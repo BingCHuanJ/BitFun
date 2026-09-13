@@ -306,6 +306,39 @@ mod local_skill_scan_tests {
         );
     }
 
+    #[tokio::test]
+    async fn claude_config_root_keeps_source_identity_and_rejects_relative_roots() {
+        let temp = tempfile::tempdir().unwrap();
+        let custom = temp.path().join("custom-claude");
+        write_skill(&custom.join("skills/shared-review"));
+        let spec = super::USER_HOME_SKILL_ROOTS
+            .iter()
+            .find(|root| root.slot == "home.claude")
+            .unwrap();
+        let path =
+            SkillRegistry::user_skill_root_path_with_environment(spec, temp.path(), |name| {
+                (name == "CLAUDE_CONFIG_DIR").then(|| custom.to_string_lossy().into_owned())
+            });
+        let mut root = test_root(path);
+        root.slot = spec.slot;
+        root.source_id = spec.source_id;
+        let scan = SkillRegistry::scan_skills_in_dir(&root).await;
+        assert_eq!(
+            scan.candidates[0].info.key,
+            "user::home.claude::shared-review"
+        );
+        for invalid in ["", "relative", "~/claude"] {
+            root.path =
+                SkillRegistry::user_skill_root_path_with_environment(spec, temp.path(), |_| {
+                    Some(invalid.into())
+                });
+            let scan = SkillRegistry::scan_skills_in_dir(&root).await;
+            assert!(scan.candidates.is_empty());
+            assert_eq!(scan.diagnostics.len(), 1);
+            assert!(!scan.cacheable);
+        }
+    }
+
     fn write_skill(path: &Path) {
         fs::create_dir_all(path).expect("skill directory");
         fs::write(
@@ -812,6 +845,15 @@ impl SkillRegistry {
         home: &Path,
         environment: impl Fn(&str) -> Option<String>,
     ) -> PathBuf {
+        // Claude config roots, like its Instruction provider, must be absolute.
+        // Keep invalid explicit input relative so discovery reports it instead
+        // of silently reading the default home or expanding a different root.
+        if spec.slot == "home.claude" {
+            return environment("CLAUDE_CONFIG_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(spec.parent))
+                .join(spec.subdir);
+        }
         let variable = match spec.slot {
             "home.codex" => Some("CODEX_HOME"),
             "home.dsh" => Some("DSH_HOME"),
@@ -936,8 +978,10 @@ impl SkillRegistry {
         let mut roots = Vec::new();
         let home_dir = dirs::home_dir();
         if let Some(home) = home_dir.as_deref() {
-            roots.extend(USER_HOME_SKILL_ROOTS.iter().map(|spec| {
-                LocalSkillWatchRoot::recursive(Self::user_skill_root_path(spec, home))
+            roots.extend(USER_HOME_SKILL_ROOTS.iter().filter_map(|spec| {
+                let path = Self::user_skill_root_path(spec, home);
+                (spec.slot != "home.claude" || path.is_absolute())
+                    .then(|| LocalSkillWatchRoot::recursive(path))
             }));
         }
 

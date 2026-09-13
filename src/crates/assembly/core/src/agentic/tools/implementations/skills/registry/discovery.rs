@@ -369,6 +369,17 @@ impl SkillRegistry {
     }
 
     pub(super) async fn scan_skills_in_dir(entry: &SkillRootEntry) -> LocalSkillScan {
+        if entry.slot == "home.claude" && !entry.path.is_absolute() {
+            return LocalSkillScan {
+                candidates: Vec::new(),
+                diagnostics: vec![diagnostic(
+                    "$CLAUDE_CONFIG_DIR",
+                    entry.source_id,
+                    "Claude Code configuration directory must be absolute",
+                )],
+                cacheable: false,
+            };
+        }
         let mut scan = LocalSkillScan {
             candidates: Vec::new(),
             diagnostics: Vec::new(),
