@@ -237,6 +237,13 @@ Hosts without Web Animations render the current text immediately.
 The **RollingText** Design Lab entry includes manual standalone and TabGroup
 examples for repeated replacement and long labels.
 
+`ActionItem` and its `NavigationPanelItem` composition also accept
+`labelBehavior="static"` to preserve wrapping labels without an implicit overflow
+tooltip or marquee. Their default remains `"overflow"`. The public `label` part
+retains its typography, and the static label inherits whitespace from its owner.
+`NavigationPanelItem.className` styles the outer row; native button attributes and
+the ref reach its `trigger` part. Keep row layout separate from trigger styling.
+
 `TabGroupItem.tabProps` applies `className`, `style`, `title`, `aria-label`,
 `aria-describedby`, and `data-*` attributes directly to the native tab button.
 Use product-namespaced data attributes for product appearance identity. The

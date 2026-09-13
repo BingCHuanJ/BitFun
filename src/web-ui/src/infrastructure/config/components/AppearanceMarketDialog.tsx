@@ -1,5 +1,6 @@
 import { OverflowText,
   Button,
+  NavigationPanelItem,
   Icon,
   ScrollArea,
   SearchField,
@@ -475,33 +476,42 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
           data-openbitfun-part="marketNav"
           aria-label={t('package.market.views.label')}
         >
-          <button
+          <NavigationPanelItem
             type="button"
+            labelBehavior="static"
+            className="appearance-market__nav-item"
+            selected={view === 'browse'}
             data-active={view === 'browse' || undefined}
             aria-current={view === 'browse' ? 'page' : undefined}
             onClick={() => selectView('browse')}
           >
             {t('package.market.views.browse')}
-          </button>
+          </NavigationPanelItem>
           {account.me && (
-            <button
+            <NavigationPanelItem
               type="button"
+              labelBehavior="static"
+              className="appearance-market__nav-item"
+              selected={view === 'submissions'}
               data-active={view === 'submissions' || undefined}
               aria-current={view === 'submissions' ? 'page' : undefined}
               onClick={() => selectView('submissions')}
             >
               {t('package.market.views.submissions')}
-            </button>
+            </NavigationPanelItem>
           )}
           {account.me?.isAdmin && (
-            <button
+            <NavigationPanelItem
               type="button"
+              labelBehavior="static"
+              className="appearance-market__nav-item"
+              selected={view === 'review'}
               data-active={view === 'review' || undefined}
               aria-current={view === 'review' ? 'page' : undefined}
               onClick={() => selectView('review')}
             >
               {t('package.market.views.review')}
-            </button>
+            </NavigationPanelItem>
           )}
         </nav>
         {view !== 'browse' ? <AppearanceMarketWorkflows workflow={view} /> : detail ? renderDetail() : (
