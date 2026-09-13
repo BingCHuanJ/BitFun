@@ -13,6 +13,9 @@ import { useI18n } from '@/infrastructure/i18n';
 import { useNotification } from '@/shared/notification-system';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import { globalEventBus } from '@/infrastructure/event-bus';
+import { MCP_CONFIG_CHANGED, type MCPConfigChanged } from '@/infrastructure/mcp/configEvents';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { WorkspaceKind } from '@/shared/types';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
@@ -189,6 +192,14 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     return () => { mcpPlanSequence.current += 1; };
   }, [refreshMcpPlan, snapshot?.generation]);
 
+  useEffect(() => {
+    if (!localImportSupported || !hasMcp) return;
+    const scope = getActiveSurfaceScope();
+    return globalEventBus.on<MCPConfigChanged>(MCP_CONFIG_CHANGED, ({ surfaceId }) => {
+      if (scope.isCurrent() && surfaceId === scope.surfaceId) void refreshMcpPlan();
+    });
+  }, [hasMcp, localImportSupported, refreshMcpPlan]);
+
   const importedHook = (item: ContentItem) => hooks?.imports.some((entry) => (
     entry.source.key.providerId === item.hookSource?.key.providerId
     && entry.source.key.sourceId === item.hookSource?.key.sourceId
@@ -218,7 +229,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     } else discoveryState = catalogDiscoveryState(snapshot, runtime.spec.ecosystemId, item.kind);
     return presentEcosystemContent({
       item, discoveryState, catalogFailed, localImportSupported,
-      imported: completed.has(item.id) || !!importedHook(item) || !!importedSkill(item),
+      // MCP copy existence comes from the current native import plan, not a past success.
+      imported: (item.kind !== 'mcp' && completed.has(item.id)) || !!importedHook(item) || !!importedSkill(item),
       skillImportSupported: skillImportVersion >= 1 || !item.skill?.entryFile || item.skill.entryFile === 'SKILL.md',
       hookImportSupported: !!item.hookSource && ['claude-code', 'codex'].includes(item.hookSource.ecosystemId),
       planLoading,
@@ -295,9 +307,12 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       await applyEcosystemBatch(batch, workspacePath || undefined, (result) => {
         if (!alive.current) return;
         setBatchResults((current) => [...(current ?? []), result]);
-        if (result.status === 'imported') setCompleted((current) => new Set([...current, result.id]));
+        if (result.status === 'imported' && batch.find((entry) => entry.id === result.id)?.kind !== 'mcp') {
+          setCompleted((current) => new Set([...current, result.id]));
+        }
       });
       if (alive.current) {
+        void refreshMcpPlan();
         void loadSupplemental(true);
         void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
       }
@@ -381,7 +396,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         setHooks(result.outcome.snapshot);
       }
       if (!alive.current) return;
-      setCompleted((current) => new Set([...current, captured.item.id]));
+      if (captured.kind === 'mcp') void refreshMcpPlan();
+      else setCompleted((current) => new Set([...current, captured.item.id]));
       setReview(null);
       setDetail(null);
       notification.success(t('content.importSuccess', { name: captured.item.name }), { duration: 3200 });
@@ -511,7 +527,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         <div className="ecosystem-compatibility__import-action">
           {localImportSupported ? <><Button size="sm" variant="primary" disabled={busy || loading || planLoading} onClick={() => void prepareBatch()}>{t('content.importAll')}</Button>
             <Button size="sm" variant="outline" disabled={busy || loading || !items.some((item) => contentState(item) === 'imported')} onClick={() => void prepareBatchUndo()}>{t('content.undoAll')}</Button></> : null}
-          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setNotice(null); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
+          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setNotice(null); void refreshMcpPlan(); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
         </div>
       </div>
       {notice && !review && !undo && !batch && !batchUndo ? <p className="ecosystem-compatibility__feedback" role="status">{notice}</p> : null}

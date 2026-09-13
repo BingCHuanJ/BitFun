@@ -2,6 +2,8 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { globalEventBus } from '@/infrastructure/event-bus';
+import { MCP_CONFIG_CHANGED } from '@/infrastructure/mcp/configEvents';
 import type { ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { buildEcosystemProductRuntimes, type EcosystemProductId } from './ecosystemCompatibilityModel';
 
@@ -234,6 +236,15 @@ describe('external agent content and explicit import boundary', () => {
   });
 
   it('requires a second explicit confirmation and sends only the selected MCP candidate', async () => {
+    mocks.applyMcp.mockImplementationOnce(async () => {
+      mocks.planMcp.mockResolvedValue({
+        ...data.plan,
+        items: data.plan.items.map((item) => item.candidateId === 'codex'
+          ? { ...item, disposition: 'already_imported' }
+          : item),
+      });
+      return { outcome: { status: 'applied' } };
+    });
     await render(); await click('content.prepareImport', 'mcp');
     expect(mocks.applyMcp).not.toHaveBeenCalled();
     await click('content.confirm');
@@ -251,6 +262,69 @@ describe('external agent content and explicit import boundary', () => {
     const confirm = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'content.confirm');
     expect(confirm?.disabled).toBe(true);
     expect(mocks.applyMcp).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['single', 'notification'], ['single', 'refresh'], ['batch', 'notification'], ['batch', 'refresh'],
+  ])('reconciles a %s MCP import deleted in native management through %s', async (mode, trigger) => {
+    mocks.skillImportVersion = 3;
+    mocks.planMcp.mockImplementation(async () => structuredClone(data.plan));
+    mocks.applyMcp.mockImplementation(async () => {
+      data.plan.items[0].disposition = 'already_imported';
+      return { outcome: { status: 'applied' } };
+    });
+    await render();
+    if (mode === 'single') await click('content.prepareImport', 'mcp');
+    else await click('content.importAll');
+    await click('content.confirm');
+    if (mode === 'batch') await click('content.close');
+    await expand('mcp');
+    const row = () => container.querySelector('[data-import-kind="mcp"]')!;
+    expect(row().getAttribute('data-import-state')).toBe('imported');
+    const calls = mocks.planMcp.mock.calls.length;
+    const generation = data.snapshot.generation;
+    data.plan.items[0].disposition = 'eligible';
+    if (trigger === 'notification') {
+      await act(async () => globalEventBus.emit(MCP_CONFIG_CHANGED, { surfaceId: 'local' }));
+    } else {
+      const refresh = container.querySelector<HTMLButtonElement>('button[aria-label="content.refresh"]')!;
+      await act(async () => refresh.click());
+    }
+    expect(data.snapshot.generation).toBe(generation);
+    expect(mocks.planMcp.mock.calls.length).toBeGreaterThan(calls);
+    expect(row().getAttribute('data-import-state')).toBe('ready');
+    expect(row().textContent).toContain('content.prepareImport');
+    expect(row().textContent).not.toContain('content.undo');
+    expect(row().textContent).not.toContain('content.manageCopy');
+    expect(mocks.saveMcp).not.toHaveBeenCalled();
+  });
+
+  it('ignores changes on another host and old MCP plan responses after deletion', async () => {
+    data.plan.items[0].disposition = 'already_imported';
+    mocks.planMcp.mockImplementation(async () => structuredClone(data.plan));
+    await render(); await expand('mcp');
+    const calls = mocks.planMcp.mock.calls.length;
+    await act(async () => globalEventBus.emit(MCP_CONFIG_CHANGED, { surfaceId: 'another-device' }));
+    expect(mocks.planMcp).toHaveBeenCalledTimes(calls);
+    const stale = structuredClone(data.plan);
+    let finish!: (plan: typeof data.plan) => void;
+    mocks.planMcp.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    await act(async () => globalEventBus.emit(MCP_CONFIG_CHANGED, { surfaceId: 'local' }));
+    data.plan.items[0].disposition = 'eligible';
+    await act(async () => globalEventBus.emit(MCP_CONFIG_CHANGED, { surfaceId: 'local' }));
+    await act(async () => finish(stale));
+    expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('ready');
+  });
+
+  it('does not offer another import when the native MCP read-back fails after saving', async () => {
+    await render(); await click('content.prepareImport', 'mcp');
+    mocks.planMcp.mockRejectedValue(new Error('Native configuration unavailable'));
+    await click('content.confirm');
+    const row = container.querySelector('[data-import-kind="mcp"]')!;
+    expect(mocks.applyMcp).toHaveBeenCalledOnce();
+    expect(row.getAttribute('data-import-state')).toBe('unavailable');
+    expect(row.textContent).not.toContain('content.prepareImport');
+    expect(row.textContent).not.toContain('content.undo');
   });
 
   it('copies a selected Skill only after validation, target review and confirmation', async () => {
