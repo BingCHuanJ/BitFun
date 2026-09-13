@@ -237,6 +237,12 @@ Hosts without Web Animations render the current text immediately.
 The **RollingText** Design Lab entry includes manual standalone and TabGroup
 examples for repeated replacement and long labels.
 
+`TabGroupItem.tabProps` applies `className`, `style`, `title`, `aria-label`,
+`aria-describedby`, and `data-*` attributes directly to the native tab button.
+Use product-namespaced data attributes for product appearance identity. The
+component retains its own part marker, IDs, panel association, disabled state,
+selection, focus, and event handling. Keep IDs and panel IDs in the item fields.
+
 `TabGroup.renderItem(item, node, index)` can wrap the supplied standard item in
 a tooltip, context-menu owner, or drag target. Keep `node` intact so TabGroup
 continues to own selection, keyboard navigation, label overflow, and end-action

@@ -182,6 +182,12 @@
 
   &__tab {
     height: 28px;
+    border-radius: 0;
+    font-family: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    transition: none;
     padding: 0 10px;
     border: 0;
     border-bottom: 2px solid transparent;
@@ -190,6 +196,17 @@
     font-size: var(--openbitfun-type-flow-control-font-size);
     white-space: nowrap;
     cursor: pointer;
+
+    > [data-openbitfun-part='label'] {
+      line-height: inherit;
+    }
+
+    @layer openbitfun.components {
+      &[role='tab']:focus-visible {
+        outline: revert-layer;
+        outline-offset: revert-layer;
+      }
+    }
 
     &:hover {
       color: var(--openbitfun-color-content-primary);
