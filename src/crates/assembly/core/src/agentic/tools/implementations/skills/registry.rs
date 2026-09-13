@@ -264,6 +264,48 @@ mod local_skill_scan_tests {
     use std::fs;
     use std::path::Path;
 
+    #[tokio::test]
+    async fn codex_home_override_discovers_skills_without_changing_persisted_keys() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let custom = temp.path().join("custom-codex");
+        write_skill(&custom.join("skills/shared-review"));
+        let spec = super::USER_HOME_SKILL_ROOTS
+            .iter()
+            .find(|root| root.slot == "home.codex")
+            .unwrap();
+        let resolved = SkillRegistry::user_skill_root_path_with_environment(spec, &home, |name| {
+            (name == "CODEX_HOME").then(|| custom.to_string_lossy().into_owned())
+        });
+        assert_eq!(resolved, custom.join("skills"));
+        let mut root = test_root(resolved);
+        root.slot = spec.slot;
+        root.source_id = spec.source_id;
+        let scan = SkillRegistry::scan_skills_in_dir(&root).await;
+        assert!(scan.diagnostics.is_empty());
+        assert_eq!(scan.candidates.len(), 1);
+        assert_eq!(
+            scan.candidates[0].info.key,
+            "user::home.codex::shared-review"
+        );
+        assert_eq!(
+            SkillRegistry::user_skill_root_path_with_environment(spec, &home, |_| None),
+            home.join(".codex/skills")
+        );
+        assert_eq!(
+            SkillRegistry::user_skill_root_path_with_environment(spec, &home, |_| Some(
+                String::new()
+            )),
+            home.join(".codex/skills")
+        );
+        assert_eq!(
+            SkillRegistry::user_skill_root_path_with_environment(spec, &home, |_| Some(
+                "~/custom".into()
+            )),
+            home.join("custom/skills")
+        );
+    }
+
     fn write_skill(path: &Path) {
         fs::create_dir_all(path).expect("skill directory");
         fs::write(
@@ -762,13 +804,22 @@ impl SkillRegistry {
         spec: &openbitfun_agent_runtime::skills::SkillRootSpec,
         home: &Path,
     ) -> PathBuf {
+        Self::user_skill_root_path_with_environment(spec, home, |name| std::env::var(name).ok())
+    }
+
+    fn user_skill_root_path_with_environment(
+        spec: &openbitfun_agent_runtime::skills::SkillRootSpec,
+        home: &Path,
+        environment: impl Fn(&str) -> Option<String>,
+    ) -> PathBuf {
         let variable = match spec.slot {
+            "home.codex" => Some("CODEX_HOME"),
             "home.dsh" => Some("DSH_HOME"),
             "home.pi" => Some("PI_CODING_AGENT_DIR"),
             _ => None,
         };
         let root = variable
-            .and_then(|name| std::env::var(name).ok())
+            .and_then(environment)
             .filter(|value| !value.trim().is_empty());
         let root = root
             .map(|value| {
