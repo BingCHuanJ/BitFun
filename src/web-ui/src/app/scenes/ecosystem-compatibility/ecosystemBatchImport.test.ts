@@ -42,3 +42,16 @@ it('refreshes a Hook target revision but refuses executable content changed sinc
   expect(mocks.hook.mock.calls[0][1].planFingerprint).toBe('new-target-revision');
   expect(results.map(({ status }) => status)).toEqual(['imported', 'stale']);
 });
+
+it('retains each reviewed Skill digest and continues after a stale package', async () => {
+  mocks.add.mockRejectedValueOnce(new Error('skill_import_stale: changed')).mockResolvedValueOnce('ok');
+  const entries: BatchImportEntry[] = ['changed', 'unchanged'].map((id) => ({
+    id, name: id, kind: 'skill', skill: { key: id, path: `/source/${id}` } as SkillInfo,
+    level: 'user', targetName: `${id}-alias`, preview: { fingerprint: `digest-${id}`, fileCount: 2, name: id, description: '' },
+  }));
+  const results: BatchImportResult[] = [];
+  await applyEcosystemBatch(entries, undefined, (result) => results.push(result));
+  expect(results.map(({ status }) => status)).toEqual(['stale', 'imported']);
+  expect(mocks.add.mock.calls.map(([request]) => request.expectedSourceFingerprint)).toEqual(['digest-changed', 'digest-unchanged']);
+  expect(mocks.add.mock.calls[1][0].targetName).toBe('unchanged-alias');
+});

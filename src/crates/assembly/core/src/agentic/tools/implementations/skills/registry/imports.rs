@@ -99,31 +99,117 @@ fn package_files(root: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(files)
 }
 
-pub fn package_fingerprint(root: &Path) -> Result<String, String> {
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillImportPreview {
+    pub fingerprint: String,
+    pub file_count: usize,
+    pub name: String,
+    pub description: String,
+}
+
+fn source_files(source: &SkillInfo, root: &Path) -> Result<Vec<(PathBuf, PathBuf)>, String> {
+    if let Some(entry) = source
+        .entry_file
+        .as_deref()
+        .filter(|entry| *entry != "SKILL.md")
+    {
+        if entry.is_empty() || entry == "." || entry == ".." || entry.contains(['/', '\\', '\0']) {
+            return Err("Invalid Skill entry file".into());
+        }
+        let path = root.join(entry);
+        let metadata = std::fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+        if is_symlink_or_reparse(&metadata) || !metadata.is_file() {
+            return Err("Skill entry is not a standalone file".into());
+        }
+        Ok(vec![(path, "SKILL.md".into())])
+    } else {
+        relative_package_files(root)
+    }
+}
+
+fn relative_package_files(root: &Path) -> Result<Vec<(PathBuf, PathBuf)>, String> {
+    package_files(root)?
+        .into_iter()
+        .map(|path| {
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|error| error.to_string())?
+                .to_path_buf();
+            Ok((path, relative))
+        })
+        .collect()
+}
+
+fn fingerprint_files(
+    files: &[(PathBuf, PathBuf)],
+    capture_entry: bool,
+) -> Result<(String, Vec<u8>), String> {
+    use std::io::Read;
     let mut digest = Sha256::new();
-    for path in package_files(root)? {
-        let relative = path.strip_prefix(root).map_err(|error| error.to_string())?;
+    let mut entry = Vec::new();
+    for (path, relative) in files {
         let relative = relative.to_string_lossy().replace('\\', "/");
         digest.update((relative.len() as u64).to_le_bytes());
         digest.update(relative.as_bytes());
-        let mut file = std::fs::File::open(&path).map_err(|error| error.to_string())?;
-        digest.update(
-            file.metadata()
-                .map_err(|error| error.to_string())?
-                .len()
-                .to_le_bytes(),
-        );
+        let mut file = std::fs::File::open(path).map_err(|error| error.to_string())?;
+        let size = file.metadata().map_err(|error| error.to_string())?.len();
+        digest.update(size.to_le_bytes());
+        let mut read_size = 0u64;
         let mut buffer = [0u8; 64 * 1024];
         loop {
-            use std::io::Read;
             let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
             if count == 0 {
                 break;
             }
+            read_size += count as u64;
             digest.update(&buffer[..count]);
+            if capture_entry && relative == "SKILL.md" {
+                if entry.len() + count > 1024 * 1024 {
+                    return Err("Skill entry exceeds the preview size limit".into());
+                }
+                entry.extend_from_slice(&buffer[..count]);
+            }
+        }
+        if read_size != size {
+            return Err("Skill package changed while being read; refresh the preview".into());
         }
     }
-    Ok(format!("{:x}", digest.finalize()))
+    Ok((format!("{:x}", digest.finalize()), entry))
+}
+
+pub fn package_fingerprint(root: &Path) -> Result<String, String> {
+    fingerprint_files(&relative_package_files(root)?, false).map(|(fingerprint, _)| fingerprint)
+}
+
+/// Read only the files that will be copied, including the normalized flat Pi entry.
+/// Display metadata and the digest come from the same entry bytes.
+pub async fn preview_import(source: SkillInfo) -> Result<SkillImportPreview, String> {
+    if source.is_builtin || source.source_id == OPENBITFUN_SKILL_SOURCE_ID {
+        return Err("Expected an external Skill source".into());
+    }
+    tokio::task::spawn_blocking(move || {
+        let root = std::fs::canonicalize(&source.path).map_err(|error| error.to_string())?;
+        let files = source_files(&source, &root)?;
+        let (fingerprint, entry) = fingerprint_files(&files, true)?;
+        let content = String::from_utf8(entry).map_err(|_| "Skill entry is not UTF-8")?;
+        let data = SkillRegistry::parse_skill_markdown(
+            source.parser_path(),
+            &content,
+            source.level,
+            false,
+            &source.source_slot,
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(SkillImportPreview {
+            fingerprint,
+            file_count: files.len(),
+            name: data.name,
+            description: data.description,
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 /// Idempotently imports one discovered external package. Existing distinct user
@@ -141,6 +227,17 @@ pub async fn import_copy_as(
     source: SkillInfo,
     target_root: PathBuf,
     target_name: Option<String>,
+) -> Result<SkillImportOrigin, String> {
+    import_copy_as_reviewed(source, target_root, target_name, None).await
+}
+
+/// Compare the reviewed digest against the staged bytes before publishing or adopting a copy.
+/// Existing callers may omit the digest; new hosts advertise reviewed import support separately.
+pub async fn import_copy_as_reviewed(
+    source: SkillInfo,
+    target_root: PathBuf,
+    target_name: Option<String>,
+    expected_fingerprint: Option<String>,
 ) -> Result<SkillImportOrigin, String> {
     if let Some(name) = &target_name {
         let reserved = name
@@ -217,32 +314,16 @@ pub async fn import_copy_as(
         let staging = staging_root.join(&import_id);
         disk::create_dir(&staging).map_err(|error| error.to_string())?;
         let prepared = (|| {
-            if let Some(entry) = source
-                .entry_file
-                .as_deref()
-                .filter(|entry| *entry != "SKILL.md")
-            {
-                if entry.contains(['/', '\\']) {
-                    return Err("Invalid Skill entry file".into());
+            for (file, relative) in source_files(&source, &source_root)? {
+                let destination = staging.join(relative);
+                if let Some(parent) = destination.parent() {
+                    disk::create_dir_all(parent).map_err(|error| error.to_string())?;
                 }
-                if is_symlink_or_reparse(
-                    &disk::symlink_metadata(source_root.join(entry))
-                        .map_err(|error| error.to_string())?,
-                ) {
-                    return Err("Skill entry is linked; import a standalone copy".into());
-                }
-                disk::copy(source_root.join(entry), staging.join("SKILL.md"))
-                    .map_err(|error| error.to_string())?;
-            } else {
-                for file in package_files(&source_root)? {
-                    let destination = staging.join(
-                        file.strip_prefix(&source_root)
-                            .map_err(|error| error.to_string())?,
-                    );
-                    if let Some(parent) = destination.parent() {
-                        disk::create_dir_all(parent).map_err(|error| error.to_string())?;
-                    }
-                    disk::copy(file, destination).map_err(|error| error.to_string())?;
+                disk::copy(file, destination).map_err(|error| error.to_string())?;
+            }
+            if let Some(expected) = &expected_fingerprint {
+                if expected != &package_fingerprint(&staging)? {
+                    return Err("skill_import_stale: Skill package changed; review it again before importing".into());
                 }
             }
             let mut markdown = disk::read_to_string(staging.join("SKILL.md"))
@@ -396,6 +477,102 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reviewed_import_rejects_entry_asset_and_file_set_changes_without_publishing() {
+        for mutation in ["entry", "asset", "added", "removed", "renamed"] {
+            let temp = tempfile::tempdir().unwrap();
+            let source = source(temp.path()).await;
+            let preview = preview_import(source.clone()).await.unwrap();
+            assert_eq!(preview.name, "demo");
+            assert_eq!(preview.description, "Imported workflow");
+            assert_eq!(preview.file_count, 2);
+            // Golden digest from the existing v1 package fingerprint format.
+            assert_eq!(
+                preview.fingerprint,
+                "dc337461d9f3e60efe4482bb17667dc1572c73c336a55a976ef0b98e2785bb6a"
+            );
+            let package = Path::new(&source.path);
+            match mutation {
+                "entry" => fs::write(
+                    package.join("SKILL.md"),
+                    "---\ndescription: Changed\n---\nChanged",
+                )
+                .await
+                .unwrap(),
+                "asset" => fs::write(package.join("scripts/tool.py"), "changed asset")
+                    .await
+                    .unwrap(),
+                "added" => fs::write(package.join("extra.txt"), "new dependency")
+                    .await
+                    .unwrap(),
+                "removed" => fs::remove_file(package.join("scripts/tool.py"))
+                    .await
+                    .unwrap(),
+                _ => fs::rename(
+                    package.join("scripts/tool.py"),
+                    package.join("scripts/renamed.py"),
+                )
+                .await
+                .unwrap(),
+            }
+            let target = temp.path().join("native");
+            let error = import_copy_as_reviewed(
+                source,
+                target.clone(),
+                Some("reviewed-alias".into()),
+                Some(preview.fingerprint),
+            )
+            .await
+            .unwrap_err();
+            assert!(error.starts_with("skill_import_stale:"), "{error}");
+            assert!(!target.join("reviewed-alias").exists());
+            assert_eq!(
+                std::fs::read_dir(temp.path().join("skill-import-staging"))
+                    .unwrap()
+                    .count(),
+                0
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn reviewed_alias_is_idempotent_and_never_replaces_user_edits() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = source(temp.path()).await;
+        let preview = preview_import(source.clone()).await.unwrap();
+        let target = temp.path().join("native");
+        let first = import_copy_as_reviewed(
+            source.clone(),
+            target.clone(),
+            Some("alias".into()),
+            Some(preview.fingerprint.clone()),
+        )
+        .await
+        .unwrap();
+        fs::write(target.join("alias/scripts/tool.py"), "user edit")
+            .await
+            .unwrap();
+        let repeated = import_copy_as_reviewed(
+            source,
+            target.clone(),
+            Some("alias".into()),
+            Some(preview.fingerprint),
+        )
+        .await
+        .unwrap();
+        assert_eq!(first, repeated);
+        assert!(fs::read_to_string(target.join("alias/SKILL.md"))
+            .await
+            .unwrap()
+            .contains("name: alias"));
+        assert_eq!(
+            fs::read_to_string(target.join("alias/scripts/tool.py"))
+                .await
+                .unwrap(),
+            "user edit"
+        );
+    }
+
+    #[tokio::test]
     async fn imported_package_preserves_dialect_assets_identity_and_runtime_selection() {
         let temp = tempfile::tempdir().unwrap();
         let source = source(temp.path()).await;
@@ -523,7 +700,31 @@ mod tests {
         .unwrap();
         assert_eq!(loaded.name, "demo");
         let target = temp.path().join("native");
-        import_copy(source, target.clone()).await.unwrap();
+        let preview = preview_import(source.clone()).await.unwrap();
+        assert_eq!(preview.file_count, 1);
+        fs::write(Path::new(&source.path).join("other.md"), "unrelated change")
+            .await
+            .unwrap();
+        import_copy_as_reviewed(
+            source.clone(),
+            target.clone(),
+            None,
+            Some(preview.fingerprint.clone()),
+        )
+        .await
+        .unwrap();
+        fs::write(Path::new(&source.path).join("demo.md"), "changed entry")
+            .await
+            .unwrap();
+        assert!(import_copy_as_reviewed(
+            source,
+            target.clone(),
+            Some("other-alias".into()),
+            Some(preview.fingerprint)
+        )
+        .await
+        .unwrap_err()
+        .starts_with("skill_import_stale:"));
         assert!(target.join("demo/SKILL.md").is_file());
         assert!(!target.join("demo/other.md").exists());
     }

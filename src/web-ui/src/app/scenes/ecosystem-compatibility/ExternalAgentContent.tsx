@@ -18,7 +18,7 @@ import { WorkspaceKind } from '@/shared/types';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { externalSourcesAPI, type ExternalMcpImportPlanV1, type ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { externalHooksAPI, type ExternalHookImportPlan, type ExternalHookImportSnapshot, type ExternalHookSource } from '@/infrastructure/api/service-api/ExternalHooksAPI';
-import type { SkillInfo, SkillLevel, SkillScanDiagnostic } from '@/infrastructure/config/types';
+import type { SkillInfo, SkillLevel, SkillScanDiagnostic, SkillImportPreview } from '@/infrastructure/config/types';
 import { getSkillSourceId, isOpenBitFunManagedSkill } from '@/infrastructure/config/skillSourcePresentation';
 import { buildEcosystemImportItems, catalogDiscoveryState, type EcosystemImportItem, type EcosystemImportItemKind, type EcosystemProductRuntime } from './ecosystemCompatibilityModel';
 import { applyImportUndo, matchesSkillReceipt, prepareHookUndo, prepareMcpUndo, readSkillImportReceipt, rememberSkillImport, type ImportUndoReview } from './ecosystemImportUndo';
@@ -45,7 +45,7 @@ const CONTENT_ICONS: Record<EcosystemImportItemKind, IconSource> = {
 
 type Review =
   | { kind: 'mcp'; item: ContentItem; plan: ExternalMcpImportPlanV1 }
-  | { kind: 'skill'; item: ContentItem; skill: SkillInfo; level: SkillLevel; targetName?: string }
+  | { kind: 'skill'; item: ContentItem; skill: SkillInfo; level: SkillLevel; targetName?: string; preview?: SkillImportPreview }
   | { kind: 'hook'; item: ContentItem; plan: ExternalHookImportPlan };
 
 interface Props {
@@ -238,6 +238,12 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     return item.description || t('content.externalOnly');
   };
 
+  async function previewSkill(skill: SkillInfo): Promise<SkillImportPreview> {
+    const result = await configAPI.validateSkillPath(skill.path, { sourceKey: skill.key, workspacePath: workspacePath || undefined });
+    if (!result.valid || !result.importPreview?.fingerprint) throw new Error('Skill import preview is unavailable');
+    return result.importPreview;
+  }
+
   async function prepareBatch(group?: EcosystemImportItemKind, selectedOnly = false) {
     if (busy || !localImportSupported) return;
     setBusy(true);
@@ -252,11 +258,14 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         if (!alive.current) return;
         if (!presentation(item).canImport) continue;
         if (item.skill && skillImportVersion >= 1) {
-          const level = item.skill.level === 'project' && workspacePath ? 'project' : 'user';
+          const preview = skillImportVersion >= 3 ? await previewSkill(item.skill).catch(() => null) : undefined;
+          if (preview === null) continue;
+          const skill = preview ? { ...item.skill, name: preview.name, description: preview.description } : item.skill;
+          const level = skill.level === 'project' && workspacePath ? 'project' : 'user';
           const reserved = entries.filter((entry) => entry.kind === 'skill' && entry.level === level)
             .flatMap((entry) => entry.kind === 'skill' ? [entry.targetName ?? entry.skill.name, entry.targetName ?? entry.skill.dirName] : []);
-          const targetName = skillImportVersion >= 2 ? suggestSkillImportName(item.skill, level, skills, reserved) : undefined;
-          entries.push({ id: item.id, name: item.name, kind: 'skill', skill: item.skill, level, targetName });
+          const targetName = skillImportVersion >= 2 ? suggestSkillImportName(skill, level, skills, reserved) : undefined;
+          entries.push({ id: item.id, name: skill.name, kind: 'skill', skill, level, targetName, ...(preview ? { preview } : {}) });
         }
         else if (item.kind === 'mcp' && item.candidateId && freshMcpPlan?.items.some((candidate) =>
           candidate.candidateId === item.candidateId && ['eligible', 'automatic_rename'].includes(candidate.disposition))) {
@@ -303,13 +312,15 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     setBusy(true);
     try {
       if (item.skill) {
-        const validation = skillImportVersion >= 1 && item.skill.entryFile && item.skill.entryFile !== 'SKILL.md'
+        const preview = skillImportVersion >= 3 ? await previewSkill(item.skill) : undefined;
+        const validation = preview || (skillImportVersion >= 1 && item.skill.entryFile && item.skill.entryFile !== 'SKILL.md')
           ? { valid: true } : await configAPI.validateSkillPath(item.skill.path);
         if (!alive.current || sequence !== reviewSequence.current) return;
         if (!validation.valid) { setNotice(t('content.validationFailed')); return; }
-        const level = item.skill.level === 'project' && workspacePath ? 'project' : 'user';
-        setReview({ kind: 'skill', item, skill: item.skill, level,
-          targetName: skillImportVersion >= 2 ? suggestSkillImportName(item.skill, level, skills) : undefined });
+        const skill = preview ? { ...item.skill, name: preview.name, description: preview.description } : item.skill;
+        const level = skill.level === 'project' && workspacePath ? 'project' : 'user';
+        setReview({ kind: 'skill', item: { ...item, name: skill.name, description: skill.description }, skill, level, preview,
+          targetName: skillImportVersion >= 2 ? suggestSkillImportName(skill, level, skills) : undefined });
       } else if (item.hookSource) {
         const next = await externalHooksAPI.planImport(workspacePath || undefined, item.hookSource.key);
         if (!alive.current || sequence !== reviewSequence.current) return;
@@ -336,7 +347,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         await configAPI.addSkill({ sourcePath: captured.skill.path, level: captured.level,
           workspacePath: workspacePath || undefined,
           ...(skillImportVersion >= 2 && captured.targetName ? { targetName: captured.targetName } : {}),
-          ...(skillImportVersion >= 1 ? { sourceKey: captured.skill.key } : {}) });
+          ...(skillImportVersion >= 1 ? { sourceKey: captured.skill.key } : {}),
+          ...(captured.preview ? { expectedSourceFingerprint: captured.preview.fingerprint } : {}) });
         // The copy has committed. A failed read-back must not invite a duplicate import.
         const report = await configAPI.getSkillScanReport({ workspacePath: workspacePath || undefined, forceRefresh: true }).catch(() => null);
         if (!alive.current) return;
@@ -378,7 +390,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     } catch (error) {
       const reason = importErrorMessage(error);
       const conflict = reason.includes('Skill target already exists with different content') || reason.includes('Skill target belongs to a different import');
-      if (alive.current) setNotice(`${t('content.importFailed')} ${conflict ? t('content.skillNameConflict') : reason}`);
+      if (alive.current) setNotice(reason.includes('skill_import_stale:') ? t('content.skillStale') : `${t('content.importFailed')} ${conflict ? t('content.skillNameConflict') : reason}`);
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -627,6 +639,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
               {entry.kind === 'skill' && entry.targetName ? <p className="ecosystem-compatibility__feedback">{t('content.renameNotice', { name: entry.targetName })}</p> : null}
               {entry.kind === 'skill' ? <p>{entry.skill.path}</p> : entry.kind === 'hook' ? <p>{entry.plan.source.locationHint}</p> : null}
               {entry.kind === 'hook' ? <><p>{t('content.hookWarning')}</p>{entry.plan.handlers.map((handler) => <div key={handler.stableKey}><p>{handler.event}{handler.matcher ? ` · ${handler.matcher}` : ''}</p><pre>{handler.command}</pre>{handler.commandWindows ? <pre>{handler.commandWindows}</pre> : null}{handler.dependencies.map((dependency) => <p key={dependency.kind === 'managed' ? dependency.relativePath : dependency.location}>{dependency.kind === 'managed' ? dependency.relativePath : dependency.location}</p>)}</div>)}{entry.plan.skipped.map((entry) => <p key={entry.reasonCode}>{t('content.skipped', { reason: entry.reasonCode, count: formatNumber(entry.count) })}</p>)}</> : null}
+              {entry.kind === 'skill' && entry.preview ? <p>{t('content.reviewedPackage', { count: formatNumber(entry.preview.fileCount) })}</p> : null}
               {entry.kind === 'mcp' ? <p>{t('content.mcpTarget', { name: entry.plan.items.find((item) => item.candidateId === entry.candidateId)?.proposedNativeId ?? entry.name })}</p> : null}
               </>}
             </section>;
@@ -666,6 +679,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
               <p className="ecosystem-compatibility__feedback">{t('content.copyWarning')}</p>
               {review.kind === 'mcp' ? <p>{t('content.mcpTarget', { name: reviewMcp?.proposedNativeId ?? review.item.name })}</p> : null}
               {review.kind === 'skill' ? <>
+                {review.preview ? <p>{t('content.reviewedPackage', { count: formatNumber(review.preview.fileCount) })}</p> : null}
                 <div className="ecosystem-compatibility__target-field"><label htmlFor={`${contentId}-scope`}>{t('content.targetScope')}</label><Select id={`${contentId}-scope`} size="sm" disabled={busy} value={review.level} onValueChange={(value) => { setNotice(null); const level = value as SkillLevel; setReview({ ...review, level, targetName: skillImportVersion >= 2 ? suggestSkillImportName(review.skill, level, skills) : undefined }); }} options={[{ value: 'user', label: t('content.userTarget') }, ...(workspacePath ? [{ value: 'project', label: t('content.projectTarget') }] : [])]} /></div>
                 {skillImportVersion >= 2 ? <div className="ecosystem-compatibility__target-field"><label htmlFor={`${contentId}-name`}>{t('content.importName')}</label><Input id={`${contentId}-name`} size="sm" disabled={busy} value={review.targetName ?? review.skill.dirName} onChange={(event) => { setNotice(null); setReview({ ...review, targetName: event.target.value }); }} /></div> : null}
                 {review.targetName ? <p className="ecosystem-compatibility__feedback">{t('content.renameNotice', { name: review.targetName })}</p> : null}

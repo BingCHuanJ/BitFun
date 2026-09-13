@@ -144,6 +144,32 @@ describe('external agent content and explicit import boundary', () => {
     expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'tools.automation', viewId: 'hooks' });
   });
 
+  it.each(['single', 'batch'])('binds the %s Skill import to its reviewed package and reports stale content', async (mode) => {
+    mocks.skillImportVersion = 3;
+    mocks.validateSkill.mockResolvedValue({ valid: true, importPreview: {
+      fingerprint: 'reviewed-package', fileCount: 2, name: 'fresh-name', description: 'Fresh description',
+    } });
+    mocks.addSkill.mockRejectedValue(new Error('skill_import_stale: package changed'));
+    await render();
+    if (mode === 'single') await click('content.prepareImport', 'skill');
+    else await click('content.importAll');
+    expect(mocks.validateSkill).toHaveBeenCalledWith(data.skills[0].path, { sourceKey: data.skills[0].key, workspacePath: '/project' });
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('content.reviewedPackage');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('fresh-name');
+    expect(mocks.addSkill).not.toHaveBeenCalled();
+    await click('content.confirm');
+    expect(mocks.addSkill).toHaveBeenCalledWith(expect.objectContaining({ expectedSourceFingerprint: 'reviewed-package', sourceKey: data.skills[0].key }));
+    expect(mocks.validateSkill).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain(mode === 'single' ? 'content.skillStale' : 'content.batchState.stale');
+  });
+
+  it('does not silently downgrade when a host advertising reviewed imports omits the preview', async () => {
+    mocks.skillImportVersion = 3;
+    await render(); await click('content.prepareImport', 'skill');
+    expect(container.textContent).toContain('content.previewFailed');
+    expect(mocks.addSkill).not.toHaveBeenCalled();
+  });
+
   it('reviews a full agent batch once and copies only that agent after confirmation', async () => {
     mocks.skillImportVersion = 1;
     await render();
@@ -401,9 +427,12 @@ describe('external agent content and explicit import boundary', () => {
 
   it.each(['remote', 'peer'] as const)('keeps %s source previews but gates unsupported imports without a local fallback', async (surface) => {
     mocks[surface] = true;
+    mocks.skillImportVersion = 3;
     await render(); await expand('skill');
     expect(container.textContent).toContain('codex-Skill');
     expect(container.textContent).not.toContain('content.prepareImport');
+    expect(container.textContent).not.toContain('content.manageNative');
+    expect(mocks.validateSkill).not.toHaveBeenCalled();
     expect(mocks.planMcp).not.toHaveBeenCalled(); expect(mocks.getHooks).not.toHaveBeenCalled();
     expect(mocks.getHookCatalog).toHaveBeenCalledWith('/project', false);
     expect(mocks.addSkill).not.toHaveBeenCalled(); expect(mocks.applyMcp).not.toHaveBeenCalled();

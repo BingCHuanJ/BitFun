@@ -1,12 +1,12 @@
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { externalSourcesAPI, type ExternalMcpImportPlanV1 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { externalHooksAPI, type ExternalHookImportPlan } from '@/infrastructure/api/service-api/ExternalHooksAPI';
-import type { SkillInfo, SkillLevel } from '@/infrastructure/config/types';
+import type { SkillInfo, SkillLevel, SkillImportPreview } from '@/infrastructure/config/types';
 import { importErrorMessage } from './ecosystemSkillImport';
 import { getActiveSurfaceScope, isLocalSurface } from '@/infrastructure/peer-device/deviceSurface';
 
 export type BatchImportEntry = { id: string; name: string } & (
-  | { kind: 'skill'; skill: SkillInfo; level: SkillLevel; targetName?: string }
+  | { kind: 'skill'; skill: SkillInfo; level: SkillLevel; targetName?: string; preview?: SkillImportPreview }
   | { kind: 'mcp'; candidateId: string; plan: ExternalMcpImportPlanV1 }
   | { kind: 'hook'; plan: ExternalHookImportPlan }
 );
@@ -40,7 +40,8 @@ export async function applyEcosystemBatch(
       scope.assertCurrent('apply reviewed external import');
       if (entry.kind === 'skill') {
         await configAPI.addSkill({ sourcePath: entry.skill.path, sourceKey: entry.skill.key,
-          level: entry.level, workspacePath, ...(entry.targetName ? { targetName: entry.targetName } : {}) });
+          level: entry.level, workspacePath, ...(entry.targetName ? { targetName: entry.targetName } : {}),
+          ...(entry.preview ? { expectedSourceFingerprint: entry.preview.fingerprint } : {}) });
         status = 'imported';
       } else {
         // Earlier imports change the target revision. Refresh it while requiring the
@@ -56,7 +57,10 @@ export async function applyEcosystemBatch(
           status = response.outcome.kind === 'stale' ? 'stale' : 'imported';
         }
       }
-    } catch (cause) { error = importErrorMessage(cause); }
+    } catch (cause) {
+      error = importErrorMessage(cause);
+      if (error.includes('skill_import_stale:')) status = 'stale';
+    }
     onResult({ id: entry.id, name: entry.name, status, ...(error ? { error } : {}) });
   }
 }

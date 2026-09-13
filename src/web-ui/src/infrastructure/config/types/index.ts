@@ -490,7 +490,15 @@ export interface SkillMarketDownloadResult {
   output: string;
 }
 
+export interface SkillImportPreview {
+  fingerprint: string;
+  fileCount: number;
+  name: string;
+  description: string;
+}
+
 export interface SkillValidationResult {
+  importPreview?: SkillImportPreview;
   valid: boolean;
   name?: string;
   description?: string;
