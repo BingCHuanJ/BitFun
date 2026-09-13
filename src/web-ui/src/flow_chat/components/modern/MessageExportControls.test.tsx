@@ -79,6 +79,7 @@ const legacyPackage: AppearancePackage = {
   components: {
     'model-round-item': { parts: {
       root: { base: { opacity: { kind: 'number', value: 0.9 } } },
+      retryToggle: { base: { opacity: { kind: 'number', value: 0.6 } } },
       action: { states: { copied: { opacity: { kind: 'number', value: 0.8 } } } },
     } },
     'export-image': { parts: {
@@ -219,7 +220,11 @@ describe('message copy and image export controls', () => {
       ],
     };
     act(() => root.render(<ModelRoundItem round={withHistory} turnId="turn-1" isLastRound isTurnComplete />));
-    act(() => container.querySelector<HTMLButtonElement>('.model-round-item__retry-toggle')!.click());
+    const historyToggle = container.querySelector<HTMLButtonElement>('.model-round-item__retry-toggle')!;
+    expect(historyToggle.getAttribute('data-openbitfun-component')).toBe('button');
+    expect(historyToggle.querySelector('[data-overflow-behavior]')).toBeNull();
+    expectCompiledRuleMatches(compileLegacyPackage(), historyToggle, '0.6');
+    act(() => historyToggle.click());
     const toggle = container.querySelector<HTMLButtonElement>('.model-round-item__attempt-diagnostic-toggle')!;
     act(() => toggle.querySelector('svg')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
@@ -232,5 +237,7 @@ describe('message copy and image export controls', () => {
     act(() => toggle.click());
     expect(container.querySelector('.model-round-item__attempt-diagnostic-details')).toBeNull();
     expect(container.querySelector('.model-round-item__retry-attempt')).not.toBeNull();
+    act(() => historyToggle.click());
+    expect(container.querySelector('.model-round-item__retry-attempt')).toBeNull();
   });
 });

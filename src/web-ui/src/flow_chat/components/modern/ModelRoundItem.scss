@@ -101,6 +101,19 @@
 }
 
 .model-round-item__retry-toggle {
+  display: inline-block;
+  block-size: auto;
+  border-radius: 0;
+  font-family: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  white-space: normal;
+  text-decoration: none;
+
+  &::before { content: none; }
+
+  > [data-openbitfun-part='content'] { display: contents; }
+
   align-self: flex-start;
   min-block-size: max(1lh, var(--openbitfun-control-tool-card-ambient-row-min-block-size));
   padding: 0;
