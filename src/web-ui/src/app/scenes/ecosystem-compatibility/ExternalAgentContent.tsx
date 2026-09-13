@@ -6,6 +6,9 @@ import { presentEcosystemContent } from './ecosystemContentPresentation';
 import { suggestSkillImportName, importErrorMessage } from './ecosystemSkillImport';
 import { applyEcosystemBatchUndo, type BatchUndoEntry, type BatchUndoResult } from './ecosystemBatchUndo';
 import { Bot, CircleUserRound, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
+import { useSceneStore } from '@/app/stores/sceneStore';
+import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
+import { useSkillsSceneStore } from '@/app/scenes/skills/skillsSceneStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotification } from '@/shared/notification-system';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -62,6 +65,17 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   const peer = usePeerDeviceModeOptional();
   const localImportSupported = isTauriRuntime() && !peer?.peerMode.active
     && workspace?.workspaceKind !== WorkspaceKind.Remote;
+  const openNativeManagement = (kind: EcosystemImportItemKind) => {
+    if (!localImportSupported) return;
+    if (kind === 'skill') {
+      useSkillsSceneStore.getState().openNativeSkills();
+      useSceneStore.getState().openScene('skills');
+    } else if (kind === 'mcp' || kind === 'hook') {
+      useSettingsStore.getState().openDestination(kind === 'mcp'
+        ? { pageId: 'tools.mcp' } : { pageId: 'tools.automation', viewId: 'hooks' });
+      useSceneStore.getState().openScene('settings');
+    }
+  };
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [skillImportVersion, setSkillImportVersion] = useState(0);
   const [skillDiagnostics, setSkillDiagnostics] = useState<SkillScanDiagnostic[]>([]);
@@ -522,6 +536,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
             <span role="cell">{runtime.spec.name}</span>
             <span role="cell" className="ecosystem-compatibility__content-summary-state">
               <StatusPill tone="neutral">{t(discoverySupported ? 'import.states.discoverySupported' : 'import.states.discoveryUnsupported')}</StatusPill>
+              {copyActionsSupported ? <Button size="sm" variant="text" disabled={busy} onClick={() => openNativeManagement(group)}>{t('content.manageNative')}</Button> : null}
               {expandable ? <IconButton size="sm" variant="quiet"
                 icon={<Icon name={expanded ? 'chevron-down' : 'chevron-right'} size="sm" />}
                 aria-label={t(expanded ? 'content.collapseCategory' : 'content.expandCategory', { type: t(`capabilities.${group}`) })}
@@ -556,6 +571,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
             <span role="cell" className="ecosystem-compatibility__import-action">
               {item.discovered ? <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.view')} ${item.name}`} onClick={() => { setNotice(null); setDetail(item); }}>{t('content.view')}</Button> : null}
               {importable ? <Button size="sm" variant="outline" disabled={busy} aria-label={`${t('content.prepareImport')} ${item.name}`} onClick={() => void prepareImport(item)}>{t('content.prepareImport')}</Button> : null}
+              {state === 'imported' && localImportSupported && ['skill', 'mcp', 'hook'].includes(item.kind) ? <Button size="sm" variant="text" disabled={busy} onClick={() => openNativeManagement(item.kind)}>{t('content.manageCopy')}</Button> : null}
               {state === 'imported' && localImportSupported ? <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.undo')} ${item.name}`} onClick={() => void prepareUndo(item)}>{t('content.undo')}</Button> : null}
               {state === 'imported' && item.skill && skillImportVersion >= 1 && !importedSkill(item)?.importId ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void prepareImport(item)}>{t('content.repairSource')}</Button> : null}
             </span>

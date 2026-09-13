@@ -181,6 +181,8 @@
     "manageAction": "管理发现设置"
   },
   "content": {
+    "manageNative": "管理原生内容",
+    "manageCopy": "管理副本",
     "skillNameConflict": "目标已有同名 Skill，且内容或来源不同。请修改上方的导入名称后重试；已有副本不会被覆盖。",
     "batchUndoWarning": "将移除以下 {{count}} 个 OpenBitFun 副本，包括对副本所做的修改。外部来源保留，之后可以重新导入。",
     "batchUndoSummary": "已撤销 {{removed}} 项 · 运行时待同步 {{pending}} 项 · 失败 {{failed}} 项",

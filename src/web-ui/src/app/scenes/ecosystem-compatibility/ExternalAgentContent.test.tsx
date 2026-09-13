@@ -6,10 +6,14 @@ import type { ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service
 import { buildEcosystemProductRuntimes, type EcosystemProductId } from './ecosystemCompatibilityModel';
 
 const mocks = vi.hoisted(() => ({
+  openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
   deleteSkill: vi.fn(), loadMcp: vi.fn(), saveMcp: vi.fn(), mutateHook: vi.fn(), getSkills: vi.fn(), validateSkill: vi.fn(), addSkill: vi.fn(), getHooks: vi.fn(), getHookCatalog: vi.fn(),
   planHook: vi.fn(), applyHook: vi.fn(), planMcp: vi.fn(), applyMcp: vi.fn(), refresh: vi.fn(),
   workspacePath: '/project', remote: false, peer: false, skillImportVersion: 0,
 }));
+vi.mock('@/app/stores/sceneStore', () => ({ useSceneStore: { getState: () => ({ openScene: mocks.openScene }) } }));
+vi.mock('@/app/scenes/settings/settingsStore', () => ({ useSettingsStore: { getState: () => ({ openDestination: mocks.openDestination }) } }));
+vi.mock('@/app/scenes/skills/skillsSceneStore', () => ({ useSkillsSceneStore: { getState: () => ({ openNativeSkills: mocks.openNativeSkills }) } }));
 vi.mock('@/infrastructure/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, formatNumber: String }) }));
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({ useCurrentWorkspace: () => ({
   workspacePath: mocks.workspacePath, workspace: { workspaceKind: mocks.remote ? 'remote' : 'normal' },
@@ -124,6 +128,21 @@ describe('external agent content and explicit import boundary', () => {
     const trigger = container.querySelector<HTMLButtonElement>(`[data-content-group="${kind}"] button[aria-expanded]`)!;
     if (trigger.getAttribute('aria-expanded') !== 'true') await act(async () => trigger.click());
   }
+
+  it('keeps native management reachable after external sources disappear', async () => {
+    data.skills = data.skills.filter((skill) => skill.sourceId === 'openbitfun');
+    await render();
+    for (const kind of ['skill', 'mcp', 'hook']) {
+      const region = container.querySelector(`[data-content-group="${kind}"]`)!;
+      const button = Array.from(region.querySelectorAll('button')).find((button) => button.textContent === 'content.manageNative');
+      expect(button).toBeDefined();
+      await act(async () => button!.click());
+    }
+    expect(mocks.openNativeSkills).toHaveBeenCalledOnce();
+    expect(mocks.openScene).toHaveBeenCalledWith('skills');
+    expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'tools.mcp' });
+    expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'tools.automation', viewId: 'hooks' });
+  });
 
   it('reviews a full agent batch once and copies only that agent after confirmation', async () => {
     mocks.skillImportVersion = 1;
