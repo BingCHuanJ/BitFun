@@ -21,7 +21,7 @@ interface SkillsSceneState {
 
 export const useSkillsSceneStore = create<SkillsSceneState>((set) => ({
   nativeNavigationRequest: 0,
-  openNativeSkills: () => set((state) => ({ nativeNavigationRequest: state.nativeNavigationRequest + 1, installedView: 'source:openbitfun', hideDuplicates: false })),
+  openNativeSkills: () => set((state) => ({ nativeNavigationRequest: state.nativeNavigationRequest + 1, installedView: 'all', hideDuplicates: false })),
   searchDraft: '',
   marketQuery: '',
   installedView: 'all',
