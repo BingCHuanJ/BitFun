@@ -1100,7 +1100,14 @@ impl SkillRegistry {
             // from user config may become project-scoped for the current workspace.
             // Discover and scan them once per request so scope and the 64-root cap
             // are applied to one coherent OpenCode configuration snapshot.
-            let roots = opencode_configured_skill_roots(workspace_root);
+            let (roots, root_diagnostics) = opencode_configured_skill_roots(workspace_root);
+            diagnostics.extend(root_diagnostics.into_iter().map(|(path, message)| {
+                SkillScanDiagnostic {
+                    path,
+                    source_id: "opencode".to_string(),
+                    message,
+                }
+            }));
             let configured_scan =
                 Self::scan_configured_opencode_candidates_with_diagnostics(roots).await;
             diagnostics.extend(configured_scan.diagnostics);
