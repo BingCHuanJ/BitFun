@@ -129,19 +129,13 @@ describe('external agent content and explicit import boundary', () => {
     if (trigger.getAttribute('aria-expanded') !== 'true') await act(async () => trigger.click());
   }
 
-  it('keeps native management reachable after external sources disappear', async () => {
-    data.skills = data.skills.filter((skill) => skill.sourceId === 'openbitfun');
+  it('keeps copy management on imported rows without category management links', async () => {
+    data.plan.items[0].disposition = 'already_imported';
     await render();
-    for (const kind of ['skill', 'mcp', 'hook']) {
-      const region = container.querySelector(`[data-content-group="${kind}"]`)!;
-      const button = Array.from(region.querySelectorAll('button')).find((button) => button.textContent === 'content.manageNative');
-      expect(button).toBeDefined();
-      await act(async () => button!.click());
-    }
-    expect(mocks.openNativeSkills).toHaveBeenCalledOnce();
-    expect(mocks.openScene).toHaveBeenCalledWith('skills');
+    expect(container.textContent).not.toContain('content.manageNative');
+    await click('content.manageCopy', 'mcp');
     expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'tools.mcp' });
-    expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'tools.automation', viewId: 'hooks' });
+    expect(mocks.openScene).toHaveBeenCalledWith('settings');
   });
 
   it.each(['single', 'batch'])('binds the %s Skill import to its reviewed package and reports stale content', async (mode) => {

@@ -794,11 +794,6 @@
     gap: var(--openbitfun-space-2);
   }
 
-  &__content-summary-manage {
-    grid-column: 1 / -1;
-    max-inline-size: 100%;
-  }
-
   &__content-expanded {
     padding: 0 var(--openbitfun-space-4) var(--openbitfun-space-4);
   }

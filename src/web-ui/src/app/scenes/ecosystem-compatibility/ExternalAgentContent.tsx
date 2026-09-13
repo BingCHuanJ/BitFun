@@ -553,7 +553,6 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
                 aria-label={t(expanded ? 'content.collapseCategory' : 'content.expandCategory', { type: t(`capabilities.${group}`) })}
                 aria-expanded={expanded} aria-controls={groupId}
                 onClick={() => { setKind(expanded ? null : group); setSearch(''); setSelected(new Set()); }} /> : null}
-              {copyActionsSupported ? <Button className="ecosystem-compatibility__content-summary-manage" size="sm" variant="text" disabled={busy} onClick={() => openNativeManagement(group)}>{t('content.manageNative')}</Button> : null}
             </span>
           </div>
         <div role="row" hidden={!expanded}>
