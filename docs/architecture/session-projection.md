@@ -25,6 +25,25 @@ remount the card or erase drafts. A mailbox-only update must survive the next
 ordinary stream update; merely asserting that the flat list contains a question
 does not prove that FlowChat can display it.
 
+## Read lifecycle and multi-session isolation
+
+`SessionStream` owns both the read fence and whether a read is in flight. A read
+ends exactly once; completion, abandonment, supersession, and attachment disposal
+must make its old handle unable to affect a subsequent read. Returning to a
+healthy projection wakes pending-message consumers even when the terminal state
+was replayed while the fence blocked submission. Those wakeups are coalesced and
+bound to the rendered surface epoch.
+
+Replayed lifecycle events establish Turn ownership before newer held events are
+released. Changing Runtime process resets old ownership; a same-process snapshot
+behind the applied position cannot clear a delivery gap. A discarded queue keeps
+the original surface stale for replay rather than delivering to another device.
+The transport also checks the captured surface epoch and surviving subscriptions
+at delayed delivery time; replacement listeners cannot receive old events.
+
+A Session restore fences only that Session. Events buffered for other Sessions
+during the read must be flushed, never cleared with the restored projection.
+
 ## The problem this replaces
 
 Seven independent writers currently produce a Session's on-screen state:

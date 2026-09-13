@@ -141,6 +141,34 @@ describe('SessionStream', () => {
     expect(stream.appliedPosition()).toEqual(at(1, 'runtime-b'));
   });
 
+  it('establishes replayed ownership before releasing newer events from a restarted host', () => {
+    const stream = sessionStream('peer-linux', 'session');
+    stream.offer(COMPLETED, textAt('turn'), at(10), () => {});
+    const read = stream.beginRead();
+    const delivered: string[] = [];
+    stream.offer(TEXT, textAt('turn'), at(3, 'runtime-b'), () => delivered.push('text'));
+    read.settle(at(2, 'runtime-b'), [{ eventName: STARTED, payload: textAt('turn') }]);
+    expect(delivered).toEqual(['text']);
+    expect(stream.persistedMayWrite('turn')).toBe(false);
+    const completed = stream.beginRead();
+    stream.offer(TEXT, textAt('turn'), at(5, 'runtime-b'), () => delivered.push('late'));
+    completed.settle(at(4, 'runtime-b'), [{ eventName: COMPLETED, payload: textAt('turn') }]);
+    expect(delivered).toEqual(['text']);
+    expect(stream.persistedMayWrite('turn')).toBe(true);
+  });
+
+  it('does not clear a delivery gap with a snapshot behind the missing range', () => {
+    const stream = sessionStream('peer-linux', 'session');
+    stream.offer(TEXT, textAt('turn'), at(1), () => {});
+    stream.offer(TEXT, textAt('turn'), at(5), () => {});
+    stream.beginRead().settle(at(3));
+    expect(stream.hasGap()).toBe(true);
+    stream.commitAppliedPosition(at(4));
+    expect(stream.hasGap()).toBe(true);
+    stream.beginRead().settle(at(5));
+    expect(stream.hasGap()).toBe(false);
+  });
+
   it('applies an unpositioned write rather than hiding it', () => {
     const stream = sessionStream('local', 'session');
     stream.offer(TEXT, textAt('turn'), at(5), () => {});

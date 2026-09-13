@@ -56,6 +56,10 @@ export class SessionStream {
     readonly sessionId: string,
   ) {}
 
+  isReadInFlight(): boolean {
+    return this.held !== null;
+  }
+
   appliedPosition(): RuntimePosition | null {
     return this.applied;
   }
@@ -161,11 +165,13 @@ export class SessionStream {
     const generation = ++this.prefixGeneration;
     this.held = this.held ?? [];
 
-    const isCurrent = (): boolean => this.prefixGeneration === generation;
+    let closed = false;
+    const isCurrent = (): boolean => !closed && this.prefixGeneration === generation;
     const takeHeld = (): HeldWrite[] | null => {
       if (!isCurrent()) {
         return null;
       }
+      closed = true;
       const held = this.held ?? [];
       this.held = null;
       return held;
@@ -173,20 +179,29 @@ export class SessionStream {
 
     return {
       isCurrent,
-      settle: (position: RuntimePosition | null) => {
+      settle: (position, events = []) => {
         const held = takeHeld();
         if (!held) {
           return;
         }
         if (position) {
-          this.applied = advancePosition(this.applied, position);
-          this.gapAt = null;
+          const coversApplied = !this.applied || this.applied.streamId !== position.streamId ||
+            position.cursor >= this.applied.cursor;
+          this.commitAppliedPosition(position);
+          if (coversApplied) {
+            for (const event of events) this.observeApplied(event.eventName, event.payload);
+          }
         }
         this.releaseHeld(held);
       },
-      abandon: () => {
+      abandon: (options) => {
         const held = takeHeld();
-        if (held) {
+        if (!held) return;
+        if (options?.discard) {
+          // A surface we left cannot paint this queue. Keep its cursor behind
+          // and require replay when returning, including for legacy events.
+          if (held.length) this.markProjectionBehind();
+        } else {
           this.releaseHeld(held);
         }
       },
@@ -209,8 +224,11 @@ export class SessionStream {
    * a snapshot prefix or a backfill suffix the caller painted itself.
    */
   commitAppliedPosition(position: RuntimePosition): void {
+    if (this.applied?.streamId !== position.streamId) this.ownership.reset();
+    if (!this.applied || this.applied.streamId !== position.streamId || position.cursor >= this.applied.cursor) {
+      this.gapAt = null;
+    }
     this.applied = advancePosition(this.applied, position);
-    this.gapAt = null;
   }
 
   /** Observe ownership for content applied outside `offer`, in order. */
@@ -233,12 +251,12 @@ export class SessionStream {
 }
 
 export interface SessionStreamRead {
-  /** False once a newer read superseded this one. */
+  /** False once completed, abandoned, or superseded by a newer read. */
   isCurrent(): boolean;
   /** Finish at `position` and release everything ahead of it, in order. */
-  settle(position: RuntimePosition | null): void;
-  /** Give up without advancing; held writes are released unchanged. */
-  abandon(): void;
+  settle(position: RuntimePosition | null, events?: ReadonlyArray<{ eventName: string; payload: unknown }>): void;
+  /** Give up without advancing; discard only when the original surface cannot paint. */
+  abandon(options?: { discard?: boolean }): void;
 }
 
 const streams = new Map<string, SessionStream>();

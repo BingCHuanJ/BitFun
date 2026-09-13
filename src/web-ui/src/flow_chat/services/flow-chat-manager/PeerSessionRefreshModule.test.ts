@@ -398,7 +398,7 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
     cleanup();
   });
 
-  it('replays the Runtime projection before reconciling the blocking mailbox', async () => {
+  it('preserves other-session events while replaying the Runtime projection before its mailbox', async () => {
     stateMachineMock.get.mockReturnValue({
       getCurrentState: () => 'idle',
       getContext: () => ({ lastUpdateTime: 0, version: 0 }),
@@ -424,15 +424,22 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
         },
       ],
     };
-    const refresh = vi.fn(async () => ({
-      applied: true,
-      backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
-      latestTurnId: 'turn-live',
-      latestTurnStatus: 'processing',
-      runtimeEventSnapshot,
-      pendingUserQuestions: { revision: 2, questions: [] },
-    }));
+    const pendingOtherSession: string[] = [];
+    const paintedOtherSession: string[] = [];
+    const refresh = vi.fn(async () => {
+      pendingOtherSession.push('other-session text');
+      return {
+        applied: true,
+        backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+        latestTurnId: 'turn-live',
+        latestTurnStatus: 'processing',
+        runtimeEventSnapshot,
+        pendingUserQuestions: { revision: 2, questions: [] },
+      };
+    });
     const context = contextWithSnapshot(refresh);
+    context.eventBatcher.flushNow.mockImplementation(() => paintedOtherSession.push(...pendingOtherSession.splice(0)));
+    context.eventBatcher.clear.mockImplementation(() => { pendingOtherSession.length = 0; });
 
     const cleanup = installPeerSessionRefresh(context);
     await vi.advanceTimersByTimeAsync(1);
@@ -447,7 +454,8 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
       'agentic://text-chunk',
       runtimeEventSnapshot.events[1].payload,
     );
-    expect(context.eventBatcher.clear).toHaveBeenCalled();
+    expect(paintedOtherSession).toEqual(['other-session text']);
+    expect(context.eventBatcher.clear).not.toHaveBeenCalled();
     expect(context.flowChatStore.prepareRuntimeTurnReplay).toHaveBeenCalledWith(
       'session-1',
       'turn-live',
