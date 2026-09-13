@@ -548,12 +548,12 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
             <span role="cell">{runtime.spec.name}</span>
             <span role="cell" className="ecosystem-compatibility__content-summary-state">
               <StatusPill tone="neutral">{t(discoverySupported ? 'import.states.discoverySupported' : 'import.states.discoveryUnsupported')}</StatusPill>
-              {copyActionsSupported ? <Button size="sm" variant="text" disabled={busy} onClick={() => openNativeManagement(group)}>{t('content.manageNative')}</Button> : null}
               {expandable ? <IconButton size="sm" variant="quiet"
                 icon={<Icon name={expanded ? 'chevron-down' : 'chevron-right'} size="sm" />}
                 aria-label={t(expanded ? 'content.collapseCategory' : 'content.expandCategory', { type: t(`capabilities.${group}`) })}
                 aria-expanded={expanded} aria-controls={groupId}
                 onClick={() => { setKind(expanded ? null : group); setSearch(''); setSelected(new Set()); }} /> : null}
+              {copyActionsSupported ? <Button className="ecosystem-compatibility__content-summary-manage" size="sm" variant="text" disabled={busy} onClick={() => openNativeManagement(group)}>{t('content.manageNative')}</Button> : null}
             </span>
           </div>
         <div role="row" hidden={!expanded}>
