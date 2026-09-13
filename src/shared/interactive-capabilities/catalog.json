@@ -3822,7 +3822,8 @@
           },
           "evidence": [
             "command:get_external_ecosystem_awareness_command",
-            "command:get_external_source_snapshot"
+            "command:get_external_source_snapshot",
+            "command:get_instruction_source_catalog"
           ]
         },
         {

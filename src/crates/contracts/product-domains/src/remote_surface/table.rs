@@ -289,6 +289,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("get_global_config_status",                                   Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("get_global_skill_settings",                                  Agnostic,    Proxied,          CLI_NOT_IMPLEMENTED),
     op("get_health_status",                                          Agnostic,    Proxied,          CLI_NOT_IMPLEMENTED),
+    op("get_instruction_source_catalog",                             Unsupported, Proxied,          CLI_NOT_IMPLEMENTED),
     op("get_latest_insights",                                        LocalOnly,   ControllerLocal,  REFUSED),
     op("get_mcp_prompt",                                             Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("get_mcp_remote_oauth_session",                               Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),

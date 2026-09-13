@@ -71,7 +71,8 @@
     "hook": "Hooks",
     "memory": "Memories",
     "plugin": "Plugins",
-    "pet": "Pets"
+    "pet": "Pets",
+    "instruction": "Instructions"
   },
   "import": {
     "title": "Import and reuse",
@@ -293,7 +294,21 @@
       "unknown": "The source was discovered, but this host has not confirmed usage status. Copy import is not supported on this page."
     },
     "hookDiscoveryOnly": "Static source and declaration preview only. This page cannot import or execute these hooks.",
-    "skillImportUnsupported": "This host does not advertise import support for this format. Upgrade the host handling this source and retry."
+    "skillImportUnsupported": "This host does not advertise import support for this format. Upgrade the host handling this source and retry.",
+    "instructions": {
+      "description": "Instruction sources read by OpenBitFun. Startup documents and matching path rules are applied by the instruction reader; this inventory does not indicate what a particular session has already loaded.",
+      "shared": "Shared workspace instructions",
+      "scope": "Scope",
+      "user": "User configuration",
+      "project": "Current project",
+      "application": "When applied",
+      "startup": "Startup context",
+      "conditional": "After a matching file read",
+      "patterns": "Workspace-relative path patterns",
+      "unsupportedHost": "Instruction source discovery is not available on this host or remote workspace. Local sources are not substituted.",
+      "partial": "Some instruction sources could not be read. The available sources are listed below.",
+      "readOnly": "Read by the instruction reader"
+    }
   },
   "sourceSettings": {
     "health": {

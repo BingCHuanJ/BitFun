@@ -3,6 +3,8 @@
 //! Concrete ecosystem providers are selected only in this assembly module. The
 //! catalog and product surfaces remain provider- and ecosystem-neutral.
 
+pub use crate::instruction_sources::{instruction_source_catalog, InstructionSourceCatalog};
+
 pub use openbitfun_product_domains::external_integration_policy::{
     EffectiveExternalIntegrationPolicy, ExternalIntegrationAccess, ExternalIntegrationMode,
     ExternalIntegrationPolicyMutation, ExternalIntegrationPolicyOperation,

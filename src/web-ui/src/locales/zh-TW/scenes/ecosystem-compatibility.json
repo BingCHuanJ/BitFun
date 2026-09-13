@@ -71,7 +71,8 @@
     "hook": "Hooks",
     "memory": "記憶",
     "plugin": "外掛",
-    "pet": "寵物"
+    "pet": "寵物",
+    "instruction": "指令與規則"
   },
   "import": {
     "title": "匯入與複用",
@@ -293,7 +294,21 @@
       "unknown": "已發現來源，但主機未確認使用狀態；此頁暫不支援副本匯入。"
     },
     "hookDiscoveryOnly": "僅靜態查看 Hook 來源與宣告；此頁不支援匯入，也不會據此執行。",
-    "skillImportUnsupported": "目前主機未提供此格式的匯入能力。請升級處理該來源的主機後重試。"
+    "skillImportUnsupported": "目前主機未提供此格式的匯入能力。請升級處理該來源的主機後重試。",
+    "instructions": {
+      "description": "OpenBitFun 讀取的指令來源。啟動指令與依路徑比對的規則由現有讀取器套用；此清單不表示某個工作階段已經載入這些內容。",
+      "shared": "共用專案指令",
+      "scope": "作用範圍",
+      "user": "使用者設定",
+      "project": "目前專案",
+      "application": "套用時機",
+      "startup": "啟動上下文",
+      "conditional": "讀取符合條件的檔案後",
+      "patterns": "相對於工作區的比對路徑",
+      "unsupportedHost": "目前主機或遠端工作區尚不支援查看指令來源，不會替用本機來源。",
+      "partial": "部分指令來源讀取失敗，以下保留可讀取的來源。",
+      "readOnly": "由指令讀取器套用"
+    }
   },
   "sourceSettings": {
     "health": {
