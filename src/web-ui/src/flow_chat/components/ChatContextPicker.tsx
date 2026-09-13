@@ -928,6 +928,8 @@ export const ChatContextPicker: React.FC<ChatContextPickerProps> = ({
                         <OverflowText
                           aria-label={skillDescription}
                           behavior="marquee"
+                          overflowStyle="ellipsis"
+                          marqueeTrigger="interaction"
                           className="chat-context-picker__skill-description"
                           data-openbitfun-component="chat-context-picker"
                           data-openbitfun-part="skillDescription"
@@ -949,7 +951,7 @@ export const ChatContextPicker: React.FC<ChatContextPickerProps> = ({
                   onMouseEnter={() => setSelectedIndex(index)}
                   value={key}
                 >
-                  {skill ? <span className="chat-context-picker__skill-name">{label}</span> : label}
+                  {skill ? <OverflowText behavior="fade" overflowStyle="ellipsis" title="">{label}</OverflowText> : label}
                 </ListboxOption>
               );
             })}

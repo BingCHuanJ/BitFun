@@ -374,12 +374,14 @@ describe('ChatContextPicker overlay', () => {
       .toBe(skill.name);
     expect(skillOptions[0]?.querySelector('[data-openbitfun-part="label"]')
       ?.getAttribute('data-overflow-behavior')).toBe('fade');
-    expect(skillOptions[0]?.querySelector('[data-openbitfun-part="label"] [data-overflow-content]'))
-      .toBeNull();
+    expect(skillOptions[0]?.querySelector('[data-openbitfun-part="label"] [data-overflow-style="ellipsis"]')
+      ?.getAttribute('data-overflow-behavior')).toBe('fade');
     expect(skillOptions[0]?.querySelector('[data-openbitfun-part="metadata"]')?.textContent)
       .toBe('Work with PDFs');
     const description = skillOptions[0]?.querySelector('[data-openbitfun-part="skillDescription"]');
     expect(description?.getAttribute('data-marquee-active')).toBeNull();
+    expect(description?.getAttribute('data-marquee-trigger')).toBe('interaction');
+    expect(description?.getAttribute('data-overflow-style')).toBe('ellipsis');
     expect(description?.getAttribute('title')).toBe('');
     expect(skillOptions[0]?.getAttribute('title')).toBe('');
     expect(skillOptions[0]?.querySelector('[data-openbitfun-part="label"]')?.getAttribute('title')).toBe('');

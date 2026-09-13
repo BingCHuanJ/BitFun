@@ -159,6 +159,15 @@ its virtual active state through this contract. Selected
 tabs do not animate automatically. Motion respects `prefers-reduced-motion`;
 reduced-motion users keep the static fade. Text and movement follow RTL direction.
 
+Use `overflowStyle="ellipsis"` when a single-line slot requires a visible ellipsis
+instead of a resting fade. It works with static `behavior="fade"` labels and with
+`behavior="marquee"`, which reveals the full text on interaction and returns to
+the ellipsis afterward. Reduced motion keeps the ellipsis. Multiline clamps retain
+their existing behavior. Set `marqueeTrigger="interaction"` to ignore virtual
+active state on both the label and its owner; the default
+`"interaction-or-active"` preserves existing listbox behavior. This also prevents
+virtual activation from opening the label's tooltip; actual hover/focus still works.
+
 Rich children default to fade to preserve the label's existing inline composition.
 Composite containers keep their icons/actions fixed and give each text slot its
 own `OverflowText`. Marquee measures and

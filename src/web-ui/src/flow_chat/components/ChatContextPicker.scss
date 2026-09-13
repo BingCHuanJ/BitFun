@@ -130,13 +130,6 @@
     max-inline-size: 60%;
   }
 
-  &__skill-name {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   &__skill-option > [data-openbitfun-part='metadata'] {
     flex: 1 1 auto;
     inline-size: 8rem;
@@ -146,30 +139,8 @@
 
   &__skill-description {
     inline-size: 100%;
-    // This picker uses a visible ellipsis instead of the shared resting fade.
-    -webkit-mask-image: none;
-    mask-image: none;
   }
 
-  &__skill-option:not(:hover):not(:focus-visible) &__skill-description > [data-overflow-content] {
-    display: block;
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    // Virtual selection alone must not start the marquee on initial opening.
-    animation: none;
-    transform: none;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    &__skill-description > [data-overflow-content] {
-      display: block;
-      min-inline-size: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-  }
-  
   &__footer {
     display: flex;
     align-items: center;
