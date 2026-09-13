@@ -2176,6 +2176,13 @@ export function ComponentDetailPage({
                         </Fragment>
                       ))}
                     </div>
+                    <div className="component-preview-row">
+                      <code>labelBehavior="static"</code>
+                      <Button labelBehavior="static" size="sm" variant="text"
+                        style={{ maxInlineSize: 220, blockSize: "auto", whiteSpace: "normal" }}>
+                        {t("components.preview.cardDescription")}
+                      </Button>
+                    </div>
                   </section>
                 ))
               ) : component.name === "Icon" ? (

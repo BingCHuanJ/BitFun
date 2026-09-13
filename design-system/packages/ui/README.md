@@ -63,6 +63,16 @@ compact-window contract. Build and source tests do not prove visual fidelity.
 
 ## Buttons
 
+`labelBehavior="overflow"` is the default and retains the shared OverflowText
+behavior. Use `labelBehavior="static"` for actions whose text must keep its
+existing wrapping or inline composition without adding clipping, a marquee,
+or an automatic overflow tooltip. Static labels inherit the button's whitespace
+and line height; button variants, sizes, loading, and disabled behavior stay the
+same. An explicitly composed OverflowText child retains its own behavior.
+The public `data-openbitfun-part` slots are `root`, `content`, `label`,
+`leading-icon`, `trailing-icon`, and `progress`; use them for scoped product
+layout instead of private CSS module classes.
+
 Choose variants by action role: use `primary` for the main save, submit, create,
 or confirm action, and `fill` for cancel, dismiss, or discard alongside it.
 Keep `outline` for ordinary toolbar utilities and secondary choices. A neutral

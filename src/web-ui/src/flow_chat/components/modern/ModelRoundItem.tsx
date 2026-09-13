@@ -10,7 +10,7 @@
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Icon, IconButton, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
+import { Button, Icon, IconButton, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 import { CircleAlert } from 'lucide-react';
 import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
@@ -607,7 +607,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
         {historyRounds.length > 0 && (
           <div className="model-round-item__retry-history" data-openbitfun-product-component="model-round-item" data-openbitfun-product-part="retryHistory">
-            <button
+            <Button labelBehavior="static" variant="text"
               type="button"
               className="model-round-item__retry-toggle"
               data-openbitfun-product-component="model-round-item"
@@ -618,7 +618,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               {showRoundHistory
                 ? t('modelRound.roundHistoryHide')
                 : t('modelRound.roundHistoryShow', { count: historyRounds.length })}
-            </button>
+            </Button>
 
             {showRoundHistory && historyRounds.map((historyRound, historyIndex) => {
               const historyAttempts = sortRoundAttempts(historyRound.attempts ?? []);
@@ -643,7 +643,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   </div>
                   {historyOlderAttempts.length > 0 && (
                     <div className="model-round-item__retry-history" data-openbitfun-product-component="model-round-item" data-openbitfun-product-part="retryHistory">
-                      <button
+                      <Button labelBehavior="static" variant="text"
                         type="button"
                         className="model-round-item__retry-toggle"
                         data-openbitfun-product-component="model-round-item"
@@ -654,7 +654,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                         {showHistoryRoundAttempts
                           ? t('modelRound.retryHistoryHide')
                           : t('modelRound.retryHistoryShow', { count: historyOlderAttempts.length })}
-                      </button>
+                      </Button>
 
                       {showHistoryRoundAttempts && historyOlderAttempts.map((attempt) => {
                         const attemptGroups = buildModelRoundItemGroups({
@@ -693,7 +693,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
         {historicalAttempts.length > 0 && (
           <div className="model-round-item__retry-history" data-openbitfun-product-component="model-round-item" data-openbitfun-product-part="retryHistory">
-            <button
+            <Button labelBehavior="static" variant="text"
               type="button"
               className="model-round-item__retry-toggle"
               data-openbitfun-product-component="model-round-item"
@@ -704,7 +704,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               {showRetryHistory
                 ? t('modelRound.retryHistoryHide')
                 : t('modelRound.retryHistoryShow', { count: historicalAttempts.length })}
-            </button>
+            </Button>
 
             {showRetryHistory && historicalAttempts.map((attempt) => {
               const attemptGroups = buildModelRoundItemGroups({
