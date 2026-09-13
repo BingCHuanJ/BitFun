@@ -558,6 +558,26 @@ pub(crate) fn opencode_configured_skill_roots(
     )
 }
 
+pub(crate) fn pi_configured_skill_roots(
+    workspace_root: Option<&Path>,
+) -> (
+    Vec<LocalConfiguredSkillRootContribution>,
+    Vec<(String, String)>,
+) {
+    let report = openbitfun_pi_adapter::PiSkillRootProvider::default().discover(workspace_root);
+    let roots = report
+        .roots
+        .into_iter()
+        .enumerate()
+        .map(|(precedence, root)| LocalConfiguredSkillRootContribution {
+            path: root.path,
+            scope: root.scope,
+            precedence,
+        })
+        .collect();
+    (roots, report.diagnostics)
+}
+
 fn opencode_configured_skill_roots_with_provider(
     workspace_root: Option<&Path>,
     provider: &OpenCodeSkillRootProvider,

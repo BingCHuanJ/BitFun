@@ -15,7 +15,8 @@ use super::types::{
 use crate::agentic::workspace::WorkspaceFileSystem;
 #[cfg(feature = "external-sources")]
 use crate::external_sources::{
-    opencode_configured_skill_roots, LocalConfiguredSkillRootContribution,
+    opencode_configured_skill_roots, pi_configured_skill_roots,
+    LocalConfiguredSkillRootContribution,
 };
 use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
@@ -1096,6 +1097,21 @@ impl SkillRegistry {
 
         #[cfg(feature = "external-sources")]
         {
+            // Explicit Pi paths are re-read on every scan, including refresh and import
+            // validation, so changes outside the standard watched roots cannot stay cached.
+            let (pi_roots, pi_diagnostics) = pi_configured_skill_roots(workspace_root);
+            diagnostics.extend(pi_diagnostics.into_iter().map(|(path, message)| {
+                SkillScanDiagnostic {
+                    path,
+                    source_id: "pi".into(),
+                    message,
+                }
+            }));
+            let pi_scan =
+                Self::scan_configured_pi_candidates(pi_roots, &standard, workspace_root.is_some())
+                    .await;
+            standard.extend(pi_scan.candidates);
+            diagnostics.extend(pi_scan.diagnostics);
             // OpenCode configured roots are workspace-sensitive: an absolute path
             // from user config may become project-scoped for the current workspace.
             // Discover and scan them once per request so scope and the 64-root cap
@@ -2502,6 +2518,7 @@ mod remote_scan_tests {
         peak: AtomicUsize,
         calls: AtomicUsize,
         installation_lock: Option<String>,
+        pi_settings: Option<String>,
     }
 
     impl DelayedFs {
@@ -2521,6 +2538,13 @@ mod remote_scan_tests {
         }
         async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
             self.round_trip().await;
+            if path.ends_with("/.pi/settings.json") {
+                assert_eq!(path, "/remote/project/.pi/settings.json");
+                return self
+                    .pi_settings
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("missing settings"));
+            }
             if path.ends_with("skills-lock.json") {
                 assert_eq!(path, "/remote/project/skills-lock.json");
                 return self
@@ -2540,6 +2564,9 @@ mod remote_scan_tests {
             anyhow::bail!("read-only fixture")
         }
         async fn exists(&self, path: &str) -> anyhow::Result<bool> {
+            if path.ends_with("/.pi/settings.json") {
+                return Ok(self.pi_settings.is_some());
+            }
             if path.ends_with("skills-lock.json") {
                 return Ok(self.installation_lock.is_some());
             }
@@ -2568,6 +2595,22 @@ mod remote_scan_tests {
                 })
                 .collect())
         }
+    }
+
+    #[tokio::test]
+    async fn remote_pi_settings_paths_report_unsupported_without_local_substitution() {
+        let fs = DelayedFs {
+            pi_settings: Some(r#"{"skills":["/controller/private-skills"]}"#.into()),
+            ..Default::default()
+        };
+        let scan = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project").await;
+        assert!(scan.diagnostics.iter().any(|entry| entry.source_id == "pi"
+            && entry.path == "/remote/project/.pi/settings.json"
+            && entry.message.contains("not supported")));
+        assert!(!scan
+            .candidates
+            .iter()
+            .any(|candidate| candidate.info.path.contains("controller")));
     }
 
     #[tokio::test]
