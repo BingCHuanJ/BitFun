@@ -11,7 +11,7 @@ import { FlowChatStore } from '../../store/FlowChatStore';
 import { notificationService } from '@/shared/notification-system';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
-import { Icon, IconButton, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
+import { Button, Icon, IconButton, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../../types/flow-chat';
@@ -556,7 +556,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         messageNode: (
           <>
             {successPrefix}
-            <button
+            <Button labelBehavior="static" variant="text"
               type="button"
               className="notification-item__path-link"
               onClick={(e) => {
@@ -566,7 +566,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
               }}
             >
               {filePath}
-            </button>
+            </Button>
           </>
         ),
       });

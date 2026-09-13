@@ -490,6 +490,18 @@
   vertical-align: middle;
 
   button {
+    display: inline-block;
+    block-size: auto;
+    letter-spacing: inherit;
+    white-space: normal;
+    text-decoration: none;
+    transition: none;
+    outline: revert;
+    outline-offset: revert;
+
+    &::before { content: none; }
+    > [data-openbitfun-part='content'] { display: contents; }
+
     flex-shrink: 0;
     padding: 0.15em 0.5em;
     border: 1px solid currentColor;

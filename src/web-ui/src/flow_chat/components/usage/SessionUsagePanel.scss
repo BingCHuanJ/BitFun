@@ -544,6 +544,31 @@
     }
   }
 
+  &__turn-link,
+  &__row-anchor-link,
+  &__turn-index-link,
+  &__table-expand {
+    block-size: auto;
+    border-radius: 0;
+    letter-spacing: inherit;
+    transition: none;
+
+    &::before { content: none; }
+    > [data-openbitfun-part='content'] { display: contents; }
+  }
+
+  &__turn-index-link,
+  &__table-expand {
+    display: inline-block;
+    white-space: normal;
+  }
+
+  &__table-expand {
+    text-decoration: none;
+    outline: revert;
+    outline-offset: revert;
+  }
+
   &__slow-span {
     display: flex;
     flex-direction: column;

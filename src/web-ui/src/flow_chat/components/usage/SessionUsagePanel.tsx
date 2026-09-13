@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, Database, FileText, GitCompare, ShieldCheck, Wrench, type LucideProps } from 'lucide-react';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
-import { OverflowText, Tooltip } from '@openbitfun/ui';
+import { Button, OverflowText, Tooltip } from '@openbitfun/ui';
 import { snapshotAPI } from '@/infrastructure/api';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -440,7 +440,7 @@ function UsageRowAnchorLink({
 
   const jumpHelp = t('usage.actions.jumpToTurn');
   const node = (
-    <button data-overflow-trigger
+    <Button labelBehavior="static" variant="text" data-overflow-trigger
       type="button"
       className="session-usage-panel__row-anchor-link"
       onClick={() => {
@@ -462,7 +462,7 @@ function UsageRowAnchorLink({
       aria-label={`${jumpHelp}: ${label}`}
     ><OverflowText>
       {label}
-    </OverflowText></button>
+    </OverflowText></Button>
   );
 
   return (
@@ -517,14 +517,14 @@ function UsageFileTurnIndexesValue({
         const displayTurnText = formatUsageNumber(displayTurnIndex, t);
         return (
           <Tooltip key={rawTurnIndex} content={t('usage.actions.jumpToTurn')}>
-            <button
+            <Button labelBehavior="static" variant="text"
               type="button"
               className="session-usage-panel__turn-index-link"
               onClick={() => onJumpToTurn(file, rawTurnIndex)}
               aria-label={`${t('usage.actions.jumpToTurn')}: ${displayTurnText}`}
             >
               {displayTurnText}
-            </button>
+            </Button>
           </Tooltip>
         );
       })}
@@ -1140,14 +1140,14 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
               node: (
                 <div className="session-usage-panel__slow-span">
                   <Tooltip content={spanHelp ? `${spanHelp} ${jumpHelp}` : jumpHelp}>
-                    <button data-overflow-trigger
+                    <Button labelBehavior="static" variant="text" data-overflow-trigger
                       type="button"
                       className="session-usage-panel__turn-link"
                       onClick={() => handleJumpToSpan(span)}
                       aria-label={`${jumpHelp}: ${spanLabel}`}
                     ><OverflowText>
                       {spanLabel}
-                    </OverflowText></button>
+                    </OverflowText></Button>
                   </Tooltip>
                   {detailRows.length > 0 && (
                     <dl className="session-usage-panel__slow-span-details">
@@ -1312,7 +1312,7 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
               total: rows.length,
             })}
           </span>
-          <button
+          <Button labelBehavior="static" variant="text"
             type="button"
             className="session-usage-panel__table-expand"
             onClick={() => setExpanded(value => !value)}
@@ -1320,7 +1320,7 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
             {expanded
               ? t('usage.table.showFewerRows', { count: MAX_USAGE_TABLE_ROWS })
               : t('usage.table.showAllRows', { count: rows.length })}
-          </button>
+          </Button>
         </div>
       )}
     </>
