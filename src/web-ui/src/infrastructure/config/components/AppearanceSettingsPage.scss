@@ -338,6 +338,10 @@
 
 }
 
+.appearance-market__dialog-header {
+  align-items: center;
+}
+
 /* Fixed height: every view scrolls internally so the dialog never resizes while loading. */
 .appearance-market__modal {
   min-height: min(720px, 78vh);

@@ -41,6 +41,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@openbitfun/ui', async (importOriginal) => ({
   NavigationPanelItem: (await importOriginal<typeof import('@openbitfun/ui')>()).NavigationPanelItem,
+  DialogHeaderActions: (await importOriginal<typeof import('@openbitfun/ui')>()).DialogHeaderActions,
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   OverflowText: ({ children, behavior: _behavior, marqueeActive: _marqueeActive, ...props }: any) => <span {...props}>{children}</span>,
@@ -103,7 +104,7 @@ vi.mock('@/infrastructure/confirm-dialog', () => ({
 }));
 
 vi.mock('@/features/market-account', () => ({
-  AccountIdentityControls: () => <div data-testid="shared-market-account-controls" />,
+  AccountIdentityControls: () => <button type="button" data-testid="shared-market-account-controls">@reviewer</button>,
 }));
 
 vi.mock('@/infrastructure/account-identity', () => ({
@@ -260,6 +261,11 @@ describe('AppearanceMarketDialog', () => {
     });
     await vi.waitFor(() => expect(container.textContent).toContain('Tokyo Night'));
     expect(container.querySelector('[data-testid="shared-market-account-controls"]')).not.toBeNull();
+    expect(container.querySelector('h2')?.textContent).toBe('package.market.title');
+    const accountControls = container.querySelector('[data-testid="shared-market-account-controls"]')!;
+    const headerActions = accountControls.closest('[data-openbitfun-part="header-actions"]');
+    expect(headerActions).not.toBeNull();
+    expect(headerActions?.querySelector('button[aria-label="Close"]')).not.toBeNull();
     expect(container.textContent).toContain('package.market.updateAvailable');
 
     const listingButton = [...container.querySelectorAll('button')]

@@ -9,6 +9,7 @@ import { OverflowText,
   DialogBody,
   DialogClose,
   DialogHeader,
+  DialogHeaderActions,
   DialogHeading,
   DialogTitle,
 } from '@openbitfun/ui';
@@ -457,11 +458,14 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
       size="xl"
       data-testid="appearance-market-dialog"
     >
-      <DialogHeader>
+      <DialogHeader className="appearance-market__dialog-header">
         <DialogHeading>
-          <DialogTitle>{t('package.market.title')}{<AccountIdentityControls />}</DialogTitle>
+          <DialogTitle>{t('package.market.title')}</DialogTitle>
         </DialogHeading>
-        <DialogClose />
+        <DialogHeaderActions>
+          <AccountIdentityControls />
+          <DialogClose />
+        </DialogHeaderActions>
       </DialogHeader>
       <DialogBody>
         <div className="appearance-market__modal">
