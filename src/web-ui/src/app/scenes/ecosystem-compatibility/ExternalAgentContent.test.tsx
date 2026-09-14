@@ -46,6 +46,9 @@ vi.mock('@openbitfun/ui', () => {
     DialogClose: () => null, DialogFooter: Wrapper, DialogHeader: Wrapper, DialogHeading: Wrapper, DialogTitle: Wrapper, DialogBody: Wrapper,
     Icon: () => <span data-icon="true" />,
     IconButton: ({ icon, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon: React.ReactNode }) => <button {...props}>{icon}</button>,
+    Card: Wrapper,
+    CardHeader: ({ title, description }: { title?: React.ReactNode; description?: React.ReactNode }) => <div>{title}{description}</div>,
+    Alert: ({ message }: { message: React.ReactNode }) => <div role="alert">{message}</div>,
     ScrollArea: Wrapper, LoadingState: Wrapper, OverflowText: Wrapper, StatusPill: Wrapper,
   };
 });
@@ -145,7 +148,7 @@ describe('external agent content and explicit import boundary', () => {
     const account = container.querySelector('[data-content-group="account"]')!;
     expect(account.textContent).toContain('codex@example.test');
     expect(account.textContent).not.toContain('other@example.test');
-    expect(account.textContent).toContain('content.accounts.states.connected');
+    expect(account.textContent).toContain('content.accounts.labels.connected');
     expect(account.querySelector('input[type="checkbox"]')).toBeNull();
     expect(account.textContent).not.toContain('content.importSelected');
     await click('content.accounts.manage');
@@ -157,7 +160,7 @@ describe('external agent content and explicit import boundary', () => {
     mocks.getAccounts.mockResolvedValue([{ provider: 'opencode', connected: false }]);
     await render('opencode');
     await expand('account');
-    expect(container.textContent).toContain('content.accounts.states.notConnected');
+    expect(container.textContent).toContain('content.accounts.labels.notConnected');
     await click('content.accounts.connect');
     expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'ai.models' });
   });
@@ -171,7 +174,7 @@ describe('external agent content and explicit import boundary', () => {
     await expand('account');
     const account = container.querySelector('[data-content-group="account"]')!;
     expect(account.textContent).toContain(`content.accounts.states.${state}`);
-    expect(account.textContent).not.toContain('content.accounts.states.connected');
+    expect(account.textContent).not.toContain('content.accounts.labels.connected');
     expect(account.textContent).toContain('content.accounts.connect');
   });
 
@@ -186,7 +189,7 @@ describe('external agent content and explicit import boundary', () => {
     expect(container.textContent).not.toContain('old@example.test');
     mocks.getAccounts.mockResolvedValue([{ provider: 'codex', connected: false }]);
     await act(async () => refresh.click());
-    expect(container.textContent).toContain('content.accounts.states.notConnected');
+    expect(container.textContent).toContain('content.accounts.labels.notConnected');
   });
 
   it('hides local account identity immediately on a peer switch and does not query peer accounts', async () => {

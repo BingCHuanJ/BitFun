@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Button, Icon, IconButton, LoadingState, OverflowText, StatusPill } from '@openbitfun/ui';
+import { Alert, Button, Card, CardHeader, Icon, IconButton, LoadingState, OverflowText, StatusPill } from '@openbitfun/ui';
 import { CircleUserRound } from 'lucide-react';
 import { aiApi, type SubscriptionAccount } from '@/infrastructure/api/service-api/AIApi';
 import { useI18n } from '@/infrastructure/i18n';
@@ -72,15 +72,26 @@ export default function EcosystemAccounts({ provider, supported, refreshVersion,
           aria-expanded={expanded} aria-controls={id} onClick={() => { if (!expanded) setRevision((value) => value + 1); onToggle(); }} />
       </span>
     </div>
-    {expanded ? <div role="row"><div id={id} role="cell" aria-colspan={3} className="ecosystem-compatibility__content-expanded">
-      <p>{t(`content.accounts.notes.${provider}`)}</p>
-      {supported && loading ? <LoadingState size="sm">{t('loading')}</LoadingState> : null}
-      <p role="status">{t(`content.accounts.states.${state}`)}</p>
-      {account?.account ? <p><OverflowText>{account.account}</OverflowText></p> : null}
-      <div className="ecosystem-compatibility__content-filters">
-        {account ? <Button size="sm" variant="outline" onClick={openAccountSettings}>{t(account.connected && !account.reauthentication_required && !account.vault_unavailable ? 'content.accounts.manage' : 'content.accounts.connect')}</Button> : null}
-        <Button size="sm" variant="outline" disabled={!supported || loading} onClick={() => setRevision((value) => value + 1)}>{t('content.refresh')}</Button>
-      </div>
-    </div></div> : null}
+    <div role="row" hidden={!expanded}><div id={id} role="cell" aria-colspan={3} className="ecosystem-compatibility__content-expanded">
+      {expanded ? <Card appearance="subtle" padding="sm" className="ecosystem-compatibility__account-panel">
+        <CardHeader
+          title={<OverflowText>{account?.account || t(`content.accounts.providers.${provider}`)}</OverflowText>}
+          description={supported && loading
+            ? <LoadingState size="sm">{t('loading')}</LoadingState>
+            : t(`content.accounts.notes.${provider}`)}
+        />
+        <div className="ecosystem-compatibility__account-actions">
+          {account ? <Button size="sm" variant="outline" onClick={openAccountSettings}>{t(account.connected && !account.reauthentication_required && !account.vault_unavailable ? 'content.accounts.manage' : 'content.accounts.connect')}</Button> : null}
+          <IconButton size="sm" variant="quiet" icon={<Icon name="refresh" size="sm" />}
+            aria-label={t('content.accounts.refresh')} title={t('content.accounts.refresh')}
+            disabled={!supported || loading} onClick={() => setRevision((value) => value + 1)} />
+        </div>
+        {!['loading', 'connected', 'notConnected'].includes(state) ? <Alert
+          className="ecosystem-compatibility__account-feedback"
+          tone={state === 'failed' ? 'error' : 'info'}
+          message={t(`content.accounts.states.${state}`)}
+        /> : null}
+      </Card> : null}
+    </div></div>
   </div>;
 }

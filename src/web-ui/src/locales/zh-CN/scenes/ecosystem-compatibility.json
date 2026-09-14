@@ -316,8 +316,8 @@
         "opencode": "OpenCode Console（Zen）"
       },
       "notes": {
-        "codex": "使用现有模型设置中的登录入口连接 ChatGPT 订阅。此处显示 OpenBitFun 的授权状态，不读取 Codex CLI 的登录凭据。登录后仍需在模型设置中添加要使用的模型。",
-        "opencode": "使用现有模型设置中的登录入口连接 OpenCode Console（Zen）。此处不读取 OpenCode 的外部登录凭据；Go 使用独立的 API Key 配置。登录后仍需添加要使用的模型。"
+        "codex": "接入 ChatGPT 订阅，在模型设置中选择要使用的模型。",
+        "opencode": "接入 OpenCode Zen，在模型设置中添加模型；Go 使用 API Key 配置。"
       },
       "states": {
         "unsupportedHost": "当前环境暂不支持账号接入",
@@ -339,7 +339,8 @@
         "reauthenticationRequired": "需重新登录",
         "connected": "已接入",
         "notConnected": "未接入"
-      }
+      },
+      "refresh": "刷新账号状态"
     }
   },
   "sourceSettings": {
