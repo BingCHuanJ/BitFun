@@ -572,7 +572,9 @@ const THIRD_PARTY_CAPABILITY_PROFILES = new Map([
   ['tokio-tungstenite', {
     label: 'Tokio Tungstenite',
     packages: new Map([
-      ['openbitfun-core', dependencyProfile([], { optional: true })],
+      ['openbitfun-core', { ...dependencyProfile([], { optional: true }),
+        devProfile: dependencyProfile([], { kind: 'dev' }),
+      }],
       // Loopback WebSocket lifecycle regressions only; the relay runtime is
       // an Axum server and does not acquire a TLS/client capability.
       ['openbitfun-relay-service', dependencyProfile(['connect', 'handshake'], {
@@ -727,6 +729,14 @@ function featureOwnedDependencyViolations(pkg, dependencyName, label, profile) {
 
 function thirdPartyDependencyProfileViolations(pkg, dependencyName, policy, profile) {
   const violations = [];
+  // A separately reviewed test client must not broaden the runtime edge.
+  if (profile.devProfile) {
+    const development = (pkg.dependencies ?? []).filter(dep => dep.name === dependencyName && dep.kind === 'dev');
+    if (development.length) violations.push(...thirdPartyDependencyProfileViolations(
+      { ...pkg, dependencies: development, features: {} }, dependencyName, policy, profile.devProfile,
+    ));
+    pkg = { ...pkg, dependencies: (pkg.dependencies ?? []).filter(dep => dep.name !== dependencyName || dep.kind !== 'dev') };
+  }
   const dependencies = (pkg.dependencies ?? []).filter(
     (dependency) => dependency.name === dependencyName,
   );

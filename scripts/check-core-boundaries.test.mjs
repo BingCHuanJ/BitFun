@@ -4805,3 +4805,18 @@ test('workspace transfer admits IO without process or networking capabilities', 
   assert.ok(findTokioDependencyFeatureViolations([pkg]).some(v =>
     v.message.includes('workspace-transfer has unexpected effective Tokio capabilities')));
 });
+
+
+test('core loopback WebSocket fixture cannot broaden the runtime dependency', () => {
+  const runtime = { name: 'tokio-tungstenite', kind: null, optional: true, uses_default_features: true, features: [] };
+  const development = { ...runtime, kind: 'dev', optional: false };
+  const pkg = packageAt('openbitfun-core', 'src/crates/assembly/core/Cargo.toml', [runtime, development]);
+  assert.deepEqual(findThirdPartyCapabilityFeatureViolations([pkg]), []);
+  for (const dependencies of [
+    [{ ...runtime, optional: false }, development],
+    [runtime, { ...development, features: ['rustls-tls-native-roots'] }],
+    [runtime, development, { ...development }],
+  ]) {
+    assert.ok(findThirdPartyCapabilityFeatureViolations([{ ...pkg, dependencies }]).length > 0);
+  }
+});

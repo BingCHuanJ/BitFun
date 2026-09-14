@@ -17935,7 +17935,17 @@ mod tests {
             .await
             .expect_err("unverified hints must not bypass local ownership");
 
-        assert!(error.to_string().contains("ownership"));
+        #[cfg(feature = "ssh-remote")]
+        assert!(
+            error.to_string().contains("not saved on this host"),
+            "{error}"
+        );
+        #[cfg(not(feature = "ssh-remote"))]
+        assert!(
+            error.to_string().contains("requires SSH support"),
+            "{error}"
+        );
+        assert!(workspace_service.get_opened_workspaces().await.is_empty());
     }
 
     #[tokio::test]
