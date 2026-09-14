@@ -474,4 +474,13 @@
     <string name="home_recent_all">All conversations</string>
     <string name="home_recent_empty">No conversations to continue yet</string>
     <string name="home_recent_connect">Connect a computer to continue your conversations.</string>
+    <string name="plan_title">Plan</string>
+    <string name="plan_view">View plan</string>
+    <string name="plan_build">Build plan</string>
+    <string name="plan_unsupported">This desktop does not support building plans.</string>
+    <string name="plan_wait">Wait for the current operation to finish.</string>
+    <string name="miniapps_title">Mini Apps</string>
+    <string name="miniapps_close">Close</string>
+    <string name="miniapps_back">Back</string>
+    <string name="chat_attachment_recovery_failed">Unable to restore or save image drafts. Tap to retry.</string>
 </resources>

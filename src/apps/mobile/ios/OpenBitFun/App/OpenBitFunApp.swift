@@ -16,6 +16,7 @@ struct OpenBitFunApp: App {
             } else {
                 ZStack {
                     MobileShellView(model: model)
+                        .accessibilityHidden(showStartupBrand)
                     if showStartupBrand {
                         StartupBrandReveal { showStartupBrand = false }
                     }

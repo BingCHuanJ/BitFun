@@ -711,7 +711,7 @@ extension MobileAppModel {
             openedSessionID: remoteOpenedSessionID,
             connected: remoteConnected && connectionPhase == .connected,
             busy: busy,
-            sending: isSending
+            sending: false // An active remote turn accepts steering or legacy queued messages.
         )
     }
 
@@ -724,6 +724,13 @@ extension MobileAppModel {
         isSending = true
         busy = true
         coreAdapter.sendRemote(sessionID: sessionID, content: value, images: images)
+    }
+
+    func buildRemotePlan(path: String, name: String) {
+        guard remoteHostCapabilities.contains("plan_build_v1"), !isSending,
+              let sessionID = remoteSendSessionID, !path.isEmpty else { return }
+        busy = true
+        coreAdapter?.buildRemotePlan(sessionID: sessionID, path: path, name: name)
     }
 
     func approveTool(_ toolID: String) {

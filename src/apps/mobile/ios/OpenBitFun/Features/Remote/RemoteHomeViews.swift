@@ -161,8 +161,7 @@ struct WelcomeHomeView: View {
                             else { model.connectRemote() }
                         }
                         welcomeAction("扫码连接电脑", symbol: "viewfinder") { model.scanRemote() }
-                        // This host does not yet ship the native MiniApp destination.
-                        Color.clear.frame(height: 44).accessibilityHidden(true)
+                        MiniAppsButton(model: model).foregroundStyle(MobileDesignColors.welcomeButton)
                     }
                     .padding(.horizontal, MobileDesignGeometry.welcomeGutter)
                     .padding(.top, MobileDesignGeometry.welcomeGutter)

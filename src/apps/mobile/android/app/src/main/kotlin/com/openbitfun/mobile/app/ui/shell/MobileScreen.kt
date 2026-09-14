@@ -384,6 +384,7 @@ internal fun MobileScreen() {
                                 )
                             },
                             accountUsername = readyAccount?.username.orEmpty(),
+                            attachmentOwner = org.json.JSONArray(listOf(readyAccount?.relayUrl, readyAccount?.username, readyAccount?.selectedDeviceId)).toString(),
                             phase = accountPhase,
                             settingsPlacement = settingsPlacement,
                             sessionDetailsPlacement = sessionDetailsPlacement,
