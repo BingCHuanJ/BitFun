@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Button, Checkbox, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Icon, IconButton, Input, LoadingState, OverflowText, ScrollArea, SearchField, Select, StatusPill, type IconSource } from '@openbitfun/ui';
+import { Alert, Button, Checkbox, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Icon, IconButton, Input, LoadingState, OverflowText, ScrollArea, SearchField, Select, StatusPill, type IconSource } from '@openbitfun/ui';
 import { EcosystemDialog as Dialog } from './EcosystemDialog';
 import { EcosystemBatchLayout } from './EcosystemBatchLayout';
 import EcosystemAccounts, { ecosystemAccountProvider } from './EcosystemAccounts';
@@ -557,7 +557,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
           <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setAccountRefreshVersion((value) => value + 1); setNotice(null); void refreshMcpPlan(); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
         </div>
       </div>
-      {notice && !review && !undo && !batch && !batchUndo ? <p className="ecosystem-compatibility__feedback" role="status">{notice}</p> : null}
+      {notice && !review && !undo && !batch && !batchUndo ? <Alert className="ecosystem-compatibility__notice ecosystem-compatibility__feedback" role="status" showIcon={false} message={notice} /> : null}
       {loading ? <LoadingState size="sm">{t('loading')}</LoadingState> : null}
       <div className="ecosystem-compatibility__content-overview" role="table" aria-label={t('content.title', { name: runtime.spec.name })}>
         <div className="ecosystem-compatibility__content-summary ecosystem-compatibility__content-summary--header" role="row">
@@ -612,7 +612,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
           <span>{t('content.selectedCount', { count: formatNumber(visible.filter((item) => selected.has(item.id)).length) })}</span>
         </> : null}
       </div>
-      {group === 'skill' ? skillDiagnostics.map((entry) => <p key={`${entry.path}:${entry.message}`} role="status">{entry.path}: {entry.message}</p>) : null}
+      {group === 'skill' ? skillDiagnostics.map((entry) => <Alert key={`${entry.path}:${entry.message}`} role="status" className="ecosystem-compatibility__notice" showIcon={false} message={<>{entry.path}: {entry.message}</>} />) : null}
       <ScrollArea className="ecosystem-compatibility__content-list" tabIndex={0} aria-label={t(`capabilities.${group}`)}>
       <div className="ecosystem-compatibility__import-table" role="table" aria-label={t('content.title', { name: runtime.spec.name })}>
         <div className="ecosystem-compatibility__import-row ecosystem-compatibility__import-row--header" role="row">
@@ -659,7 +659,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
             </section>;
           }}>
           {!batchUndo?.length ? <p>{t('content.undoEmpty')}</p> : null}
-          {notice ? <p role="alert" className="ecosystem-compatibility__feedback ecosystem-compatibility__feedback--error">{notice}</p> : null}
+          {notice ? <Alert role="alert" className="ecosystem-compatibility__notice ecosystem-compatibility__feedback ecosystem-compatibility__feedback--error" showIcon={false} message={notice} /> : null}
         </EcosystemBatchLayout>
         <DialogFooter><Button size="sm" variant="fill" disabled={busy} onClick={() => setBatchUndo(null)}>{t(batchUndoResults ? 'content.close' : 'content.cancel')}</Button>
           {!batchUndoResults ? <Button size="sm" variant="primary" tone="danger" disabled={busy || !batchUndo?.length} loading={busy} onClick={() => void confirmBatchUndo()}>{t('content.confirmUndo')}</Button> : null}
@@ -686,11 +686,11 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
               {entry.kind === 'hook' ? <><p>{t('content.hookWarning')}</p>{entry.plan.handlers.map((handler) => <div key={handler.stableKey}><p>{handler.event}{handler.matcher ? ` · ${handler.matcher}` : ''}</p><pre>{handler.command}</pre>{handler.commandWindows ? <pre>{handler.commandWindows}</pre> : null}{handler.dependencies.map((dependency) => <p key={dependency.kind === 'managed' ? dependency.relativePath : dependency.location}>{dependency.kind === 'managed' ? dependency.relativePath : dependency.location}</p>)}</div>)}{entry.plan.skipped.map((entry) => <p key={entry.reasonCode}>{t('content.skipped', { reason: entry.reasonCode, count: formatNumber(entry.count) })}</p>)}</> : null}
               {entry.kind === 'skill' && entry.preview ? <p>{t('content.reviewedPackage', { count: formatNumber(entry.preview.fileCount) })}</p> : null}
               {entry.kind === 'mcp' ? <p>{t('content.mcpTarget', { name: entry.plan.items.find((item) => item.candidateId === entry.candidateId)?.proposedNativeId ?? entry.name })}</p> : null}
-              </>}
+             </>}
             </section>;
           }}>
           {!batch?.length ? <p>{t('content.batchEmpty')}</p> : null}
-          {notice ? <p role="status">{notice}</p> : null}
+          {notice ? <Alert role="status" className="ecosystem-compatibility__notice" showIcon={false} message={notice} /> : null}
         </EcosystemBatchLayout>
         <DialogFooter><Button size="sm" variant="fill" disabled={busy} onClick={() => setBatch(null)}>{t(batchResults ? 'content.close' : 'content.cancel')}</Button>
           {!batchResults ? <Button size="sm" variant="primary" disabled={busy || !batch?.length} loading={busy} onClick={() => void confirmBatch()}>{t('content.confirm')}</Button> : null}
@@ -702,7 +702,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
           {undo ? <div className="ecosystem-compatibility__content-detail">
             <strong className="ecosystem-compatibility__detail-name">{undo.item.name}</strong><p className="ecosystem-compatibility__feedback">{t('content.undoWarning')}</p>
             <section className="ecosystem-compatibility__review-section"><h3>{t('content.nativeCopy')}</h3><p className="ecosystem-compatibility__path">{undo.review.target}</p></section>
-            {notice ? <p role="alert" className="ecosystem-compatibility__feedback ecosystem-compatibility__feedback--error">{notice}</p> : null}
+            {notice ? <Alert role="alert" className="ecosystem-compatibility__notice ecosystem-compatibility__feedback ecosystem-compatibility__feedback--error" showIcon={false} message={notice} /> : null}
           </div> : null}
         </DialogBody>
         <DialogFooter>
@@ -733,15 +733,15 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
                 <div className="ecosystem-compatibility__target-field"><label htmlFor={`${contentId}-scope`}>{t('content.targetScope')}</label><Select id={`${contentId}-scope`} size="sm" disabled={busy} value={review.level} onValueChange={(value) => { setNotice(null); const level = value as SkillLevel; setReview({ ...review, level, targetName: skillImportVersion >= 2 ? suggestSkillImportName(review.skill, level, skills) : undefined }); }} options={[{ value: 'user', label: t('content.userTarget') }, ...(workspacePath ? [{ value: 'project', label: t('content.projectTarget') }] : [])]} /></div>
                 {skillImportVersion >= 2 ? <div className="ecosystem-compatibility__target-field"><label htmlFor={`${contentId}-name`}>{t('content.importName')}</label><Input id={`${contentId}-name`} size="sm" disabled={busy} value={review.targetName ?? review.skill.dirName} onChange={(event) => { setNotice(null); setReview({ ...review, targetName: event.target.value }); }} /></div> : null}
                 {review.targetName ? <p className="ecosystem-compatibility__feedback">{t('content.renameNotice', { name: review.targetName })}</p> : null}
-                {review.targetName !== undefined && confirmDisabled && !busy ? <p role="alert" className="ecosystem-compatibility__feedback ecosystem-compatibility__feedback--error">{t('content.invalidImportName')}</p> : null}
-                {skillCollision(review.skill, review.level) && skillImportVersion < 2 ? <p role="alert" className="ecosystem-compatibility__feedback">{t(skillImportVersion >= 1 ? 'content.targetRepair' : 'content.targetExists')}</p> : null}
+                {review.targetName !== undefined && confirmDisabled && !busy ? <Alert role="alert" className="ecosystem-compatibility__notice ecosystem-compatibility__feedback ecosystem-compatibility__feedback--error" showIcon={false} message={t('content.invalidImportName')} /> : null}
+                {skillCollision(review.skill, review.level) && skillImportVersion < 2 ? <Alert role="alert" className="ecosystem-compatibility__notice ecosystem-compatibility__feedback" showIcon={false} message={t(skillImportVersion >= 1 ? 'content.targetRepair' : 'content.targetExists')} /> : null}
               </> : null}
               {review.kind === 'hook' ? <>
                 <p>{t('content.hookWarning')}</p>
                 {review.plan.handlers.map((handler) => <section key={handler.stableKey}><h4>{handler.event}{handler.matcher ? ` · ${handler.matcher}` : ''}</h4><pre>{handler.command}</pre>{handler.commandWindows ? <pre>{handler.commandWindows}</pre> : null}{handler.dependencies.map((dependency) => <p key={dependency.kind === 'managed' ? dependency.relativePath : dependency.location}>{dependency.kind === 'managed' ? dependency.relativePath : dependency.location}</p>)}</section>)}
                 {review.plan.skipped.map((entry) => <p key={entry.reasonCode}>{t('content.skipped', { reason: entry.reasonCode, count: formatNumber(entry.count) })}</p>)}
               </> : null}
-              {notice ? <p role="alert" className="ecosystem-compatibility__feedback ecosystem-compatibility__feedback--error">{notice}</p> : null}
+              {notice ? <Alert role="alert" className="ecosystem-compatibility__notice ecosystem-compatibility__feedback ecosystem-compatibility__feedback--error" showIcon={false} message={notice} /> : null}
             </> : null}
           </div> : null}
         </DialogBody>

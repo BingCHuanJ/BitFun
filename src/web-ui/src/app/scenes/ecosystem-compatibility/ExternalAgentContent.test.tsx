@@ -34,9 +34,10 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({ external
 vi.mock('@/infrastructure/api/service-api/AIApi', () => ({ aiApi: { listSubscriptionAccounts: mocks.getAccounts } }));
 vi.mock('@/infrastructure/api/service-api/InstructionSourcesAPI', () => ({ instructionSourcesAPI: { getCatalog: mocks.getInstructions } }));
 vi.mock('@/infrastructure/api/service-api/MCPAPI', () => ({ MCPAPI: { loadMCPJsonConfig: mocks.loadMcp, saveMCPJsonConfig: mocks.saveMcp } }));
-vi.mock('@openbitfun/ui', () => {
+vi.mock('@openbitfun/ui', async (importOriginal) => {
   const Wrapper = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
   return {
+    Alert: (await importOriginal<typeof import('@openbitfun/ui')>()).Alert,
     Input: ({ size: _size, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
     Checkbox: ({ size: _size, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => <input type="checkbox" {...props} />,
     Button: ({ children, disabled, onClick, 'aria-label': label }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button disabled={disabled} onClick={onClick} aria-label={label}>{children}</button>,
@@ -48,7 +49,6 @@ vi.mock('@openbitfun/ui', () => {
     IconButton: ({ icon, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon: React.ReactNode }) => <button {...props}>{icon}</button>,
     Card: Wrapper,
     CardHeader: ({ title, description }: { title?: React.ReactNode; description?: React.ReactNode }) => <div>{title}{description}</div>,
-    Alert: ({ message }: { message: React.ReactNode }) => <div role="alert">{message}</div>,
     ScrollArea: Wrapper, LoadingState: Wrapper, OverflowText: Wrapper, StatusPill: Wrapper,
   };
 });
@@ -524,6 +524,11 @@ describe('external agent content and explicit import boundary', () => {
     await click('content.confirm');
     expect(mocks.addSkill.mock.calls[0][0].targetName).toBe('demo-codex');
     expect(container.querySelector('[role="dialog"] [role="alert"]')?.textContent).toContain('content.skillNameConflict');
+    const alert = container.querySelector('[role="dialog"] [role="alert"]');
+    expect(alert?.getAttribute('data-openbitfun-component')).toBe('alert');
+    expect(alert?.getAttribute('aria-live')).toBe('assertive');
+    expect(alert?.querySelector('[data-openbitfun-part="icon"]')).toBeNull();
+    expect(mocks.addSkill).toHaveBeenCalledTimes(1);
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   });
 

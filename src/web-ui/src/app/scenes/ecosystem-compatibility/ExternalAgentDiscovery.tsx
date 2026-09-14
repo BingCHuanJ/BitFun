@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Select, Switch } from '@openbitfun/ui';
+import { Alert, Select, Switch } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { externalSourcesAPI, type ExternalIntegrationPolicyMutation, type ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
@@ -54,8 +54,8 @@ export default function ExternalAgentDiscovery({ runtime, snapshot, onSnapshotCh
         { value: 'disabled', label: t('sourceSettings.disabled') },
         ...(!['discover_only', 'disabled'].includes(mode) ? [{ value: mode, label: t('sourceSettings.existingPolicy') }] : []),
       ]} /></label>
-      {!canChange ? <p role="status">{t('sourceSettings.readOnly')}</p> : null}
-      {error ? <p role="alert">{t('sourceSettings.failed')}</p> : null}
+      {!canChange ? <Alert role="status" className="ecosystem-compatibility__notice" showIcon={false} message={t('sourceSettings.readOnly')} /> : null}
+      {error ? <Alert role="alert" className="ecosystem-compatibility__notice" showIcon={false} message={t('sourceSettings.failed')} /> : null}
       {runtime.sources.map((source) => <div key={source.stableKey}><strong>{source.record.displayName}</strong><p>{source.record.location}</p><small>{t(`sourceSettings.health.${source.record.health}`)}</small></div>)}
       {runtime.sources.length === 0 ? <p>{t('sourceSettings.empty')}</p> : null}
     </div>
