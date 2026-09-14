@@ -4,6 +4,7 @@ import OpenBitFunMobileCore
 private struct MobilePreviewRequestExpectation {
     let requestID: String
     let deviceKey: String?
+    let previewDeviceKey: String?
     let adapterEpoch: UInt64
     let sessionID: String
     let path: String
@@ -67,25 +68,28 @@ extension MobileAppModel {
             showToast(localized("仅远程工作区文件支持预览"))
             return
         }
+        guard let adapter = coreAdapter, adapter.canOpenRemoteFile else {
+            showToast(localized("连接不可用，请先重新连接"))
+            return
+        }
         filePreviewLoading = true
         let key = ObjectIdentifier(self)
         let requestID = UUID().uuidString
-        let path = normalizedRemotePath(reference)
-        let deviceKey = coreAdapter?.currentRemoteTargetKey
-        let adapterEpoch = coreAdapter?.currentRemoteTargetEpoch ?? 0
-        _ = coreAdapter?.openRemoteFile(
+        // Register before dispatch: a store may publish Loading immediately.
+        filePreviewRequestByModel[key] = MobilePreviewRequestExpectation(
+            requestID: requestID,
+            deviceKey: adapter.currentRemoteTargetKey,
+            previewDeviceKey: adapter.currentFilePreviewDeviceKey,
+            adapterEpoch: adapter.currentRemoteTargetEpoch,
+            sessionID: selectedSessionID,
+            path: normalizedRemotePath(reference),
+            controlTargetEpoch: nil
+        )
+        adapter.openRemoteFile(
             reference: reference,
             label: label,
             sessionID: selectedSessionID,
             requestID: requestID
-        )
-        filePreviewRequestByModel[key] = MobilePreviewRequestExpectation(
-            requestID: requestID,
-            deviceKey: deviceKey,
-            adapterEpoch: adapterEpoch,
-            sessionID: selectedSessionID,
-            path: path,
-            controlTargetEpoch: nil
         )
     }
 
@@ -227,16 +231,17 @@ extension MobileAppModel {
         let key = ObjectIdentifier(self)
         if !(state is RemoteFilePreviewUiStateNone) {
             guard var expected = filePreviewRequestByModel[key],
-                  RemoteAuthorityGate.fileTransferCallbackMatchesAuthority(
+                  let identity = stateRequestIdentity(state),
+                  RemoteAuthorityGate.filePreviewCallbackMatchesAuthority(
                       requestTargetKey: expected.deviceKey,
                       requestEpoch: expected.adapterEpoch,
                       adapterTargetKey: coreAdapter?.currentRemoteTargetKey,
-                      adapterEpoch: coreAdapter?.currentRemoteTargetEpoch ?? 0
+                      adapterEpoch: coreAdapter?.currentRemoteTargetEpoch ?? 0,
+                      expectedStoreDeviceKey: expected.previewDeviceKey,
+                      callbackDeviceKey: identity.deviceKey
                   ),
-                  let identity = stateRequestIdentity(state),
                   let target = stateTarget(state),
                   identity.requestId == expected.requestID,
-                  identity.deviceKey == expected.deviceKey,
                   identity.sessionId == expected.sessionID,
                   normalizedRemotePath(identity.path) == expected.path,
                   target.sessionId == expected.sessionID,

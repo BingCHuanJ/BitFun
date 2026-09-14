@@ -163,6 +163,10 @@ final class MobileCoreAdapter {
         let state = SkieSwiftStateFlow<AccountUiState>(account.state).value
         guard let ready = state as? AccountUiStateReady,
               ready.selectedDeviceId == id else { return }
+        // Selecting a persisted target can leave StateFlow unchanged. Publish
+        // the confirmed snapshot before binding stores so the UI exits switching
+        // even when no asynchronous account event is emitted.
+        onAccountState?(ready, accountGeneration)
         startAccountRemoteSessionIfNeeded(ready: ready, generation: accountGeneration)
     }
 
@@ -429,6 +433,11 @@ final class MobileCoreAdapter {
         remoteTargetEpoch &+= 1
         return .invalidated(newEpoch: remoteTargetEpoch)
     }
+
+    // Workspace-store identities use the raw device ID, not the adapter's
+    // namespaced account/pairing target key.
+    var currentFilePreviewDeviceKey: String? { remoteWorkspace?.deviceKey }
+    var canOpenRemoteFile: Bool { remoteWorkspace != nil }
 
     @discardableResult
     func openRemoteFile(reference: String, label: String, sessionID: String, requestID: String) -> String? {

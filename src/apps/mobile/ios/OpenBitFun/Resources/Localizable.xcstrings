@@ -1,6 +1,26 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "查看设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse devices"
+          }
+        }
+      }
+    },
+    "选择设备和工作区，继续你的对话。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a device and workspace to continue your conversations."
+          }
+        }
+      }
+    },
     "无法打开授权页面，请重试。": {
       "localizations": {
         "en": {
@@ -2257,6 +2277,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enter a message"
+          }
+        }
+      }
+    },
+    "子任务输出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtask output"
           }
         }
       }
