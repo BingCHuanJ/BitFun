@@ -135,6 +135,6 @@ project carries its connection identity through the create request.
 ## Connection recovery
 
 Native iOS and Android controllers probe idle session lists while the app is in the
-foreground. An open transcript uses its existing session poll for recovery instead
+foreground. An open transcript uses its durable session stream for recovery instead
 of duplicating the health request. Temporary transport failures keep the displayed
 list or transcript; a successful response restores the connected state.

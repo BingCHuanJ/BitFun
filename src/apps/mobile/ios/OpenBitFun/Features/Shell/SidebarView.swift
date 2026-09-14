@@ -202,7 +202,7 @@ struct SidebarView: View {
                 workspaceCreatePath = workspace.path + ":" + (workspace.remoteConnectionId ?? "")
             } else if ProcessInfo.processInfo.arguments.contains("--sidebar-actions"),
                       compactActionSession == nil,
-                      let session = shownRecentSessions.first {
+                      let session = model.sessionListSections.flatMap(\.sessions).first {
                 try? await Task.sleep(nanoseconds: 450_000_000)
                 if permanent { onPermanentActions?(session) }
                 else { compactActionSession = session }

@@ -7,6 +7,7 @@ import UIKit
 struct ChatTimelineView: View {
     @ObservedObject var model: MobileAppModel
     var onLoadOlderMessages: (() -> Void)? = nil
+    @State private var expandedMailboxToolID: String?
     @StateObject private var scrollController = TimelineScrollController()
     @State private var historyAnchor: (id: String, top: CGFloat, firstID: String)?
 
@@ -56,7 +57,7 @@ struct ChatTimelineView: View {
                     if model.surface == .remote, let mailbox = model.permissionMailbox {
                         if mailbox.failed { Text(model.localized("Permission request could not be completed. Retry to refresh pending requests.")); Button(model.localized("重试")) { model.refreshPermissionMailbox() } }
                         ForEach(mailbox.questions, id: \.id) { question in
-                            ToolStatusList(tools: [MobileAppModel.mapTool(question)], model: model)
+                            ToolStatusList(tools: [MobileAppModel.mapTool(question)], model: model, expandedToolID: $expandedMailboxToolID)
                                 .simultaneousGesture(TapGesture().onEnded { model.startQuestionInteraction(question.id) })
                         }
                         ForEach(mailbox.requests, id: \.requestId) { request in
