@@ -1,3 +1,4 @@
+import { Button, IconButton } from '@openbitfun/ui';
 import { GithubLogo } from '@phosphor-icons/react';
 import {
   RefreshCw as ArrowClockwise,
@@ -139,7 +140,7 @@ export default function App() {
             )}
           </nav>
           <div className="header-actions">
-            <button
+            <Button labelBehavior="static"
               type="button"
               className="icon-button language-button"
               onClick={() => setLocale(locale === 'zh-CN' ? 'en-US' : 'zh-CN')}
@@ -148,18 +149,17 @@ export default function App() {
             >
               <GlobeSimple size={19} aria-hidden="true" />
               <span>{locale === 'zh-CN' ? 'EN' : '中'}</span>
-            </button>
-            <button
+            </Button>
+            <IconButton
               type="button"
               className="icon-button"
               onClick={toggleTheme}
               aria-label={theme === 'dark' ? t('switchToLight') : t('switchToDark')}
               title={theme === 'dark' ? t('switchToLight') : t('switchToDark')}
-            >
-              {theme === 'dark'
+              icon={theme === 'dark'
                 ? <Sun size={20} aria-hidden="true" />
                 : <Moon size={20} aria-hidden="true" />}
-            </button>
+            />
             {!accountResolved ? (
               <div className="account-loading" role="status" aria-label={t('accountLoading')}>
                 <span className="account-loading__avatar" aria-hidden="true" />
@@ -170,16 +170,15 @@ export default function App() {
               <div className="account-profile">
                 <img src={account.user.avatarUrl} alt="" width="28" height="28" />
                 <span title={`@${account.user.login}`}>@{account.user.login}</span>
-                <button
+                <IconButton
                   type="button"
                   className="account-signout"
                   onClick={() => void signOut()}
                   disabled={accountBusy}
                   aria-label={t('signOut')}
                   title={t('signOut')}
-                >
-                  <SignOut size={18} aria-hidden="true" />
-                </button>
+                  icon={<SignOut size={18} aria-hidden="true" />}
+                />
               </div>
             ) : (
               <a
@@ -202,10 +201,10 @@ export default function App() {
       {accountError && (
         <div className="account-alert" role="alert" title={accountError.message}>
           <span>{t('accountError')}</span>
-          <button type="button" onClick={() => void refreshAccount()}>
+          <Button labelBehavior="static" type="button" onClick={() => void refreshAccount()}>
             <ArrowClockwise size={17} aria-hidden="true" />
             {t('retryAccount')}
-          </button>
+          </Button>
         </div>
       )}
 

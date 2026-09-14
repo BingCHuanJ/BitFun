@@ -1,4 +1,4 @@
-import { Textarea } from '@openbitfun/ui';
+import { Textarea, Button } from '@openbitfun/ui';
 import { GithubLogo } from '@phosphor-icons/react';
 import { RefreshCw as ArrowClockwise, ShieldCheck, CircleAlert as WarningCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -130,10 +130,10 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
           <h1>{t('reviewTitle')}</h1>
           <p>{t('reviewIntro')}</p>
         </div>
-        <button type="button" className="secondary-button" onClick={() => void load()} disabled={loading}>
+        <Button labelBehavior="static" type="button" className="secondary-button" onClick={() => void load()} disabled={loading}>
           <ArrowClockwise size={18} aria-hidden="true" />
           {t('refreshQueue')}
-        </button>
+        </Button>
       </header>
       {error && <div className="workflow-error" role="alert"><WarningCircle size={20} fill="currentColor" /><span>{t('reviewError')}</span><small>{error.message}</small></div>}
       {loading && queue.length === 0 ? <div className="workflow-loading">{t('reviewLoading')}</div>
@@ -147,7 +147,7 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
           <div className="review-workspace">
             <aside className="review-queue" aria-label={t('reviewQueueLabel')}>
               {queue.map(submission => (
-                <button
+                <Button labelBehavior="static"
                   type="button"
                   key={submission.submissionId}
                   aria-current={detail?.submission.submissionId === submission.submissionId || undefined}
@@ -156,7 +156,7 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
                   <strong>{submission.name || submission.slug}</strong>
                   <span>{submission.packageVersion ? `v${submission.packageVersion}` : submission.slug}</span>
                   <small>{formatMarketDate(submission.updatedAt, locale)}</small>
-                </button>
+                </Button>
               ))}
             </aside>
             <section className="review-detail">
@@ -208,8 +208,8 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
                     <label htmlFor="review-reason">{t('reviewReason')}</label>
                     <Textarea className="market-textarea" id="review-reason" rows={4} maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} placeholder={t('reviewReasonPlaceholder')} />
                     <div>
-                      <button type="button" className="secondary-button danger-button" disabled={acting || !reason.trim()} onClick={() => void decide('reject')}>{t('reviewReject')}</button>
-                      <button type="button" className="primary-button" disabled={acting} onClick={() => void decide('approve')}>{acting ? t('reviewActing') : t('reviewApprove')}</button>
+                      <Button labelBehavior="static" type="button" className="secondary-button danger-button" disabled={acting || !reason.trim()} onClick={() => void decide('reject')}>{t('reviewReject')}</Button>
+                      <Button labelBehavior="static" type="button" className="primary-button" disabled={acting} onClick={() => void decide('approve')}>{acting ? t('reviewActing') : t('reviewApprove')}</Button>
                     </div>
                   </div>
                 </>

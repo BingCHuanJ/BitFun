@@ -1,4 +1,4 @@
-import { Input } from '@openbitfun/ui';
+import { Input, Button } from '@openbitfun/ui';
 import { ArrowRight, Search as MagnifyingGlass } from 'lucide-react';
 import {
   useCallback,
@@ -180,14 +180,14 @@ export function CatalogPage({
 
           <div className="mode-filter" role="group" aria-label={t('modeFilterLabel')}>
             {(['all', 'light', 'dark'] as const).map((value) => (
-              <button
+              <Button labelBehavior="static"
                 key={value}
                 type="button"
                 aria-pressed={mode === value}
                 onClick={() => setMode(value)}
               >
                 {t(value === 'all' ? 'allModes' : value === 'light' ? 'lightMode' : 'darkMode')}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -229,15 +229,15 @@ export function CatalogPage({
         {error && items.length > 0 ? (
           <div className="inline-error" role="status">
             <span>{t('errorBody')}</span>
-            <button type="button" onClick={() => void loadMore()}>{t('retry')}</button>
+            <Button labelBehavior="static" type="button" onClick={() => void loadMore()}>{t('retry')}</Button>
           </div>
         ) : null}
 
         {nextCursor ? (
           <div className="load-more">
-            <button type="button" className="secondary-button" onClick={() => void loadMore()} disabled={loadingMore}>
+            <Button labelBehavior="static" type="button" className="secondary-button" onClick={() => void loadMore()} disabled={loadingMore}>
               {loadingMore ? t('loading') : t('loadMore')}
-            </button>
+            </Button>
           </div>
         ) : null}
       </section>
@@ -325,7 +325,7 @@ function ErrorState({ error, onRetry, t }: { error: unknown; onRetry: () => void
       <h3>{t('errorTitle')}</h3>
       <p>{t('errorBody')}</p>
       {requestId ? <code>{t('requestId', { id: requestId })}</code> : null}
-      <button type="button" className="secondary-button" onClick={onRetry}>{t('retry')}</button>
+      <Button labelBehavior="static" type="button" className="secondary-button" onClick={onRetry}>{t('retry')}</Button>
     </div>
   );
 }
