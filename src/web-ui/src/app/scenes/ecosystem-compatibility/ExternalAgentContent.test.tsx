@@ -42,9 +42,9 @@ vi.mock('@openbitfun/ui', async (importOriginal) => {
     Checkbox: ({ size: _size, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => <input type="checkbox" {...props} />,
     Button: ({ children, disabled, onClick, 'aria-label': label }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button disabled={disabled} onClick={onClick} aria-label={label}>{children}</button>,
     Select: ({ value, options, onValueChange, disabled }: { value: string; options: Array<{ value: string; label: string }>; onValueChange: (value: string) => void; disabled?: boolean }) => <select value={value} disabled={disabled} onChange={(event) => onValueChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>,
-    SearchField: ({ value, onChange }: React.InputHTMLAttributes<HTMLInputElement>) => <input value={value} onChange={onChange} />,
-    Dialog: ({ open, children, onOpenChange }: React.PropsWithChildren<{ open: boolean; onOpenChange: (open: boolean) => void }>) => open ? <div role="dialog"><button onClick={() => onOpenChange(false)}>close</button>{children}</div> : null,
-    DialogClose: () => null, DialogFooter: Wrapper, DialogHeader: Wrapper, DialogHeading: Wrapper, DialogTitle: Wrapper, DialogBody: Wrapper,
+    SearchField: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+    Dialog: ({ open, children, onOpenChange, id, 'data-ecosystem-category': category }: React.PropsWithChildren<{ open: boolean; onOpenChange: (open: boolean) => void; id?: string; 'data-ecosystem-category'?: string }>) => open ? <div role="dialog" id={id} data-ecosystem-category={category}><button onClick={() => onOpenChange(false)}>close</button>{children}</div> : null,
+    DialogClose: () => null, DialogDescription: Wrapper, DialogHeaderActions: Wrapper, DialogFooter: Wrapper, DialogHeader: Wrapper, DialogHeading: Wrapper, DialogTitle: Wrapper, DialogBody: Wrapper,
     Icon: () => <span data-icon="true" />,
     IconButton: ({ icon, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon: React.ReactNode }) => <button {...props}>{icon}</button>,
     Card: Wrapper,
@@ -53,6 +53,7 @@ vi.mock('@openbitfun/ui', async (importOriginal) => {
   };
 });
 import ExternalAgentContent from './ExternalAgentContent';
+import { clearEcosystemDiscoveryCache } from './ecosystemDiscoveryCache';
 
 function fixture() {
   const sources = ['codex', 'claude-code'].map((ecosystemId) => ({
@@ -94,6 +95,7 @@ describe('external agent content and explicit import boundary', () => {
   let container: HTMLDivElement;
   let data: ReturnType<typeof fixture>;
   beforeEach(() => {
+    clearEcosystemDiscoveryCache();
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.resetAllMocks();
     localStorage.clear();
@@ -134,7 +136,10 @@ describe('external agent content and explicit import boundary', () => {
   }
 
   async function expand(kind: string) {
-    const trigger = container.querySelector<HTMLButtonElement>(`[data-content-group="${kind}"] button[aria-expanded]`)!;
+    if (container.querySelector(`[data-ecosystem-category="${kind}"]`)) return;
+    const trigger = container.querySelector<HTMLButtonElement>(
+      `[data-content-group="${kind}"] button[aria-haspopup="dialog"], [data-content-group="${kind}"] button[aria-expanded]`,
+    )!;
     if (trigger.getAttribute('aria-expanded') !== 'true') await act(async () => trigger.click());
   }
 
@@ -183,7 +188,7 @@ describe('external agent content and explicit import boundary', () => {
     await render();
     await expand('account');
     mocks.getAccounts.mockRejectedValue(new Error('unavailable'));
-    const refresh = container.querySelector<HTMLButtonElement>('button[aria-label="content.refresh"]')!;
+    const refresh = container.querySelector<HTMLButtonElement>('button[aria-label="content.accounts.refresh"]')!;
     await act(async () => refresh.click());
     expect(container.textContent).toContain('content.accounts.labels.failed');
     expect(container.textContent).not.toContain('old@example.test');
@@ -238,6 +243,92 @@ describe('external agent content and explicit import boundary', () => {
     await click('content.manageCopy', 'mcp');
     expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'tools.mcp' });
     expect(mocks.openScene).toHaveBeenCalledWith('settings');
+    expect(container.querySelector('[data-ecosystem-category]')).toBeNull();
+  });
+
+  it('opens category content in a dialog and returns to that list after inspecting an item', async () => {
+    await render();
+    const overview = container.querySelector('.ecosystem-compatibility__content-overview')!;
+    expect(overview.querySelector('[data-import-kind]')).toBeNull();
+    await expand('mcp');
+    const catalog = container.querySelector('[role="dialog"][data-ecosystem-category="mcp"]')!;
+    expect(catalog.querySelector('[data-import-kind="mcp"]')).not.toBeNull();
+    expect(overview.querySelector('[data-import-kind]')).toBeNull();
+
+    await click('content.view', 'mcp');
+    const detail = container.querySelector('[role="dialog"]:not([data-ecosystem-category])')!;
+    expect(detail.textContent).toContain('docs-server');
+    await act(async () => detail.querySelector<HTMLButtonElement>('button')!.click());
+    expect(container.querySelector('[data-ecosystem-category="mcp"]')).toBe(catalog);
+    expect(mocks.applyMcp).not.toHaveBeenCalled();
+
+    await act(async () => catalog.querySelector<HTMLButtonElement>('button')!.click());
+    expect(container.querySelector('[data-ecosystem-category]')).toBeNull();
+    expect(overview.querySelector('[data-import-kind]')).toBeNull();
+  });
+
+  it.each([
+    ['codex', 'subagent'], ['codex', 'mcp'], ['codex', 'skill'], ['codex', 'hook'], ['claude-code', 'command'],
+  ] as const)('shows an empty %s %s category without list controls or placeholder rows', async (product, category) => {
+    data.snapshot.mcpServers = [];
+    data.skills = [];
+    data.hooks.catalog.sources = [];
+    data.hooks.catalog.entries = [];
+    await render(product); await expand(category);
+    const dialog = container.querySelector(`[data-ecosystem-category="${category}"]`)!;
+    expect(dialog.querySelector('[data-content-empty-state="notDetected"] p')?.textContent).toBe('import.states.notDetected');
+    const scanButton = dialog.querySelector<HTMLButtonElement>('[data-content-empty-state] button');
+    expect(scanButton?.textContent).toBe('content.scan');
+    expect(scanButton?.disabled).toBe(false);
+    expect(dialog.querySelector('[role="table"], [role="columnheader"], [data-import-kind], input')).toBeNull();
+    expect(dialog.textContent).not.toMatch(/content\.(importCategory|importSelected|undoSelected|selectedCount|noMatches)/);
+    expect(dialog.querySelector('button[aria-label="content.refresh"]')).not.toBeNull();
+    expect(container.querySelector(`[data-content-group="${category}"]`)).not.toBeNull();
+  });
+
+  it('keeps search and selection recoverable when real content has no matches', async () => {
+    await render(); await expand('skill');
+    const dialog = container.querySelector('[data-ecosystem-category="skill"]')!;
+    const checkbox = dialog.querySelector<HTMLInputElement>('[data-import-kind] input[type="checkbox"]')!;
+    await act(async () => checkbox.click());
+    const searchInput = dialog.querySelector<HTMLInputElement>('input[aria-label="content.search"]')!;
+    async function searchFor(value: string) {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(searchInput, value);
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
+    await searchFor('no matching item');
+    expect(dialog.querySelector('[data-content-empty-state="noMatches"]')?.textContent).toBe('content.noMatches');
+    expect(dialog.querySelector('[data-content-empty-state] button')).toBeNull();
+    expect(dialog.querySelector('[role="table"], [role="columnheader"], input[type="checkbox"]')).toBeNull();
+    expect(dialog.textContent).not.toMatch(/content\.(importCategory|importSelected|undoSelected|selectedCount)/);
+    expect(dialog.querySelector('input[aria-label="content.search"]')).toBe(searchInput);
+
+    await searchFor('');
+    expect(dialog.querySelector('[data-content-empty-state]')).toBeNull();
+    expect(dialog.querySelector('[data-import-kind="skill"]')?.textContent).toContain('codex-Skill');
+    expect(dialog.querySelector<HTMLInputElement>('[data-import-kind] input[type="checkbox"]')?.checked).toBe(true);
+  });
+
+  it.each(['failed', 'disabled'])('distinguishes a %s scan from a completed empty scan', async (state) => {
+    data.snapshot.mcpServers = [];
+    if (state === 'disabled') data.snapshot.integrationPolicy.effective.enabled = false;
+    await render('codex', state === 'failed'); await expand('mcp');
+    const dialog = container.querySelector('[data-ecosystem-category="mcp"]')!;
+    const expectedState = state === 'failed' ? 'discoveryUnavailable' : 'discoveryDisabled';
+    expect(dialog.querySelector(`[data-content-empty-state="${expectedState}"] p`)?.textContent).toBe(`import.states.${expectedState}`);
+    expect(dialog.querySelector('[data-content-empty-state] button')?.textContent).toBe(state === 'failed' ? 'content.scan' : undefined);
+    expect(dialog.querySelector('[role="table"], [data-import-kind], input')).toBeNull();
+  });
+
+  it('does not label a completed category as loading while supplemental discovery is pending', async () => {
+    mocks.getSkills.mockImplementation(() => new Promise(() => {}));
+    await render(); await expand('subagent');
+    const dialog = container.querySelector('[data-ecosystem-category="subagent"]')!;
+    expect(dialog.querySelector('[data-content-empty-state="notDetected"]')).not.toBeNull();
+    expect(dialog.textContent).not.toContain('loading');
+    expect(dialog.textContent).not.toContain('import.states.checking');
   });
 
   it('shows instruction ownership, scope and path matching without copy controls', async () => {
@@ -260,8 +351,8 @@ describe('external agent content and explicit import boundary', () => {
     }
     await render('claude-code'); await expand('instruction');
     await click('content.view', 'instruction');
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('src/**/*.ts');
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('content.instructions.conditional');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain('src/**/*.ts');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain('content.instructions.conditional');
     expect(mocks.applyMcp).not.toHaveBeenCalled();
   });
 
@@ -269,17 +360,17 @@ describe('external agent content and explicit import boundary', () => {
     mocks[surface] = true;
     await render(); await expand('instruction');
     expect(mocks.getInstructions).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-import-kind="instruction"]')?.getAttribute('data-import-state')).toBe('discoveryUnavailable');
+    expect(container.querySelector('[data-content-empty-state="discoveryUnavailable"]')).not.toBeNull();
     expect(container.textContent).toContain('content.instructions.unsupportedHost');
   });
 
   it('shows a legacy host failure and recovers instruction discovery on refresh', async () => {
     mocks.getInstructions.mockRejectedValueOnce(new Error('Unknown command'));
     await render(); await expand('instruction');
-    expect(container.querySelector('[data-import-kind="instruction"]')?.getAttribute('data-import-state')).toBe('discoveryUnavailable');
+    expect(container.querySelector('[data-content-empty-state="discoveryUnavailable"]')).not.toBeNull();
     const refresh = container.querySelector<HTMLButtonElement>('button[aria-label="content.refresh"]')!;
     await act(async () => refresh.click());
-    expect(container.querySelector('[data-import-kind="instruction"]')?.getAttribute('data-import-state')).toBe('notDetected');
+    expect(container.querySelector('[data-content-empty-state="notDetected"]')).not.toBeNull();
   });
 
   it('clears a local instruction detail when switching to a peer', async () => {
@@ -291,7 +382,7 @@ describe('external agent content and explicit import boundary', () => {
     mocks.peer = true;
     await render();
     expect(container.textContent).not.toContain('/private/local/AGENTS.md');
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).toBeNull();
     expect(mocks.getInstructions).toHaveBeenCalledTimes(1);
   });
 
@@ -305,13 +396,13 @@ describe('external agent content and explicit import boundary', () => {
     if (mode === 'single') await click('content.prepareImport', 'skill');
     else await click('content.importAll');
     expect(mocks.validateSkill).toHaveBeenCalledWith(data.skills[0].path, { sourceKey: data.skills[0].key, workspacePath: '/project' });
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('content.reviewedPackage');
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('fresh-name');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain('content.reviewedPackage');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain('fresh-name');
     expect(mocks.addSkill).not.toHaveBeenCalled();
     await click('content.confirm');
     expect(mocks.addSkill).toHaveBeenCalledWith(expect.objectContaining({ expectedSourceFingerprint: 'reviewed-package', sourceKey: data.skills[0].key }));
     expect(mocks.validateSkill).toHaveBeenCalledTimes(1);
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain(mode === 'single' ? 'content.skillStale' : 'content.batchState.stale');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain(mode === 'single' ? 'content.skillStale' : 'content.batchState.stale');
   });
 
   it('does not silently downgrade when a host advertising reviewed imports omits the preview', async () => {
@@ -328,7 +419,7 @@ describe('external agent content and explicit import boundary', () => {
     expect(mocks.addSkill).not.toHaveBeenCalled();
     expect(mocks.applyMcp).not.toHaveBeenCalled();
     expect(mocks.applyHook).not.toHaveBeenCalled();
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('echo reviewed-command');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain('echo reviewed-command');
     await click('content.confirm');
     expect(mocks.addSkill).toHaveBeenCalledTimes(1);
     expect(mocks.addSkill.mock.calls[0][0].sourceKey).toBe(data.skills[0].key);
@@ -344,7 +435,7 @@ describe('external agent content and explicit import boundary', () => {
     mocks.applyMcp.mockImplementation(() => new Promise((resolve) => { finishMcp = resolve; }));
     mocks.addSkill.mockImplementation(() => new Promise((_resolve, reject) => { failSkill = reject; }));
     await render(); await click('content.importAll');
-    const dialog = container.querySelector('[role="dialog"]')!;
+    const dialog = container.querySelector('[role="dialog"]:not([data-ecosystem-category])')!;
     expect([...dialog.querySelectorAll('.ecosystem-compatibility__batch-group')].map((group) => group.getAttribute('aria-label'))).toEqual(['capabilities.skill', 'capabilities.mcp', 'capabilities.hook']);
     expect(dialog.querySelector('progress')).toBeNull();
     await click('content.confirm');
@@ -368,7 +459,7 @@ describe('external agent content and explicit import boundary', () => {
     expect(overview.querySelectorAll('[role="columnheader"]')).toHaveLength(3);
     expect(overview.textContent).toContain('import.columns.state');
     expect(overview.querySelector('[data-content-group="skill"] [data-icon]')).not.toBeNull();
-    expect(overview.querySelector('[data-content-group="skill"]')?.textContent).toContain('import.states.discoverySupported');
+    expect(overview.querySelector('[data-content-group="skill"]')?.textContent).toContain('content.itemCount');
     expect(overview.querySelector('[data-content-group="account"] button[aria-expanded]')).not.toBeNull();
     await expand('skill');
     expect(container.textContent).toContain('codex-Skill');
@@ -386,7 +477,7 @@ describe('external agent content and explicit import boundary', () => {
     expect(container.textContent).toContain('docs-server');
     expect(mocks.applyMcp).not.toHaveBeenCalled(); expect(mocks.addSkill).not.toHaveBeenCalled(); expect(mocks.applyHook).not.toHaveBeenCalled();
     await render('claude-code');
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).toBeNull();
     await expand('skill'); expect(container.textContent).not.toContain('codex-Skill'); expect(container.textContent).toContain('claude-code-Skill');
   });
 
@@ -493,7 +584,7 @@ describe('external agent content and explicit import boundary', () => {
     let finish: (value: string) => void = () => {};
     mocks.addSkill.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     await render(); await click('content.prepareImport', 'skill'); await click('content.confirm');
-    expect(container.querySelector<HTMLSelectElement>('[role="dialog"] select')?.disabled).toBe(true);
+    expect(container.querySelector<HTMLSelectElement>('[role="dialog"]:not([data-ecosystem-category]) select')?.disabled).toBe(true);
     await act(async () => finish('ok'));
   });
 
@@ -501,7 +592,7 @@ describe('external agent content and explicit import boundary', () => {
     await render();
     await render('codex', true); await expand('mcp');
     const row = container.querySelector('[data-import-kind="mcp"]');
-    expect(row?.getAttribute('data-import-state')).toBe('discoveryUnavailable');
+    expect(row?.getAttribute('data-import-state')).toBe('discovered');
     expect(row?.textContent).not.toContain('content.prepareImport');
     expect(mocks.applyMcp).not.toHaveBeenCalled();
   });
@@ -519,17 +610,17 @@ describe('external agent content and explicit import boundary', () => {
     data.skills[2].dirName = 'demo';
     mocks.addSkill.mockRejectedValueOnce(new Error('Skill target already exists with different content'));
     await render(); await click('content.prepareImport', 'skill');
-    expect(container.querySelector<HTMLInputElement>('[role="dialog"] input')?.value).toBe('demo-codex');
-    expect(container.querySelector('[role="dialog"]')?.textContent?.match(/Skill description/g)).toHaveLength(1);
+    expect(container.querySelector<HTMLInputElement>('[role="dialog"]:not([data-ecosystem-category]) input')?.value).toBe('demo-codex');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent?.match(/Skill description/g)).toHaveLength(1);
     await click('content.confirm');
     expect(mocks.addSkill.mock.calls[0][0].targetName).toBe('demo-codex');
-    expect(container.querySelector('[role="dialog"] [role="alert"]')?.textContent).toContain('content.skillNameConflict');
-    const alert = container.querySelector('[role="dialog"] [role="alert"]');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category]) [role="alert"]')?.textContent).toContain('content.skillNameConflict');
+    const alert = container.querySelector('[role="dialog"]:not([data-ecosystem-category]) [role="alert"]');
     expect(alert?.getAttribute('data-openbitfun-component')).toBe('alert');
     expect(alert?.getAttribute('aria-live')).toBe('assertive');
     expect(alert?.querySelector('[data-openbitfun-part="icon"]')).toBeNull();
     expect(mocks.addSkill).toHaveBeenCalledTimes(1);
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).not.toBeNull();
   });
 
   it('imports only checked rows and can undo the selected committed copy as a batch', async () => {
@@ -571,7 +662,7 @@ describe('external agent content and explicit import boundary', () => {
   it('rejects a Hook preview for a different agent instead of showing or applying it', async () => {
     mocks.planHook.mockResolvedValue({ ...data.hookPlan, source: data.hooks.catalog.sources[1] });
     await render(); await click('content.prepareImport', 'hook');
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).toBeNull();
     expect(container.textContent).toContain('content.previewFailed');
     expect(mocks.applyHook).not.toHaveBeenCalled();
   });
@@ -601,9 +692,10 @@ describe('external agent content and explicit import boundary', () => {
     data.snapshot.integrationPolicy.effective.enabled = false;
     await render(); await expand('mcp');
     expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('discoveryDisabled');
+    expect(container.querySelector('[data-content-empty-state]')).toBeNull();
     Object.assign(data.snapshot.integrationPolicy, { effective: undefined });
     await render();
-    expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('discoveryUnavailable');
+    expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('discovered');
   });
 
   it('shows direct command availability independently of copy import and same-name selection', async () => {
@@ -638,10 +730,45 @@ describe('external agent content and explicit import boundary', () => {
     expect(container.textContent).toContain('content.directUse.unknown');
   });
 
-  it('reports failed discovery instead of missing content even with a cached candidate', async () => {
+  it('keeps a cached candidate inspectable and explains the stale result', async () => {
     await render('codex', true); await expand('mcp');
-    expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('discoveryUnavailable');
+    expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('discovered');
     expect(container.querySelector('[data-import-kind="mcp"]')?.textContent).not.toContain('content.prepareImport');
+  });
+
+  it('does not scan Skills, Hooks or MCP import plans while paused, but permits explicit import review', async () => {
+    data.snapshot.discovery = { enabled: false, canChange: true, hasScanned: true, preferenceRevision: 1 };
+    await render();
+    expect(mocks.getSkills).not.toHaveBeenCalled();
+    expect(mocks.getHooks).not.toHaveBeenCalled();
+    expect(mocks.planMcp).not.toHaveBeenCalled();
+    await expand('mcp');
+    expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('review');
+    await click('content.prepareImport', 'mcp');
+    expect(mocks.planMcp).toHaveBeenCalledOnce();
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).not.toBeNull();
+    expect(mocks.applyMcp).not.toHaveBeenCalled();
+    expect(data.snapshot.discovery.enabled).toBe(false);
+  });
+
+  it('finishes an explicit Hook refresh while automatic discovery remains paused', async () => {
+    vi.useFakeTimers();
+    try {
+      data.snapshot.discovery = { enabled: false, canChange: true, hasScanned: true, preferenceRevision: 1 };
+      mocks.getHooks.mockResolvedValueOnce({ ...data.hooks, catalog: { ...data.hooks.catalog, discoveryPending: true, sources: [], entries: [] } })
+        .mockResolvedValue(data.hooks);
+      await render();
+      await expand('hook');
+      await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="content.refresh"]')!.click());
+      expect(mocks.getHooks).toHaveBeenCalledWith('/project', true);
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+      expect(mocks.getHooks).toHaveBeenLastCalledWith('/project', false);
+      await expand('hook');
+      expect(container.textContent).toContain('codex-Hooks');
+      await act(async () => vi.advanceTimersByTimeAsync(5000));
+      expect(mocks.getHooks).toHaveBeenCalledTimes(2);
+      expect(data.snapshot.discovery.enabled).toBe(false);
+    } finally { vi.useRealTimers(); }
   });
 
   it('does not label an imported MCP copy as connected or usable', async () => {
@@ -688,7 +815,7 @@ describe('external agent content and explicit import boundary', () => {
     expect(mocks.saveMcp).toHaveBeenCalledTimes(1);
     const view = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-import-kind="mcp"] button')).find(button => button.textContent === 'content.view');
     expect(view?.disabled).toBe(false);
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).toBeNull();
     data.plan.items[0].disposition = 'eligible';
     await act(async () => { finishPlan(data.plan); });
     expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('ready');
@@ -699,7 +826,7 @@ describe('external agent content and explicit import boundary', () => {
     mocks.saveMcp.mockRejectedValue(new Error('stale'));
     await render(); await click('content.undo', 'mcp'); await click('content.confirmUndo');
     expect(container.textContent).toContain('content.undoFailed');
-    expect(container.querySelector('[role="dialog"] [role="alert"]')?.textContent).toContain('stale');
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category]) [role="alert"]')?.textContent).toContain('stale');
     expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('imported');
     expect(mocks.saveMcp).toHaveBeenCalledTimes(1);
   });
@@ -729,6 +856,6 @@ describe('external agent content and explicit import boundary', () => {
     mocks.validateSkill.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
     await render(); await click('content.prepareImport', 'skill'); await render('claude-code');
     await act(async () => resolve({ valid: true }));
-    expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(container.textContent).not.toContain('/codex/skills/demo'); expect(mocks.addSkill).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).toBeNull(); expect(container.textContent).not.toContain('/codex/skills/demo'); expect(mocks.addSkill).not.toHaveBeenCalled();
   });
 });

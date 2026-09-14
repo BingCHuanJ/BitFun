@@ -611,7 +611,7 @@
         }
       }
     },
-    "允许 Agent 直接执行操作": {
+    "允许智能体直接执行操作": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -861,7 +861,7 @@
         }
       }
     },
-    "告诉 Agent 要做什么": {
+    "告诉智能体要做什么": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2321,7 +2321,7 @@
         }
       }
     },
-    "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和 Agent 的执行状态。": {
+    "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和智能体的执行状态。": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3251,7 +3251,7 @@
         }
       }
     },
-    "Agent 类型": {
+    "智能体类型": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3261,7 +3261,7 @@
         }
       }
     },
-    "所有 Agent 类型": {
+    "所有智能体类型": {
       "localizations": {
         "en": {
           "stringUnit": {

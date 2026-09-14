@@ -1,6 +1,5 @@
 import {
   AppWindow as LucideAppWindow,
-  Bot as LucideBot,
   Check as LucideCheck,
   ChevronRight as LucideChevronRight,
   ChevronsUpDown as LucideChevronsUpDown,
@@ -21,6 +20,7 @@ import {
   SquarePen as LucideSquarePen,
   Sun as LucideSun,
   Terminal as LucideTerminal,
+  User as LucideUser,
   Users as LucideUsers,
   X as LucideX,
 } from 'lucide-react';
@@ -235,7 +235,7 @@ const ProModeIcon = () => (
 );
 
 const AssistantModeIcon = () => (
-  <LucideBot width="32" height="32" stroke="currentColor" aria-hidden="true" />
+  <LucideUser width="32" height="32" stroke="currentColor" aria-hidden="true" />
 );
 
 const WorkspaceIcon = () => (

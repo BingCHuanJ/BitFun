@@ -47,9 +47,9 @@ struct RemoteViewSettingsView: View {
                         )
                     }
 
-                    filterLabel("Agent 类型")
+                    filterLabel("智能体类型")
                     filterRow(
-                        "所有 Agent 类型",
+                        "所有智能体类型",
                         selected: model.remoteViewAgentFilter.isEmpty,
                         action: { model.remoteViewAgentFilter = "" }
                     )

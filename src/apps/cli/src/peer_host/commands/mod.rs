@@ -59,6 +59,7 @@ pub(crate) async fn dispatch(
         "get_agent_profile_configs" => config::get_agent_profile_configs().await,
         "get_external_source_snapshot"
         | "get_external_source_control_snapshot"
+        | "get_external_source_discovery_snapshot"
         | "reveal_external_source_location"
         | "apply_external_source_control_action_command"
         | "set_external_source_enabled_command"
@@ -222,6 +223,7 @@ pub(crate) const HANDLED_COMMANDS: &[&str] = &[
     "get_directory_children",
     "get_directory_children_paginated",
     "get_external_source_control_snapshot",
+    "get_external_source_discovery_snapshot",
     "get_external_source_snapshot",
     "get_opened_workspaces",
     "get_recent_workspaces",

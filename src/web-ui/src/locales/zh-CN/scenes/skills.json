@@ -253,6 +253,7 @@
     "marketDownloadFailed": "下载失败: {{error}}",
     "enabled": "启用",
     "disabled": "禁用",
-    "revealPathFailed": "无法在资源管理器中打开: {{error}}"
+    "revealPathFailed": "无法在资源管理器中打开: {{error}}",
+    "copyPathFailed": "复制路径失败: {{error}}"
   }
 }

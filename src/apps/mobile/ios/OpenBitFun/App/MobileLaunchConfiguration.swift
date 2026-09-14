@@ -19,7 +19,7 @@ enum MobileLaunchConfiguration {
             selectedSessionID: first.id,
             messages: [
                 ChatMessage(id: UUID(), role: .user, text: "你好"),
-                ChatMessage(id: UUID(), role: .assistant, text: "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和 Agent 的执行状态。")
+                ChatMessage(id: UUID(), role: .assistant, text: "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和智能体的执行状态。")
             ],
             connectCore: !streamingRegressionPreview && !ProcessInfo.processInfo.arguments.contains("--harness-preview") && designPreviewScenario() == nil
         )

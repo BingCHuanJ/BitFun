@@ -46,7 +46,7 @@
     "capabilities": {
       "ai": {
         "title": "AI 協作",
-        "description": "可按需調用 AI 或 Agent 完成任務"
+        "description": "可按需調用 AI 或智能體完成任務"
       },
       "workspace": {
         "title": "工作區協同",
@@ -196,7 +196,7 @@
       "shell": "執行命令：{{value}}",
       "net": "連網網域：{{value}}",
       "ai": "呼叫 AI",
-      "agent": "在可見工作階段中呼叫 Agent",
+      "agent": "在可見工作階段中呼叫智能體",
       "notifications": "系統通知",
       "dialog": "開啟系統對話框",
       "clipboardRead": "讀取剪貼簿",

@@ -278,6 +278,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("get_external_hook_catalog",                                  Unsupported, Proxied,          CLI_NOT_IMPLEMENTED),
     op("get_external_hook_import_snapshot",                          Unsupported, Proxied,          CLI_NOT_IMPLEMENTED),
     op("get_external_source_control_snapshot",                       Unsupported, Proxied,          HANDLED),
+    op("get_external_source_discovery_snapshot",                     Unsupported, Proxied,          HANDLED),
     op("get_external_source_snapshot",                               Unsupported, Proxied,          HANDLED),
     op("get_file_change_history",                                    Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("get_file_diff",                                              Unsupported, Proxied,          CLI_NOT_IMPLEMENTED),
