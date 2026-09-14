@@ -1063,6 +1063,7 @@ export function ComponentDetailPage({
       return (
         <Alert
           message={t("components.preview.fieldDescription")}
+          role={tone === "error" || tone === "warning" ? "alert" : "status"}
           title={t("components.preview.notifications")}
           tone={tone}
         />

@@ -296,6 +296,11 @@ surface elevation, responsive inline sizing, composer geometry, transparent
 floating action layout, and sheet accessibility. Product state, localized copy,
 routing, and device or session operations stay in the consuming application.
 
+`Alert` preserves an explicit `role` and `aria-live`. An explicit `status` is
+polite and an explicit `alert` is assertive unless `aria-live` overrides it.
+Omitting both retains the existing default: role alert, polite announcements
+except for error tone. Use `showIcon={false}` for text-only notices.
+
 `Disclosure` is the shared expandable-content primitive. It owns controlled or
 uncontrolled open state, trigger/region accessibility wiring, focus exclusion
 while collapsed, reduced-motion behavior, and independent header actions.
