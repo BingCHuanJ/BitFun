@@ -111,6 +111,11 @@ For companion pet manifest versions and package metadata, use
 `cargo test -p openbitfun-desktop --lib api::commands::pet_package_tests`.
 For content-search routing and remote fallback protection, use
 `cargo test --locked -p openbitfun-desktop --lib api::search_api::tests`.
+For controller-local peer download staging, atomic replacement, and failed transfer cleanup,
+run `cargo test -p openbitfun-desktop --lib api::local_file_download::tests`.
+After changing its registration, also run
+`cargo test -p openbitfun-desktop --lib remote_workspace_policy`.
+
 For staged application-update cache and signature behavior, use
 `cargo test -p openbitfun-desktop --lib api::update_api::tests`.
 For peer system-info response compatibility, run

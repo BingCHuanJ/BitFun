@@ -4019,6 +4019,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
     let composerCleared = false;
     const trimmedMessage = message.trim();
+    if (!trimmedMessage.startsWith('/')) return false;
     const commandWhitespaceIndex = trimmedMessage.search(/\s/);
     const command = trimmedMessage.startsWith('/')
       ? (commandWhitespaceIndex === -1
