@@ -312,6 +312,14 @@ uncontrolled open state, trigger/region accessibility wiring, focus exclusion
 while collapsed, reduced-motion behavior, and independent header actions.
 Product copy and the revealed content remain consumer-owned.
 
+Use `Disclosure presentation="native"` when the browser must own the existing
+`details`/`summary` behavior. This mode renders a real details element, a direct
+summary child, and the supplied content without extra wrappers. It accepts native
+`open`, `name`, and `onToggle` attributes, and its ref points to that details
+element. Browser focus, marker, wrapping, and content lifetime are preserved;
+custom-mode `defaultOpen`, `onOpenChange`, `disabled`, and header slots do not
+apply. Omitting `presentation` retains the custom disclosure contract above.
+
 Sized icon slots in buttons, tabs, menu items and fields own their glyph geometry.
 Pass catalog `Icon` nodes through `leadingIcon`, `trailingIcon`, `icon` or the
 matching component slot, just as for SVG icons. These slots constrain catalog

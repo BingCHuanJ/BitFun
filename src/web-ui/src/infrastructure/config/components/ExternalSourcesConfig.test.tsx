@@ -2970,6 +2970,8 @@ describe('ExternalSourcesConfig', () => {
       'details[data-external-attention="true"]',
     ) as HTMLDetailsElement;
     expect(firstDiagnostic.open).toBe(true);
+    expect(firstDiagnostic.getAttribute('data-openbitfun-component')).toBe('disclosure');
+    expect(firstDiagnostic.getAttribute('data-presentation')).toBe('native');
     expect(document.activeElement).toBe(firstDiagnostic.querySelector('summary'));
     expect(scrollIntoView).toHaveBeenCalled();
     expect(container.textContent).toContain('diagnostics.category.sourceIssue');

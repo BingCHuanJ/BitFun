@@ -2377,6 +2377,14 @@ export function ComponentDetailPage({
                 </div>
               )}
               {component.name === "Menu" && <div className="component-menu-interaction"><NestedMenuPattern /></div>}
+              {component.name === "Disclosure" && (
+                <div className="component-preview-row">
+                  <code>presentation="native"</code>
+                  <Disclosure presentation="native" summary={t("components.preview.appearance")}>
+                    {t("components.preview.appearanceDescription")}
+                  </Disclosure>
+                </div>
+              )}
             </ThemeRoot>
           </section>
 

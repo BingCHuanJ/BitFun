@@ -1,4 +1,4 @@
-import { Alert, Button, Combobox, ConfirmDialog, Icon, IconButton, Select, Switch, Tooltip } from '@openbitfun/ui';
+import { Disclosure, Alert, Button, Combobox, ConfirmDialog, Icon, IconButton, Select, Switch, Tooltip } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -1932,19 +1932,18 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                   </span>
                                   {renderSourceMembers(group)}
                                   {group.diagnostics.length > 0 ? (
-                                    <details
+                                    <Disclosure
+                                      presentation="native"
                                       className="openbitfun-external-sources-config__notice"
                                       data-openbitfun-product-component="external-sources-config"
                                       data-openbitfun-product-part="notice"
                                       data-external-attention="true"
                                       data-external-ecosystem={group.ecosystemId}
+                                      summary={t('diagnostics.sourceSummary', {
+                                        name: group.displayName,
+                                        count: group.diagnostics.length,
+                                      })}
                                     >
-                                      <summary>
-                                        {t('diagnostics.sourceSummary', {
-                                          name: group.displayName,
-                                          count: group.diagnostics.length,
-                                        })}
-                                      </summary>
                                       <ul className="openbitfun-external-sources-config__diagnostics" data-openbitfun-product-component="external-sources-config" data-openbitfun-product-part="diagnostics">
                                         {group.diagnostics.map((diagnostic) => (
                                             <li key={externalSourceDiagnosticKey(diagnostic)}>
@@ -1952,7 +1951,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                             </li>
                                         ))}
                                       </ul>
-                                    </details>
+                                    </Disclosure>
                                   ) : null}
                                 </div>
                               ))}
@@ -2229,16 +2228,15 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
               />
             ) : null}
             {catalogDiagnostics.length > 0 ? (
-              <details
+              <Disclosure
+                presentation="native"
                 className="openbitfun-external-sources-config__notice"
                 data-openbitfun-product-component="external-sources-config"
                 data-openbitfun-product-part="notice"
                 data-external-attention={catalogDiagnostics
                   .some((diagnostic) => diagnostic.severity !== 'info') ? 'true' : undefined}
+                summary={t('diagnostics.summary', { count: catalogDiagnostics.length })}
               >
-                <summary>
-                  {t('diagnostics.summary', { count: catalogDiagnostics.length })}
-                </summary>
                 <ul className="openbitfun-external-sources-config__diagnostics" data-openbitfun-product-component="external-sources-config" data-openbitfun-product-part="diagnostics">
                   {catalogDiagnostics.map((diagnostic) => (
                     <li key={externalSourceDiagnosticKey(diagnostic)}>
@@ -2246,7 +2244,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     </li>
                   ))}
                 </ul>
-              </details>
+              </Disclosure>
             ) : null}
             {snapshot?.discoveryPending ? (
               <Alert
@@ -2929,8 +2927,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             <span>{t('agents.executionDomain')}</span>
                             <span>{t('agents.compatibility', { state: t(`agentCompatibility.${agent.compatibilityState}`) })}</span>
                             {sourceLocations.length > 0 ? (
-                              <details className="openbitfun-external-sources-config__source-detail-toggle">
-                                <summary>{t('agents.sourceLocations', { count: sourceLocations.length })}</summary>
+                              <Disclosure
+                                presentation="native"
+                                className="openbitfun-external-sources-config__source-detail-toggle"
+                                summary={t('agents.sourceLocations', { count: sourceLocations.length })}
+                              >
                                 <div className="openbitfun-external-sources-config__tool-detail">
                                   {sourceLocations.map((location) => (
                                     <span key={location.key}>{renderPathLink(
@@ -2939,7 +2940,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                     )}</span>
                                   ))}
                                 </div>
-                              </details>
+                              </Disclosure>
                             ) : null}
                             {agent.diagnostics.map((diagnostic) => {
                                 const category = agentDiagnosticCategory(

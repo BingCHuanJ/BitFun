@@ -1,3 +1,4 @@
+import { Disclosure } from '@openbitfun/ui';
 import React from 'react';
 import { ConfigPageRow, ConfigPageSection } from '../common';
 import {
@@ -85,19 +86,18 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
               {renderSourceMembers(group)}
             </ConfigPageRow>
             {userDiagnostics.length > 0 ? (
-              <details
+              <Disclosure
+                presentation="native"
                 className="openbitfun-external-sources-config__notice"
                 data-openbitfun-product-component="external-sources-config"
                 data-openbitfun-product-part="notice"
                 data-external-attention="true"
                 data-external-ecosystem={group.ecosystemId}
+                summary={t('diagnostics.sourceSummary', {
+                  name: group.displayName,
+                  count: userDiagnostics.length,
+                })}
               >
-                <summary>
-                  {t('diagnostics.sourceSummary', {
-                    name: group.displayName,
-                    count: userDiagnostics.length,
-                  })}
-                </summary>
                 <ul className="openbitfun-external-sources-config__diagnostics" data-openbitfun-product-component="external-sources-config" data-openbitfun-product-part="diagnostics">
                   {userDiagnostics.map((diagnostic) => (
                     <li key={externalSourceDiagnosticKey(diagnostic)}>
@@ -105,7 +105,7 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
                     </li>
                   ))}
                 </ul>
-              </details>
+              </Disclosure>
             ) : null}
           </React.Fragment>
         );
