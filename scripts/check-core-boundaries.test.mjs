@@ -1744,6 +1744,7 @@ const ACP_REVIEWED_CORE_FEATURES = [
 ];
 
 const CLI_REVIEWED_CORE_FEATURES = [
+  'tools-pages',
   ...ACP_REVIEWED_CORE_FEATURES,
   'product-search',
   'remote-connect',
