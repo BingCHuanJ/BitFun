@@ -181,6 +181,9 @@
     "manageAction": "管理探索設定"
   },
   "content": {
+    "skillStale": "Skill 套件內容已變更。請取消本次確認，重新預覽後再匯入。",
+    "reviewedPackage": "已核對套件內容，共 {{count}} 個檔案。來源變更後需要重新預覽才能匯入。",
+    "manageCopy": "管理副本",
     "skillNameConflict": "目標已有同名 Skill，且內容或來源不同。請修改上方的匯入名稱後重試；既有副本不會被覆寫。",
     "batchUndoWarning": "將移除以下 {{count}} 個 OpenBitFun 副本，包括對副本所做的修改。外部來源保留，之後可以重新匯入。",
     "batchUndoSummary": "已復原 {{removed}} 項 · 執行階段待同步 {{pending}} 項 · 失敗 {{failed}} 項",

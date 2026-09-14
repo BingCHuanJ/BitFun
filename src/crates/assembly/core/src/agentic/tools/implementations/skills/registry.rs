@@ -264,6 +264,81 @@ mod local_skill_scan_tests {
     use std::fs;
     use std::path::Path;
 
+    #[tokio::test]
+    async fn codex_home_override_discovers_skills_without_changing_persisted_keys() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let custom = temp.path().join("custom-codex");
+        write_skill(&custom.join("skills/shared-review"));
+        let spec = super::USER_HOME_SKILL_ROOTS
+            .iter()
+            .find(|root| root.slot == "home.codex")
+            .unwrap();
+        let resolved = SkillRegistry::user_skill_root_path_with_environment(spec, &home, |name| {
+            (name == "CODEX_HOME").then(|| custom.to_string_lossy().into_owned())
+        });
+        assert_eq!(resolved, custom.join("skills"));
+        let mut root = test_root(resolved);
+        root.slot = spec.slot;
+        root.source_id = spec.source_id;
+        let scan = SkillRegistry::scan_skills_in_dir(&root).await;
+        assert!(scan.diagnostics.is_empty());
+        assert_eq!(scan.candidates.len(), 1);
+        assert_eq!(
+            scan.candidates[0].info.key,
+            "user::home.codex::shared-review"
+        );
+        assert_eq!(
+            SkillRegistry::user_skill_root_path_with_environment(spec, &home, |_| None),
+            home.join(".codex/skills")
+        );
+        assert_eq!(
+            SkillRegistry::user_skill_root_path_with_environment(spec, &home, |_| Some(
+                String::new()
+            )),
+            home.join(".codex/skills")
+        );
+        assert_eq!(
+            SkillRegistry::user_skill_root_path_with_environment(spec, &home, |_| Some(
+                "~/custom".into()
+            )),
+            home.join("custom/skills")
+        );
+    }
+
+    #[tokio::test]
+    async fn claude_config_root_keeps_source_identity_and_rejects_relative_roots() {
+        let temp = tempfile::tempdir().unwrap();
+        let custom = temp.path().join("custom-claude");
+        write_skill(&custom.join("skills/shared-review"));
+        let spec = super::USER_HOME_SKILL_ROOTS
+            .iter()
+            .find(|root| root.slot == "home.claude")
+            .unwrap();
+        let path =
+            SkillRegistry::user_skill_root_path_with_environment(spec, temp.path(), |name| {
+                (name == "CLAUDE_CONFIG_DIR").then(|| custom.to_string_lossy().into_owned())
+            });
+        let mut root = test_root(path);
+        root.slot = spec.slot;
+        root.source_id = spec.source_id;
+        let scan = SkillRegistry::scan_skills_in_dir(&root).await;
+        assert_eq!(
+            scan.candidates[0].info.key,
+            "user::home.claude::shared-review"
+        );
+        for invalid in ["", "relative", "~/claude"] {
+            root.path =
+                SkillRegistry::user_skill_root_path_with_environment(spec, temp.path(), |_| {
+                    Some(invalid.into())
+                });
+            let scan = SkillRegistry::scan_skills_in_dir(&root).await;
+            assert!(scan.candidates.is_empty());
+            assert_eq!(scan.diagnostics.len(), 1);
+            assert!(!scan.cacheable);
+        }
+    }
+
     fn write_skill(path: &Path) {
         fs::create_dir_all(path).expect("skill directory");
         fs::write(
@@ -762,13 +837,31 @@ impl SkillRegistry {
         spec: &openbitfun_agent_runtime::skills::SkillRootSpec,
         home: &Path,
     ) -> PathBuf {
+        Self::user_skill_root_path_with_environment(spec, home, |name| std::env::var(name).ok())
+    }
+
+    fn user_skill_root_path_with_environment(
+        spec: &openbitfun_agent_runtime::skills::SkillRootSpec,
+        home: &Path,
+        environment: impl Fn(&str) -> Option<String>,
+    ) -> PathBuf {
+        // Claude config roots, like its Instruction provider, must be absolute.
+        // Keep invalid explicit input relative so discovery reports it instead
+        // of silently reading the default home or expanding a different root.
+        if spec.slot == "home.claude" {
+            return environment("CLAUDE_CONFIG_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(spec.parent))
+                .join(spec.subdir);
+        }
         let variable = match spec.slot {
+            "home.codex" => Some("CODEX_HOME"),
             "home.dsh" => Some("DSH_HOME"),
             "home.pi" => Some("PI_CODING_AGENT_DIR"),
             _ => None,
         };
         let root = variable
-            .and_then(|name| std::env::var(name).ok())
+            .and_then(environment)
             .filter(|value| !value.trim().is_empty());
         let root = root
             .map(|value| {
@@ -885,8 +978,10 @@ impl SkillRegistry {
         let mut roots = Vec::new();
         let home_dir = dirs::home_dir();
         if let Some(home) = home_dir.as_deref() {
-            roots.extend(USER_HOME_SKILL_ROOTS.iter().map(|spec| {
-                LocalSkillWatchRoot::recursive(Self::user_skill_root_path(spec, home))
+            roots.extend(USER_HOME_SKILL_ROOTS.iter().filter_map(|spec| {
+                let path = Self::user_skill_root_path(spec, home);
+                (spec.slot != "home.claude" || path.is_absolute())
+                    .then(|| LocalSkillWatchRoot::recursive(path))
             }));
         }
 
@@ -1005,7 +1100,14 @@ impl SkillRegistry {
             // from user config may become project-scoped for the current workspace.
             // Discover and scan them once per request so scope and the 64-root cap
             // are applied to one coherent OpenCode configuration snapshot.
-            let roots = opencode_configured_skill_roots(workspace_root);
+            let (roots, root_diagnostics) = opencode_configured_skill_roots(workspace_root);
+            diagnostics.extend(root_diagnostics.into_iter().map(|(path, message)| {
+                SkillScanDiagnostic {
+                    path,
+                    source_id: "opencode".to_string(),
+                    message,
+                }
+            }));
             let configured_scan =
                 Self::scan_configured_opencode_candidates_with_diagnostics(roots).await;
             diagnostics.extend(configured_scan.diagnostics);

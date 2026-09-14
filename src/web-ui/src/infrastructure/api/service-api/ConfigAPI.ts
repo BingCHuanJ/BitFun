@@ -68,6 +68,7 @@ export interface ResetModeSkillSelectionParams {
 }
 
 export interface AddSkillParams {
+  expectedSourceFingerprint?: string;
   targetName?: string;
   sourceKey?: string;
   sourcePath: string;
@@ -496,9 +497,9 @@ export class ConfigAPI {
   }
 
    
-  async validateSkillPath(path: string): Promise<SkillValidationResult> {
+  async validateSkillPath(path: string, source?: { sourceKey: string; workspacePath?: string }): Promise<SkillValidationResult> {
     try {
-      return await api.invoke('validate_skill_path', { path });
+      return await api.invoke('validate_skill_path', { path, ...source });
     } catch (error) {
       throw createTauriCommandError('validate_skill_path', error, { path });
     }
@@ -506,6 +507,7 @@ export class ConfigAPI {
 
    
   async addSkill({
+    expectedSourceFingerprint,
     targetName,
     sourceKey,
     sourcePath,
@@ -513,7 +515,7 @@ export class ConfigAPI {
     workspacePath,
   }: AddSkillParams): Promise<string> {
     try {
-      return await api.invoke('add_skill', { sourcePath, level, workspacePath, ...(sourceKey ? { sourceKey } : {}), ...(targetName ? { targetName } : {}) });
+      return await api.invoke('add_skill', { sourcePath, level, workspacePath, ...(sourceKey ? { sourceKey } : {}), ...(targetName ? { targetName } : {}), ...(expectedSourceFingerprint !== undefined ? { expectedSourceFingerprint } : {}) });
     } catch (error) {
       throw createTauriCommandError('add_skill', error, { sourcePath, level, workspacePath });
     }

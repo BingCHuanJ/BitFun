@@ -311,6 +311,20 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeConfiguredSkillRoot',
     'openbitfun-core external source composition root and OpenCode configured Skill fixtures',
   ),
+  ...['OpenCodeSkillRootDiagnostic', 'OpenCodeSkillRootReport'].map((symbol) => ({
+    symbol,
+    owner: 'opencode-adapter configured Skill root source owner',
+    consumer: 'openbitfun-core external_sources::opencode_configured_skill_roots_with_provider',
+    verification:
+      'opencode_static_source_contracts::opencode_skill_roots diagnostics fixtures and core-boundary public API checks',
+    p0: 'runtime-free configured local Skill root discovery with bounded diagnostics',
+    contractSlice: contractSlices.opencodeAdapterBoundary,
+    wireImpact: false,
+    rationale:
+      'Product Assembly projects valid roots and redacted discovery failures into its neutral Skill scan report without exposing OpenCode configuration syntax',
+    exit:
+      'remove only with the configured Skill root provider or an equivalent reviewed diagnostic projection',
+  })),
   opencodeAdapterEntry(
     'OpenCodeSkillRootProvider',
     'openbitfun-core external source composition root and OpenCode configured Skill fixtures',

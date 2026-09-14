@@ -548,7 +548,10 @@ pub(crate) struct LocalConfiguredSkillRootContribution {
 
 pub(crate) fn opencode_configured_skill_roots(
     workspace_root: Option<&Path>,
-) -> Vec<LocalConfiguredSkillRootContribution> {
+) -> (
+    Vec<LocalConfiguredSkillRootContribution>,
+    Vec<(String, String)>,
+) {
     opencode_configured_skill_roots_with_provider(
         workspace_root,
         &OpenCodeSkillRootProvider::default(),
@@ -558,16 +561,28 @@ pub(crate) fn opencode_configured_skill_roots(
 fn opencode_configured_skill_roots_with_provider(
     workspace_root: Option<&Path>,
     provider: &OpenCodeSkillRootProvider,
-) -> Vec<LocalConfiguredSkillRootContribution> {
-    provider
-        .discover(workspace_root)
+) -> (
+    Vec<LocalConfiguredSkillRootContribution>,
+    Vec<(String, String)>,
+) {
+    let report = provider.discover_with_diagnostics(workspace_root);
+    let roots = report
+        .roots
         .into_iter()
         .map(|root| LocalConfiguredSkillRootContribution {
             path: root.path,
             scope: root.scope,
             precedence: root.precedence,
         })
-        .collect()
+        .collect();
+    (
+        roots,
+        report
+            .diagnostics
+            .into_iter()
+            .map(|diagnostic| (diagnostic.location, diagnostic.message))
+            .collect(),
+    )
 }
 
 async fn finalize_prompt_command_expansion(
@@ -8984,7 +8999,9 @@ mod tests {
             home_dir: Some(home),
         });
 
-        let roots = opencode_configured_skill_roots_with_provider(Some(&project), &provider);
+        let (roots, diagnostics) =
+            opencode_configured_skill_roots_with_provider(Some(&project), &provider);
+        assert!(diagnostics.is_empty());
 
         assert_eq!(roots.len(), 1);
         assert_eq!(

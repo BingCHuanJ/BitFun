@@ -181,6 +181,9 @@
     "manageAction": "管理发现设置"
   },
   "content": {
+    "skillStale": "Skill 包内容已变化。请取消本次确认，重新预览后再导入。",
+    "reviewedPackage": "已核对包内容，共 {{count}} 个文件。来源变化后需要重新预览才能导入。",
+    "manageCopy": "管理副本",
     "skillNameConflict": "目标已有同名 Skill，且内容或来源不同。请修改上方的导入名称后重试；已有副本不会被覆盖。",
     "batchUndoWarning": "将移除以下 {{count}} 个 OpenBitFun 副本，包括对副本所做的修改。外部来源保留，之后可以重新导入。",
     "batchUndoSummary": "已撤销 {{removed}} 项 · 运行时待同步 {{pending}} 项 · 失败 {{failed}} 项",

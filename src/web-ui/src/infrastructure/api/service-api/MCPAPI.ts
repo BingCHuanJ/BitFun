@@ -444,7 +444,9 @@ export class MCPAPI {
   }
 
   static async deleteServer(request: DeleteMCPServerRequest): Promise<void> {
-    return api.invoke('delete_mcp_server', { request });
+    const scope = getActiveSurfaceScope();
+    await api.invoke('delete_mcp_server', { request });
+    notifyMcpConfigChanged(scope);
   }
 
   static async startRemoteOAuth(

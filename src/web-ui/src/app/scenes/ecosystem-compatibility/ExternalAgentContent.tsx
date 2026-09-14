@@ -6,16 +6,22 @@ import { presentEcosystemContent } from './ecosystemContentPresentation';
 import { suggestSkillImportName, importErrorMessage } from './ecosystemSkillImport';
 import { applyEcosystemBatchUndo, type BatchUndoEntry, type BatchUndoResult } from './ecosystemBatchUndo';
 import { Bot, CircleUserRound, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
+import { useSceneStore } from '@/app/stores/sceneStore';
+import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
+import { useSkillsSceneStore } from '@/app/scenes/skills/skillsSceneStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotification } from '@/shared/notification-system';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import { globalEventBus } from '@/infrastructure/event-bus';
+import { MCP_CONFIG_CHANGED, type MCPConfigChanged } from '@/infrastructure/mcp/configEvents';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { WorkspaceKind } from '@/shared/types';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { externalSourcesAPI, type ExternalMcpImportPlanV1, type ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { externalHooksAPI, type ExternalHookImportPlan, type ExternalHookImportSnapshot, type ExternalHookSource } from '@/infrastructure/api/service-api/ExternalHooksAPI';
-import type { SkillInfo, SkillLevel, SkillScanDiagnostic } from '@/infrastructure/config/types';
+import type { SkillInfo, SkillLevel, SkillScanDiagnostic, SkillImportPreview } from '@/infrastructure/config/types';
 import { getSkillSourceId, isOpenBitFunManagedSkill } from '@/infrastructure/config/skillSourcePresentation';
 import { buildEcosystemImportItems, catalogDiscoveryState, type EcosystemImportItem, type EcosystemImportItemKind, type EcosystemProductRuntime } from './ecosystemCompatibilityModel';
 import { applyImportUndo, matchesSkillReceipt, prepareHookUndo, prepareMcpUndo, readSkillImportReceipt, rememberSkillImport, type ImportUndoReview } from './ecosystemImportUndo';
@@ -42,7 +48,7 @@ const CONTENT_ICONS: Record<EcosystemImportItemKind, IconSource> = {
 
 type Review =
   | { kind: 'mcp'; item: ContentItem; plan: ExternalMcpImportPlanV1 }
-  | { kind: 'skill'; item: ContentItem; skill: SkillInfo; level: SkillLevel; targetName?: string }
+  | { kind: 'skill'; item: ContentItem; skill: SkillInfo; level: SkillLevel; targetName?: string; preview?: SkillImportPreview }
   | { kind: 'hook'; item: ContentItem; plan: ExternalHookImportPlan };
 
 interface Props {
@@ -62,6 +68,17 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   const peer = usePeerDeviceModeOptional();
   const localImportSupported = isTauriRuntime() && !peer?.peerMode.active
     && workspace?.workspaceKind !== WorkspaceKind.Remote;
+  const openNativeManagement = (kind: EcosystemImportItemKind) => {
+    if (!localImportSupported) return;
+    if (kind === 'skill') {
+      useSkillsSceneStore.getState().openNativeSkills();
+      useSceneStore.getState().openScene('skills');
+    } else if (kind === 'mcp' || kind === 'hook') {
+      useSettingsStore.getState().openDestination(kind === 'mcp'
+        ? { pageId: 'tools.mcp' } : { pageId: 'tools.automation', viewId: 'hooks' });
+      useSceneStore.getState().openScene('settings');
+    }
+  };
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [skillImportVersion, setSkillImportVersion] = useState(0);
   const [skillDiagnostics, setSkillDiagnostics] = useState<SkillScanDiagnostic[]>([]);
@@ -175,6 +192,14 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     return () => { mcpPlanSequence.current += 1; };
   }, [refreshMcpPlan, snapshot?.generation]);
 
+  useEffect(() => {
+    if (!localImportSupported || !hasMcp) return;
+    const scope = getActiveSurfaceScope();
+    return globalEventBus.on<MCPConfigChanged>(MCP_CONFIG_CHANGED, ({ surfaceId }) => {
+      if (scope.isCurrent() && surfaceId === scope.surfaceId) void refreshMcpPlan();
+    });
+  }, [hasMcp, localImportSupported, refreshMcpPlan]);
+
   const importedHook = (item: ContentItem) => hooks?.imports.some((entry) => (
     entry.source.key.providerId === item.hookSource?.key.providerId
     && entry.source.key.sourceId === item.hookSource?.key.sourceId
@@ -204,7 +229,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     } else discoveryState = catalogDiscoveryState(snapshot, runtime.spec.ecosystemId, item.kind);
     return presentEcosystemContent({
       item, discoveryState, catalogFailed, localImportSupported,
-      imported: completed.has(item.id) || !!importedHook(item) || !!importedSkill(item),
+      // MCP copy existence comes from the current native import plan, not a past success.
+      imported: (item.kind !== 'mcp' && completed.has(item.id)) || !!importedHook(item) || !!importedSkill(item),
       skillImportSupported: skillImportVersion >= 1 || !item.skill?.entryFile || item.skill.entryFile === 'SKILL.md',
       hookImportSupported: !!item.hookSource && ['claude-code', 'codex'].includes(item.hookSource.ecosystemId),
       planLoading,
@@ -224,6 +250,12 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     return item.description || t('content.externalOnly');
   };
 
+  async function previewSkill(skill: SkillInfo): Promise<SkillImportPreview> {
+    const result = await configAPI.validateSkillPath(skill.path, { sourceKey: skill.key, workspacePath: workspacePath || undefined });
+    if (!result.valid || !result.importPreview?.fingerprint) throw new Error('Skill import preview is unavailable');
+    return result.importPreview;
+  }
+
   async function prepareBatch(group?: EcosystemImportItemKind, selectedOnly = false) {
     if (busy || !localImportSupported) return;
     setBusy(true);
@@ -238,11 +270,14 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         if (!alive.current) return;
         if (!presentation(item).canImport) continue;
         if (item.skill && skillImportVersion >= 1) {
-          const level = item.skill.level === 'project' && workspacePath ? 'project' : 'user';
+          const preview = skillImportVersion >= 3 ? await previewSkill(item.skill).catch(() => null) : undefined;
+          if (preview === null) continue;
+          const skill = preview ? { ...item.skill, name: preview.name, description: preview.description } : item.skill;
+          const level = skill.level === 'project' && workspacePath ? 'project' : 'user';
           const reserved = entries.filter((entry) => entry.kind === 'skill' && entry.level === level)
             .flatMap((entry) => entry.kind === 'skill' ? [entry.targetName ?? entry.skill.name, entry.targetName ?? entry.skill.dirName] : []);
-          const targetName = skillImportVersion >= 2 ? suggestSkillImportName(item.skill, level, skills, reserved) : undefined;
-          entries.push({ id: item.id, name: item.name, kind: 'skill', skill: item.skill, level, targetName });
+          const targetName = skillImportVersion >= 2 ? suggestSkillImportName(skill, level, skills, reserved) : undefined;
+          entries.push({ id: item.id, name: skill.name, kind: 'skill', skill, level, targetName, ...(preview ? { preview } : {}) });
         }
         else if (item.kind === 'mcp' && item.candidateId && freshMcpPlan?.items.some((candidate) =>
           candidate.candidateId === item.candidateId && ['eligible', 'automatic_rename'].includes(candidate.disposition))) {
@@ -272,9 +307,12 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       await applyEcosystemBatch(batch, workspacePath || undefined, (result) => {
         if (!alive.current) return;
         setBatchResults((current) => [...(current ?? []), result]);
-        if (result.status === 'imported') setCompleted((current) => new Set([...current, result.id]));
+        if (result.status === 'imported' && batch.find((entry) => entry.id === result.id)?.kind !== 'mcp') {
+          setCompleted((current) => new Set([...current, result.id]));
+        }
       });
       if (alive.current) {
+        void refreshMcpPlan();
         void loadSupplemental(true);
         void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
       }
@@ -289,13 +327,15 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     setBusy(true);
     try {
       if (item.skill) {
-        const validation = skillImportVersion >= 1 && item.skill.entryFile && item.skill.entryFile !== 'SKILL.md'
+        const preview = skillImportVersion >= 3 ? await previewSkill(item.skill) : undefined;
+        const validation = preview || (skillImportVersion >= 1 && item.skill.entryFile && item.skill.entryFile !== 'SKILL.md')
           ? { valid: true } : await configAPI.validateSkillPath(item.skill.path);
         if (!alive.current || sequence !== reviewSequence.current) return;
         if (!validation.valid) { setNotice(t('content.validationFailed')); return; }
-        const level = item.skill.level === 'project' && workspacePath ? 'project' : 'user';
-        setReview({ kind: 'skill', item, skill: item.skill, level,
-          targetName: skillImportVersion >= 2 ? suggestSkillImportName(item.skill, level, skills) : undefined });
+        const skill = preview ? { ...item.skill, name: preview.name, description: preview.description } : item.skill;
+        const level = skill.level === 'project' && workspacePath ? 'project' : 'user';
+        setReview({ kind: 'skill', item: { ...item, name: skill.name, description: skill.description }, skill, level, preview,
+          targetName: skillImportVersion >= 2 ? suggestSkillImportName(skill, level, skills) : undefined });
       } else if (item.hookSource) {
         const next = await externalHooksAPI.planImport(workspacePath || undefined, item.hookSource.key);
         if (!alive.current || sequence !== reviewSequence.current) return;
@@ -322,7 +362,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         await configAPI.addSkill({ sourcePath: captured.skill.path, level: captured.level,
           workspacePath: workspacePath || undefined,
           ...(skillImportVersion >= 2 && captured.targetName ? { targetName: captured.targetName } : {}),
-          ...(skillImportVersion >= 1 ? { sourceKey: captured.skill.key } : {}) });
+          ...(skillImportVersion >= 1 ? { sourceKey: captured.skill.key } : {}),
+          ...(captured.preview ? { expectedSourceFingerprint: captured.preview.fingerprint } : {}) });
         // The copy has committed. A failed read-back must not invite a duplicate import.
         const report = await configAPI.getSkillScanReport({ workspacePath: workspacePath || undefined, forceRefresh: true }).catch(() => null);
         if (!alive.current) return;
@@ -355,7 +396,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         setHooks(result.outcome.snapshot);
       }
       if (!alive.current) return;
-      setCompleted((current) => new Set([...current, captured.item.id]));
+      if (captured.kind === 'mcp') void refreshMcpPlan();
+      else setCompleted((current) => new Set([...current, captured.item.id]));
       setReview(null);
       setDetail(null);
       notification.success(t('content.importSuccess', { name: captured.item.name }), { duration: 3200 });
@@ -364,7 +406,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     } catch (error) {
       const reason = importErrorMessage(error);
       const conflict = reason.includes('Skill target already exists with different content') || reason.includes('Skill target belongs to a different import');
-      if (alive.current) setNotice(`${t('content.importFailed')} ${conflict ? t('content.skillNameConflict') : reason}`);
+      if (alive.current) setNotice(reason.includes('skill_import_stale:') ? t('content.skillStale') : `${t('content.importFailed')} ${conflict ? t('content.skillNameConflict') : reason}`);
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -485,7 +527,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         <div className="ecosystem-compatibility__import-action">
           {localImportSupported ? <><Button size="sm" variant="primary" disabled={busy || loading || planLoading} onClick={() => void prepareBatch()}>{t('content.importAll')}</Button>
             <Button size="sm" variant="outline" disabled={busy || loading || !items.some((item) => contentState(item) === 'imported')} onClick={() => void prepareBatchUndo()}>{t('content.undoAll')}</Button></> : null}
-          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setNotice(null); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
+          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setNotice(null); void refreshMcpPlan(); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
         </div>
       </div>
       {notice && !review && !undo && !batch && !batchUndo ? <p className="ecosystem-compatibility__feedback" role="status">{notice}</p> : null}
@@ -556,6 +598,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
             <span role="cell" className="ecosystem-compatibility__import-action">
               {item.discovered ? <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.view')} ${item.name}`} onClick={() => { setNotice(null); setDetail(item); }}>{t('content.view')}</Button> : null}
               {importable ? <Button size="sm" variant="outline" disabled={busy} aria-label={`${t('content.prepareImport')} ${item.name}`} onClick={() => void prepareImport(item)}>{t('content.prepareImport')}</Button> : null}
+              {state === 'imported' && localImportSupported && ['skill', 'mcp', 'hook'].includes(item.kind) ? <Button size="sm" variant="text" disabled={busy} onClick={() => openNativeManagement(item.kind)}>{t('content.manageCopy')}</Button> : null}
               {state === 'imported' && localImportSupported ? <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.undo')} ${item.name}`} onClick={() => void prepareUndo(item)}>{t('content.undo')}</Button> : null}
               {state === 'imported' && item.skill && skillImportVersion >= 1 && !importedSkill(item)?.importId ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void prepareImport(item)}>{t('content.repairSource')}</Button> : null}
             </span>
@@ -611,6 +654,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
               {entry.kind === 'skill' && entry.targetName ? <p className="ecosystem-compatibility__feedback">{t('content.renameNotice', { name: entry.targetName })}</p> : null}
               {entry.kind === 'skill' ? <p>{entry.skill.path}</p> : entry.kind === 'hook' ? <p>{entry.plan.source.locationHint}</p> : null}
               {entry.kind === 'hook' ? <><p>{t('content.hookWarning')}</p>{entry.plan.handlers.map((handler) => <div key={handler.stableKey}><p>{handler.event}{handler.matcher ? ` · ${handler.matcher}` : ''}</p><pre>{handler.command}</pre>{handler.commandWindows ? <pre>{handler.commandWindows}</pre> : null}{handler.dependencies.map((dependency) => <p key={dependency.kind === 'managed' ? dependency.relativePath : dependency.location}>{dependency.kind === 'managed' ? dependency.relativePath : dependency.location}</p>)}</div>)}{entry.plan.skipped.map((entry) => <p key={entry.reasonCode}>{t('content.skipped', { reason: entry.reasonCode, count: formatNumber(entry.count) })}</p>)}</> : null}
+              {entry.kind === 'skill' && entry.preview ? <p>{t('content.reviewedPackage', { count: formatNumber(entry.preview.fileCount) })}</p> : null}
               {entry.kind === 'mcp' ? <p>{t('content.mcpTarget', { name: entry.plan.items.find((item) => item.candidateId === entry.candidateId)?.proposedNativeId ?? entry.name })}</p> : null}
               </>}
             </section>;
@@ -650,6 +694,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
               <p className="ecosystem-compatibility__feedback">{t('content.copyWarning')}</p>
               {review.kind === 'mcp' ? <p>{t('content.mcpTarget', { name: reviewMcp?.proposedNativeId ?? review.item.name })}</p> : null}
               {review.kind === 'skill' ? <>
+                {review.preview ? <p>{t('content.reviewedPackage', { count: formatNumber(review.preview.fileCount) })}</p> : null}
                 <div className="ecosystem-compatibility__target-field"><label htmlFor={`${contentId}-scope`}>{t('content.targetScope')}</label><Select id={`${contentId}-scope`} size="sm" disabled={busy} value={review.level} onValueChange={(value) => { setNotice(null); const level = value as SkillLevel; setReview({ ...review, level, targetName: skillImportVersion >= 2 ? suggestSkillImportName(review.skill, level, skills) : undefined }); }} options={[{ value: 'user', label: t('content.userTarget') }, ...(workspacePath ? [{ value: 'project', label: t('content.projectTarget') }] : [])]} /></div>
                 {skillImportVersion >= 2 ? <div className="ecosystem-compatibility__target-field"><label htmlFor={`${contentId}-name`}>{t('content.importName')}</label><Input id={`${contentId}-name`} size="sm" disabled={busy} value={review.targetName ?? review.skill.dirName} onChange={(event) => { setNotice(null); setReview({ ...review, targetName: event.target.value }); }} /></div> : null}
                 {review.targetName ? <p className="ecosystem-compatibility__feedback">{t('content.renameNotice', { name: review.targetName })}</p> : null}

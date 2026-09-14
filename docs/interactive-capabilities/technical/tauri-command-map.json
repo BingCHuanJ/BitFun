@@ -329,7 +329,7 @@
       "visibility": "documented",
       "rustPath": "add_skill",
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
-      "signature": "fn add_skill( _state: State<'_, AppState>, source_path: String, level: String, workspace_path: Option<String>, source_key: Option<String>, target_name: Option<String>, ) -> Result<String, String>",
+      "signature": "fn add_skill( _state: State<'_, AppState>, source_path: String, level: String, workspace_path: Option<String>, source_key: Option<String>, target_name: Option<String>, expected_source_fingerprint: Option<String>, ) -> Result<String, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -10200,7 +10200,7 @@
       "visibility": "documented",
       "rustPath": "validate_skill_path",
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
-      "signature": "fn validate_skill_path(path: String) -> Result<SkillValidationResult, String>",
+      "signature": "fn validate_skill_path( path: String, source_key: Option<String>, workspace_path: Option<String>, ) -> Result<SkillValidationResult, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {

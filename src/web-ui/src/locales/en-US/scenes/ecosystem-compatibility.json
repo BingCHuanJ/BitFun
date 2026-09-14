@@ -181,6 +181,9 @@
     "manageAction": "Discovery settings"
   },
   "content": {
+    "skillStale": "The Skill package changed. Cancel this confirmation and prepare a new preview before importing.",
+    "reviewedPackage": "Reviewed package: {{count}} files. If the source changes, review it again before importing.",
+    "manageCopy": "Manage copy",
     "skillNameConflict": "A Skill with this name already has different content or provenance. Change the import name above and retry; the existing copy will not be overwritten.",
     "batchUndoWarning": "Remove these {{count}} OpenBitFun copies, including edits made to them. External sources are preserved and can be imported again.",
     "batchUndoSummary": "{{removed}} removed · {{pending}} runtime updates pending · {{failed}} failed",
