@@ -28,10 +28,11 @@ vi.mock('./ecosystemCompatibilityStore', () => ({
     selectedProductId: mocks.selectedProductId, ownerSurface: mocks.ownerSurface, setOwnerSurface: mocks.setOwnerSurface,
   }),
 }));
-vi.mock('@openbitfun/ui', async () => {
+vi.mock('@openbitfun/ui', async (importOriginal) => {
   const { createElement } = await import('react');
   const Wrapper = ({ children }: { children?: React.ReactNode }) => createElement('div', null, children);
   return {
+    Alert: (await importOriginal<typeof import('@openbitfun/ui')>()).Alert,
     ...Object.fromEntries(['LoadingState', 'NavigationPanel', 'NavigationPanelBody', 'NavigationPanelContent',
       'NavigationPanelFooter', 'NavigationPanelHeader', 'NavigationPanelItem', 'NavigationPanelSection',
       'OverflowText', 'ScrollArea', 'SearchField', 'Select', 'StatusPill', 'Switch', 'Textarea', 'DialogBody', 'DialogFooter', 'DialogHeader', 'DialogHeading', 'DialogTitle'].map((name) => [name, Wrapper])),
@@ -111,6 +112,16 @@ describe('compatibility discovery lifecycle', () => {
     expect(action).toBeDefined();
     await act(async () => action!.click());
     expect(mocks.setOwnerSurface).toHaveBeenCalledWith('external-sources');
+    await act(async () => {
+      await import('./ExternalAgentDiscovery');
+      root.render(<EcosystemCompatibilityScene />);
+    });
+    const discovery = container.querySelector('[data-external-agent-discovery="codex"]');
+    expect(discovery).not.toBeNull();
+    const status = discovery?.querySelector('[data-openbitfun-component="alert"]');
+    expect(status?.textContent).toBe('sourceSettings.readOnly');
+    expect(status?.getAttribute('role')).toBe('status');
+    expect(status?.getAttribute('aria-live')).toBe('polite');
     await act(async () => vi.advanceTimersByTimeAsync(5000));
     expect(mocks.getSnapshot).toHaveBeenCalledTimes(1);
   });

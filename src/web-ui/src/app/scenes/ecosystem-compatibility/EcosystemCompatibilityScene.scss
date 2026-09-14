@@ -840,7 +840,7 @@
     line-height: var(--openbitfun-type-body-sm-line-height);
     overflow-wrap: anywhere;
 
-    p, h3, h4, dl, pre { margin: 0; }
+    p, h3, h4, dl, pre, .ecosystem-compatibility__notice { margin: 0; }
     > * { min-inline-size: 0; max-inline-size: 100%; }
     > label {
       display: flex;
@@ -892,7 +892,7 @@
     font-size: var(--openbitfun-type-body-sm-font-size);
     line-height: var(--openbitfun-type-body-sm-line-height);
     overflow-wrap: anywhere;
-    p { margin: 0; }
+    p, .ecosystem-compatibility__notice { margin: 0; }
   }
 
   &__batch-body { min-block-size: 0; overflow-y: auto; }
@@ -981,6 +981,27 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     gap: var(--openbitfun-space-2) var(--openbitfun-space-4);
+  }
+
+  // Preserve the existing paragraph layout while Alert owns announcements.
+  &__notice {
+    display: block;
+    margin: 1em 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    letter-spacing: inherit;
+
+    > [data-openbitfun-part='content'] {
+      display: block;
+
+      > [data-openbitfun-part='message'] {
+        color: inherit;
+      }
+    }
   }
 
   &__feedback {
