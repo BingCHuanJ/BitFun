@@ -296,6 +296,12 @@ surface elevation, responsive inline sizing, composer geometry, transparent
 floating action layout, and sheet accessibility. Product state, localized copy,
 routing, and device or session operations stay in the consuming application.
 
+`Checkbox appearance="native"` uses the visible browser checkbox, retaining its
+native focus, disabled, checked, indeterminate, and form semantics. The default
+`custom` presentation remains unchanged. Both presentations share sm/md/lg
+sizing and the same label and description slots; native colors belong to the
+browser, with optional consumer `accent-color` styling.
+
 `Alert` preserves an explicit `role` and `aria-live`. An explicit `status` is
 polite and an explicit `alert` is assertive unless `aria-live` overrides it.
 Omitting both retains the existing default: role alert, polite announcements
