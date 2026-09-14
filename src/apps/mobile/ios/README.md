@@ -67,7 +67,7 @@ workspace, chat, and settings sections. A connected preview exposes the
 remote empty home through the same conversation chrome.
 
 For repeatable simulator captures, pass `--remote`, `--connected`, `--drawer`,
-`--settings`, `--remote-settings`, `--remote-view-settings`, `--remote-view-density`, `--model-settings`, `--composer-model-picker`, `--pairing`, `--pairing-manual`, `--pairing-account`, `--remote-create`, `--remote-create-workspace-picker`, `--remote-chat-section`, `--project-create-menu`, `--file-preview`, `--session-actions`, `--sidebar-actions`, `--local-actions`, and/or
+`--settings`, `--remote-settings`, `--remote-view-settings`, `--remote-view-density`, `--model-settings`, `--composer-model-picker`, `--pairing`, `--pairing-manual`, `--pairing-account`, `--remote-create`, `--remote-create-workspace-picker`, `--remote-chat-section`, `--project-create-menu`, `--file-preview`, `--plan-preview`, `--session-actions`, `--sidebar-actions`, `--local-actions`, and/or
 `--account-login` or `--account-profile` after the bundle identifier in `simctl launch`. The local
 actions flag can be combined with the session-actions flag; the account-login
 flag opens a deterministic signed-out surface without storing credentials. These launch flags
@@ -97,3 +97,8 @@ Use `-only-testing:OpenBitFunUITests/GitHubLoginPresentationUITests` on a signed
 simulator to check the compact login sheet and automatic authorization-browser
 handoff. This check needs the configured relay's login endpoint and opens Safari;
 it does not submit GitHub credentials or approve account access.
+
+For offline parity regression, use `-only-testing:OpenBitFunUITests/MobileParityUITests`.
+It exercises language switching, numbered file previews, plan capability gating,
+and all three bundled Mini Apps using isolated preview data. No host command is sent.
+The Mini App resource build phase requires Node.js on PATH.

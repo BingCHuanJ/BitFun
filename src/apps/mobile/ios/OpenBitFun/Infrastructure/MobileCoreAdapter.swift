@@ -243,6 +243,10 @@ final class MobileCoreAdapter {
         )
     }
 
+    func buildRemotePlan(sessionID: String, path: String, name: String) {
+        remoteSession?.dispatch(intent: RemoteSessionIntentBuildPlan(sessionId: sessionID, path: path, name: name))
+    }
+
     func cancelRemoteTurn(sessionID: String, turnID: String?) {
         remoteSession?.dispatch(
             intent: RemoteSessionIntentCancelTurn(sessionId: sessionID, turnId: turnID)

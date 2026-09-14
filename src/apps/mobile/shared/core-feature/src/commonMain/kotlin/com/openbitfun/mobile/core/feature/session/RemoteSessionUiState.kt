@@ -421,6 +421,12 @@ public sealed interface RemoteSessionIntent {
         public constructor(sessionId: String, content: String) : this(sessionId, content, null)
     }
 
+    public data class BuildPlan public constructor(
+        public val sessionId: String,
+        public val path: String,
+        public val name: String,
+    ) : RemoteSessionIntent
+
     public data class CancelTurn public constructor(
         public val sessionId: String,
         public val turnId: String?,

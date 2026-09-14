@@ -135,6 +135,7 @@ private fun RemoteConnectedScreen(
     if (conversation != null) {
         ConversationView(
             state = conversation,
+            hostCapabilities = (workspaceState as? RemoteWorkspaceUiState.Ready)?.hostCapabilities.orEmpty(),
             phase = phase,
             settingsPlacement = settingsPlacement,
             onBack = onRemoteHome,

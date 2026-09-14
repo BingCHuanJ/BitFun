@@ -459,4 +459,12 @@
     <string name="home_recent_all">全部会话</string>
     <string name="home_recent_empty">还没有可继续的对话</string>
     <string name="home_recent_connect">连接电脑后，继续你的对话。</string>
+    <string name="plan_title">计划</string>
+    <string name="plan_view">查看计划</string>
+    <string name="plan_build">执行计划</string>
+    <string name="plan_unsupported">此电脑暂不支持执行计划</string>
+    <string name="plan_wait">请等待当前操作完成</string>
+    <string name="miniapps_title">小应用</string>
+    <string name="miniapps_close">关闭</string>
+    <string name="miniapps_back">返回</string>
 </resources>

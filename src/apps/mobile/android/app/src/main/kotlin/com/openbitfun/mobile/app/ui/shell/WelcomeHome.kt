@@ -79,8 +79,7 @@ internal fun WelcomeHome(onLogin: () -> Unit, onScan: () -> Unit, signedIn: Bool
                 .padding(start = G.WelcomeGutter, end = G.WelcomeGutter, top = G.WelcomeGutter, bottom = G.WelcomeDockBottom), verticalArrangement = Arrangement.spacedBy(G.WelcomeButtonGap)) {
                 WelcomeAction(stringResource(if (signedIn) R.string.sidebar_connect_desktop else R.string.welcome_login), onLogin)
                 WelcomeAction(stringResource(R.string.welcome_scan), onScan, scan = true)
-                // Reserve the optional MiniApp row; this host does not ship a MiniApp runtime yet.
-                Spacer(Modifier.height(44.dp))
+                com.openbitfun.mobile.app.ui.miniapps.MiniAppsButton()
             }
         }
     }
