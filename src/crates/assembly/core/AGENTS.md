@@ -268,3 +268,13 @@ IM bot reply routing, account-device observation, and interaction delivery:
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::remote_connect::bot::
 ```
+
+Pages account publication and tool gates (including remote directory rejection):
+
+```bash
+cargo test -p openbitfun-core --no-default-features --features remote-connect,tools-pages,git,ssh-remote --lib page_
+```
+
+`tools-pages` selects only the Pages tool group. Account host wiring additionally
+requires `remote-connect`; CLI and Desktop select both explicitly. Pages does
+not select MiniApp runtime or market dependencies.

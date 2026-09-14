@@ -4,6 +4,8 @@
 //! keeps only compatibility exports and adapter wiring that still depends on
 //! existing concrete core paths.
 
+#[cfg(all(feature = "tools-pages", feature = "remote-connect"))]
+pub mod account_pages;
 mod runtime_services;
 
 use std::path::{Path, PathBuf};
