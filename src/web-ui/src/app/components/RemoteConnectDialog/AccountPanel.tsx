@@ -21,6 +21,7 @@ import {
 } from '@/infrastructure/account/accountErrorUtils';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import { ensureAccountSession } from './ensureAccountSession';
 import './AccountPanel.scss';
 
 const log = createLogger('AccountPanel');
@@ -72,6 +73,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const { success } = useNotification();
   const { peerMode, switchToDevice, switchToLocal } = usePeerDeviceMode();
   const identity = useAccountIdentity();
+  const githubId = identity.me?.user.githubId;
   const username = identity.me?.user.login ?? '';
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -132,14 +134,20 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   const handleSessionExpired = useCallback(async (_error: unknown, expectedEpoch: number) => {
     if (!isAccountEpochCurrent(expectedEpoch)) return;
-    invalidateAccountRequests();
+    const nextEpoch = invalidateAccountRequests();
     // Authenticated backend commands invalidate only the generation/token that
     // produced their 401. Do not issue a second unconditional logout here: a
     // late frontend response must never clear a newer login.
     resetState();
-    setView('login');
-    setError(t('accountLogin.sessionExpired'));
-  }, [invalidateAccountRequests, isAccountEpochCurrent, resetState, t]);
+    setView(githubId !== undefined ? 'devices' : 'login');
+    if (githubId !== undefined) {
+      setActiveAccountEpoch(nextEpoch);
+      setRelayError(t('accountLogin.sessionExpired'));
+      void accountIdentityService.refresh().catch(() => undefined);
+    } else {
+      setError(t('accountLogin.sessionExpired'));
+    }
+  }, [githubId, invalidateAccountRequests, isAccountEpochCurrent, resetState, t]);
 
   const markRelayUnreachable = useCallback(() => {
     setDevicesReady(false);
@@ -246,6 +254,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       setRelayError(null);
     }
     try {
+      if (githubId === undefined) return;
+      if (!await ensureAccountSession(remoteConnectAPI, () => isAccountEpochCurrent(epoch), githubId)) return;
       const onlineDevices = await connectDevicesWithRetry(
         () => isAccountEpochCurrent(epoch),
       );
@@ -281,6 +291,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       if (showLoading && isAccountEpochCurrent(epoch)) setLoading(false);
     }
   }, [
+    githubId,
     applyPresenceOnline,
     handleSessionExpired,
     isAccountEpochCurrent,
@@ -358,27 +369,43 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, []);
 
   useEffect(() => {
-    const epoch = accountEpochRef.current;
+    if (!identity.resolved || identity.status === 'authorizing') return;
+    const epoch = invalidateAccountRequests();
+    resetState();
+    setLoading(false);
+    setError(null);
+    if (githubId === undefined) {
+      setView('login');
+      return;
+    }
+    // Identity is shared with both markets. A missing Relay session is a
+    // connection setup step, never a second GitHub login prompt.
+    setView('devices');
+    setActiveAccountEpoch(epoch);
     remoteConnectAPI.getDeviceInfo().then((info) => {
       if (isAccountEpochCurrent(epoch)) setLocalDeviceId(info.device_id);
     }).catch((e) => { log.warn('getDeviceInfo failed', e); });
-    remoteConnectAPI.accountStatus().then(async (status) => {
-      if (isAccountEpochCurrent(epoch) && status.logged_in && status.user_id) {
-        setActiveAccountEpoch(epoch);
-        setView('devices');
-        await initializeDevices();
-      }
+    ensureAccountSession(remoteConnectAPI, () => isAccountEpochCurrent(epoch), githubId).then(async (ready) => {
+      if (ready) await initializeDevices();
     }).catch((e) => {
-      // A failed status probe must not synthesize a logged-out transition.
-      log.warn('account status initialization failed', e);
+      if (!isAccountEpochCurrent(epoch)) return;
+      log.warn('account connection initialization failed', e);
+      markRelayUnreachable();
     });
 
     return () => {
+      invalidateAccountRequests();
       if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
     };
   }, [
+    identity.resolved,
+    identity.status,
+    githubId,
     initializeDevices,
+    invalidateAccountRequests,
     isAccountEpochCurrent,
+    markRelayUnreachable,
+    resetState,
   ]);
 
   // Subscribe only while a specific account epoch is active. The callback
@@ -410,32 +437,17 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     return unlistenPresence;
   }, [activeAccountEpoch, applyPresenceOnline, isAccountEpochCurrent]);
 
-  /** Show the authenticated device list and connect routing. */
-  const completeLogin = useCallback((
-    accountEpoch: number,
-  ) => {
-    if (!isAccountEpochCurrent(accountEpoch)) return;
-    setActiveAccountEpoch(accountEpoch);
-    setView('devices');
-    void initializeDevices();
-  }, [initializeDevices, isAccountEpochCurrent]);
-
   const handleLogin = useCallback(async () => {
-    const epoch = invalidateAccountRequests();
     setLoading(true); setError(null);
     try {
       const me = await accountIdentityService.signIn();
-      if (!isAccountEpochCurrent(epoch)) return;
-      await remoteConnectAPI.accountLogin();
-      if (!isAccountEpochCurrent(epoch)) return;
-      success(t('accountLogin.loginSuccess', { user_id: me.user.login }));
-      completeLogin(epoch);
+      if (mountedRef.current) success(t('accountLogin.loginSuccess', { user_id: me.user.login }));
     } catch (e: unknown) {
-      if (isAccountEpochCurrent(epoch)) setError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setError(e instanceof Error ? e.message : String(e));
     } finally {
-      if (isAccountEpochCurrent(epoch)) setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
-  }, [completeLogin, invalidateAccountRequests, isAccountEpochCurrent, success, t]);
+  }, [success, t]);
 
   const handleLogout = useCallback(async () => {
     const epoch = invalidateAccountRequests();
