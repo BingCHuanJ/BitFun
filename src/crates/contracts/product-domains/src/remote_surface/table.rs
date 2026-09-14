@@ -646,6 +646,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("set_session_memory_mode",                                    Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("set_session_thread_goal_status",                             Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("set_subagent_timeout",                                       Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
+    op("set_tray_unread_count",                                      LocalOnly,   ControllerLocal,  REFUSED),
     op("show_agent_companion_desktop_pet",                           LocalOnly,   ControllerLocal,  REFUSED),
     op("show_main_window",                                           LocalOnly,   ControllerLocal,  REFUSED),
     op("speech_append_audio_chunk",                                  LocalOnly,   ControllerLocal,  REFUSED),

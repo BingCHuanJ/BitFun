@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "124222af073f8c5164b15b625723c0e3b81f0b200e41855cd343ef1f07d5f39b",
-  "commandCount": 648,
+  "commandCount": 649,
   "coverage": {
-    "commandCount": 648,
+    "commandCount": 649,
     "documentedCommandCount": 611,
-    "implementationCommandCount": 37,
-    "implementationDigest": "3c5e64b6ff16d55d95c2a6b4f77046be009a554b395b4a52bf8ed7c162ab1093"
+    "implementationCommandCount": 38,
+    "implementationDigest": "60b4319c9031d08dca0394488100c536ffd5bf4d766d7426c3a36eddfaf73b19"
   },
   "commands": [
     {
@@ -8704,6 +8704,20 @@
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn set_subagent_timeout( coordinator: State<'_, Arc<ConversationCoordinator>>, request: SetSubagentTimeoutRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "set_tray_unread_count",
+      "moduleId": "system",
+      "capabilityId": "setting.application.general",
+      "capabilityIds": [
+        "setting.application.general"
+      ],
+      "documentedItemIds": [],
+      "visibility": "implementation",
+      "rustPath": "api::system_api::set_tray_unread_count",
+      "sourceFile": "src/apps/desktop/src/api/system_api.rs",
+      "signature": "fn set_tray_unread_count(request: SetTrayUnreadCountRequest) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "show_agent_companion_desktop_pet",

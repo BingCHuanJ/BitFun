@@ -1684,6 +1684,7 @@ pub async fn run() {
             api::system_api::quit_app,
             api::system_api::minimize_to_tray,
             api::system_api::initialize_tray_after_startup,
+            api::system_api::set_tray_unread_count,
             api::system_api::startup_window_control,
             api::system_api::set_main_window_transient_geometry,
             api::system_api::toggle_main_window_fullscreen,
