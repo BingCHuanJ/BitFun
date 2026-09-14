@@ -541,17 +541,17 @@ export const codexAdapterPublicApiEntries = [
 ))).concat([
   'load_codex_user_instructions',
   'CodexInstructionSourceOptions',
-].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Codex'))).concat([{
-  symbol: 'pet_source_root',
+].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Codex'))).concat(['pet_source_root', 'builtin_pet_sources', 'BuiltinPetCatalog', 'BuiltinPetSource'].map((symbol) => ({
+  symbol,
   owner: 'Codex adapter static pet source owner',
   consumer: 'openbitfun-core external source composition facade',
-  verification: 'Codex configured root test and services-core pet package fixtures',
-  p0: 'local custom pet source root discovery without execution or installation',
+  verification: 'Codex pet source fixtures, installed bundle smoke test, and services-core pet package tests',
+  p0: 'local custom and bundled pet source discovery without execution or installation',
   contractSlice: contractSlices.externalSourcePetContract,
   wireImpact: false,
-  rationale: 'the adapter resolves CODEX_HOME; the host supplies the native destination to the portable pet package service',
+  rationale: 'the adapter translates Codex package metadata; portable services own bounded resource IO and native copying',
   exit: 'remove only when an equivalent typed pet source provider owns this root',
-}]);
+})));
 
 export const staticHookSupportPublicApiEntries = [
   // Shared by DSH/PI only for validated, redacted source/event construction.
@@ -1224,6 +1224,8 @@ export const externalSourceCorePublicApiEntries = [
     'native_prompt_command_conflicts',
     'instruction_source_catalog',
     'external_pet_source_root',
+    'external_builtin_pet_sources',
+    'ExternalBuiltinPetCatalog',
     'InstructionSourceCatalog',
     'set_native_prompt_command_conflict_choice',
     'external_source_conflict_choices',

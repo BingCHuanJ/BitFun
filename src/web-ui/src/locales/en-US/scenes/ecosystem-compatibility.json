@@ -345,7 +345,9 @@
       "refresh": "Refresh account status"
     },
     "pets": {
-      "description": "Browse custom Codex pets and import them for use in OpenBitFun.",
+      "builtinSource": "Codex built-in",
+      "customSource": "Codex custom",
+      "description": "Browse built-in and custom Codex pets, then import them to use in OpenBitFun.",
       "partial": "Some pets could not be read. Check the source diagnostics below.",
       "reviewTitle": "Import pet",
       "reviewDescription": "Copy the reviewed pet package into OpenBitFun. You can select it after import; your current pet stays selected.",

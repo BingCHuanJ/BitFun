@@ -4,6 +4,9 @@ mod agent_source;
 mod hook_source;
 mod instruction_source;
 mod mcp_source;
+mod pet_source;
+
+pub use pet_source::{builtin_pet_sources, BuiltinPetCatalog, BuiltinPetSource};
 
 pub use agent_source::{CodexSubagentProvider, CodexSubagentProviderOptions};
 pub use hook_source::{CodexHookProvider, CodexHookProviderOptions};

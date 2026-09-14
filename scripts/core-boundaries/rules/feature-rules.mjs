@@ -93,7 +93,7 @@ export const optionalDependencyFeatureOwnerRules = [
       },
       { depName: 'which', ownerFeatures: ['process-runtime'] },
       { depName: 'win32job', ownerFeatures: ['process-runtime'] },
-      { depName: 'windows', ownerFeatures: ['json-io', 'local-storage', 'process-runtime'] },
+      { depName: 'windows', ownerFeatures: ['installed-apps', 'json-io', 'local-storage', 'process-runtime'] },
       {
         depName: 'tokio',
         ownerFeatures: [

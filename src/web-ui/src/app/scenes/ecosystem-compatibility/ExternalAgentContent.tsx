@@ -95,7 +95,8 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
   const [refreshing, setRefreshing] = useState(false);
   const [contentRefreshVersion, setContentRefreshVersion] = useState(0);
   const [accountExpanded, setAccountExpanded] = useState(false);
-  const [petExpanded, setPetExpanded] = useState(false);
+  const [petDialogOpen, setPetDialogOpen] = useState(false);
+  const [petCount, setPetCount] = useState(0);
   const [loadFailures, setLoadFailures] = useState<string[]>([]);
   const [plan, setPlan] = useState<ExternalMcpImportPlanV1 | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -216,8 +217,11 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
     for (const source of hooks?.catalog.sources ?? []) {
       counts[source.ecosystemId] = (counts[source.ecosystemId] ?? 0) + 1;
     }
+    if (localImportSupported && runtime.spec.id === 'codex') {
+      counts.codex = (counts.codex ?? 0) + petCount;
+    }
     onSupplementalCounts?.(counts);
-  }, [hooks, loading, onSupplementalCounts, skills]);
+  }, [hooks, loading, localImportSupported, onSupplementalCounts, petCount, runtime.spec.id, skills]);
 
   const hasMcp = items.some((item) => item.kind === 'mcp' && item.discovered);
   const refreshMcpPlan = useCallback(async (explicit = false) => {
@@ -632,9 +636,9 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
           <span role="columnheader">{t('import.columns.state')}</span>
         </div>
       {Array.from(new Set(items.map((item) => item.kind))).map((group) => {
-        if (group === 'pet' && runtime.spec.id === 'codex') return <EcosystemPets key="pet" supported={localImportSupported} refreshVersion={contentRefreshVersion} expanded={petExpanded} onToggle={() => { setPetExpanded((expanded) => !expanded); setAccountExpanded(false); setSearch(''); setSelected(new Set()); }} />;
+        if (group === 'pet' && runtime.spec.id === 'codex') return <EcosystemPets key="pet" onCountChange={setPetCount} supported={localImportSupported} refreshVersion={contentRefreshVersion} open={petDialogOpen} onOpenChange={(open) => { setPetDialogOpen(open); setAccountExpanded(false); setSearch(''); setSelected(new Set()); }} />;
         const accountProvider = ecosystemAccountProvider(runtime.spec.id);
-        if (group === 'account' && accountProvider) return <EcosystemAccounts key={`${group}:${accountProvider}`} provider={accountProvider} supported={localImportSupported} refreshVersion={contentRefreshVersion} expanded={accountExpanded} onToggle={() => { setAccountExpanded((expanded) => !expanded); setPetExpanded(false); setSearch(''); setSelected(new Set()); }} />;
+        if (group === 'account' && accountProvider) return <EcosystemAccounts key={`${group}:${accountProvider}`} provider={accountProvider} supported={localImportSupported} refreshVersion={contentRefreshVersion} expanded={accountExpanded} onToggle={() => { setAccountExpanded((expanded) => !expanded); setPetDialogOpen(false); setSearch(''); setSelected(new Set()); }} />;
         const groupItems = items.filter((item) => item.kind === group);
         const representative = groupItems[0];
         const count = groupItems.filter((item) => item.discovered).length;
@@ -666,7 +670,7 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
                 icon={<Icon name="chevron-right" size="sm" />}
                 aria-label={t('content.viewCategory', { type: t(`capabilities.${group}`) })}
                 aria-haspopup="dialog" aria-controls={categoryDialogId}
-                onClick={() => { setAccountExpanded(false); setPetExpanded(false); setKind(group); setSearch(''); setSelected(new Set()); setNotice(null); }} /> : null}
+                onClick={() => { setAccountExpanded(false); setPetDialogOpen(false); setKind(group); setSearch(''); setSelected(new Set()); setNotice(null); }} /> : null}
             </span>
           </div>
         </div>;

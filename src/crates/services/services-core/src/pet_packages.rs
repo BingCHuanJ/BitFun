@@ -52,6 +52,8 @@ pub struct PetCandidate {
     pub imported: Option<PetPackage>,
     pub copy_modified: bool,
     pub source_changed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub builtin_id: Option<String>,
 }
 #[derive(Default, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -174,7 +176,14 @@ fn load(path: &Path, preview: bool) -> Result<Loaded> {
         )?;
         (bytes, image)
     };
-    let (value, resource, version) = manifest(&manifest_bytes)?;
+    decode(&manifest_bytes, image_bytes, preview)
+}
+
+fn decode(manifest_bytes: &[u8], image_bytes: Vec<u8>, preview: bool) -> Result<Loaded> {
+    if manifest_bytes.len() as u64 > MANIFEST_LIMIT || image_bytes.len() as u64 > IMAGE_LIMIT {
+        return Err("Pet package resource exceeds its size limit".into());
+    }
+    let (value, resource, version) = manifest(manifest_bytes)?;
     let extension = resource
         .extension()
         .and_then(|v| v.to_str())
@@ -315,11 +324,34 @@ fn directories(root: &Path) -> Result<Vec<PathBuf>> {
 /// Validate a reviewed source again, then publish an independent copy under a root lock.
 /// Older callers may omit the fingerprint; ecosystem callers must supply the catalog value.
 pub fn import(root: &Path, source: &Path, expected: Option<&str>) -> Result<PetPackage> {
-    let mut loaded = load(source, false)?;
+    publish(root, load(source, false)?, source_key(source)?, expected)
+}
+
+/// Import a resource supplied by a static source adapter, with the same receipt and review rules.
+pub fn import_bytes(
+    root: &Path,
+    identity: &str,
+    manifest: &[u8],
+    image: Vec<u8>,
+    expected: &str,
+) -> Result<PetPackage> {
+    publish(
+        root,
+        decode(manifest, image, false)?,
+        hash(identity.as_bytes()),
+        Some(expected),
+    )
+}
+
+fn publish(
+    root: &Path,
+    mut loaded: Loaded,
+    key: String,
+    expected: Option<&str>,
+) -> Result<PetPackage> {
     if expected.is_some_and(|value| value != loaded.fingerprint) {
         return Err("Pet source changed; refresh and review again".into());
     }
-    let key = source_key(source)?;
     fs::create_dir_all(root).map_err(|e| e.to_string())?;
     let root = dunce::canonicalize(root).map_err(|e| e.to_string())?;
     let lock = fs::OpenOptions::new()
@@ -404,34 +436,7 @@ pub fn catalog(source_root: &Path, installed_root: &Path) -> PetCatalog {
         let result: Result<PetCandidate> = (|| {
             let loaded = load(&dir, true)?;
             let key = source_key(&dir)?;
-            let mut candidate = PetCandidate {
-                source_key: key.clone(),
-                fingerprint: loaded.fingerprint.clone(),
-                pet: metadata(&dir, &loaded, "codex"),
-                preview_data_url: loaded.preview.clone(),
-                imported: None,
-                copy_modified: false,
-                source_changed: false,
-            };
-            for native in &installed {
-                if !native.join(RECEIPT).exists() {
-                    continue;
-                }
-                let receipt: Receipt =
-                    serde_json::from_slice(&read_file(&native.join(RECEIPT), MANIFEST_LIMIT)?)
-                        .map_err(|e| e.to_string())?;
-                if receipt.schema_version != 1 {
-                    return Err("Unsupported pet import receipt".into());
-                }
-                if receipt.source_key == key {
-                    let current = load(native, false)?;
-                    candidate.copy_modified = current.fingerprint != receipt.installed_fingerprint;
-                    candidate.source_changed = loaded.fingerprint != receipt.fingerprint;
-                    candidate.imported = Some(metadata(native, &current, "user"));
-                    break;
-                }
-            }
-            Ok(candidate)
+            candidate(&installed, &dir, key, loaded)
         })();
         match result {
             Ok(candidate) => report.candidates.push(candidate),
@@ -439,6 +444,59 @@ pub fn catalog(source_root: &Path, installed_root: &Path) -> PetCatalog {
         }
     }
     report
+}
+
+/// Build a preview and reconcile an adapter-provided resource without writing a package.
+pub fn candidate_from_bytes(
+    installed_root: &Path,
+    identity: &str,
+    origin: &Path,
+    manifest: &[u8],
+    image: Vec<u8>,
+) -> Result<PetCandidate> {
+    candidate(
+        &directories(installed_root)?,
+        origin,
+        hash(identity.as_bytes()),
+        decode(manifest, image, true)?,
+    )
+}
+
+fn candidate(
+    installed: &[PathBuf],
+    dir: &Path,
+    key: String,
+    loaded: Loaded,
+) -> Result<PetCandidate> {
+    let mut candidate = PetCandidate {
+        source_key: key.clone(),
+        fingerprint: loaded.fingerprint.clone(),
+        pet: metadata(&dir, &loaded, "codex"),
+        preview_data_url: loaded.preview.clone(),
+        imported: None,
+        copy_modified: false,
+        source_changed: false,
+        builtin_id: None,
+    };
+    for native in installed {
+        if !native.join(RECEIPT).exists() {
+            continue;
+        }
+        let receipt: Receipt =
+            serde_json::from_slice(&read_file(&native.join(RECEIPT), MANIFEST_LIMIT)?)
+                .map_err(|e| e.to_string())?;
+        if receipt.schema_version != 1 {
+            return Err("Unsupported pet import receipt".into());
+        }
+        if receipt.source_key == key {
+            let current = load(native, false)?;
+            candidate.copy_modified = current.fingerprint != receipt.installed_fingerprint;
+            candidate.source_changed = loaded.fingerprint != receipt.fingerprint;
+            candidate.imported = Some(metadata(native, &current, "user"));
+            break;
+        }
+    }
+    Ok(candidate)
 }
 
 #[cfg(test)]
@@ -458,6 +516,86 @@ mod tests {
             .save(dir.join("sprite.png"))
             .unwrap();
         dir
+    }
+
+    #[test]
+    fn bundled_identity_survives_app_updates_and_reconciles_native_deletion() {
+        let temp = tempfile::tempdir().unwrap();
+        let fixture = fixture(temp.path(), "owl", Some(2));
+        let manifest = fs::read(fixture.join("pet.json")).unwrap();
+        let image = fs::read(fixture.join("sprite.png")).unwrap();
+        let native = temp.path().join("native");
+        let identity = "codex:builtin:owl";
+        let reviewed = candidate_from_bytes(
+            &native,
+            identity,
+            Path::new("old/app.asar"),
+            &manifest,
+            image.clone(),
+        )
+        .unwrap();
+        assert!(!native.exists());
+        let pet = import_bytes(
+            &native,
+            identity,
+            &manifest,
+            image.clone(),
+            &reviewed.fingerprint,
+        )
+        .unwrap();
+        let moved = candidate_from_bytes(
+            &native,
+            identity,
+            Path::new("new/app.asar"),
+            &manifest,
+            image.clone(),
+        )
+        .unwrap();
+        assert_eq!(moved.source_key, reviewed.source_key);
+        assert_eq!(moved.imported.unwrap().package_path, pet.package_path);
+        assert_eq!(
+            import_bytes(
+                &native,
+                identity,
+                &manifest,
+                image.clone(),
+                &reviewed.fingerprint
+            )
+            .unwrap()
+            .package_path,
+            pet.package_path
+        );
+        let mut changed: serde_json::Value = serde_json::from_slice(&manifest).unwrap();
+        changed["displayName"] = "Updated owl".into();
+        let changed = serde_json::to_vec(&changed).unwrap();
+        assert!(import_bytes(
+            &native,
+            identity,
+            &changed,
+            image.clone(),
+            &reviewed.fingerprint
+        )
+        .is_err());
+        let changed_source = candidate_from_bytes(
+            &native,
+            identity,
+            Path::new("new/app.asar"),
+            &changed,
+            image.clone(),
+        )
+        .unwrap();
+        assert!(changed_source.source_changed);
+        fs::remove_dir_all(&pet.package_path).unwrap();
+        assert!(candidate_from_bytes(
+            &native,
+            identity,
+            Path::new("new/app.asar"),
+            &manifest,
+            image
+        )
+        .unwrap()
+        .imported
+        .is_none());
     }
     #[test]
     fn imports_both_versions_and_legacy_payload_and_rejects_stale_review() {

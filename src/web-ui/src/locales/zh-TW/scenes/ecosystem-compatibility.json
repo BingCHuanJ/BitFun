@@ -345,7 +345,9 @@
       "refresh": "重新整理帳號狀態"
     },
     "pets": {
-      "description": "查看 Codex 自訂寵物，匯入後可在 OpenBitFun 中使用。",
+      "builtinSource": "Codex 內建",
+      "customSource": "Codex 自訂",
+      "description": "查看 Codex 內建與自訂寵物，匯入後可在 OpenBitFun 中使用。",
       "partial": "部分寵物無法讀取，請檢查下方來源診斷。",
       "reviewTitle": "匯入寵物",
       "reviewDescription": "將已預覽的寵物套件複製到 OpenBitFun。匯入後可單獨選擇使用，目前寵物保持不變。",

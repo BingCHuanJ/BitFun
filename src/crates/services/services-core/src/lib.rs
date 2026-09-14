@@ -83,3 +83,9 @@ pub mod workspace_instructions;
 pub mod workspace_text;
 #[cfg(feature = "workspace-transfer")]
 pub mod workspace_transfer;
+
+#[cfg(feature = "asar")]
+pub mod asar;
+
+#[cfg(all(feature = "installed-apps", target_os = "windows"))]
+pub mod installed_apps;

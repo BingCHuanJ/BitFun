@@ -345,7 +345,9 @@
       "refresh": "刷新账号状态"
     },
     "pets": {
-      "description": "查看 Codex 自定义宠物，导入后可在 OpenBitFun 中使用。",
+      "builtinSource": "Codex 内置",
+      "customSource": "Codex 自定义",
+      "description": "查看 Codex 内置与自定义宠物，导入后可在 OpenBitFun 中使用。",
       "partial": "部分宠物无法读取，请检查下方来源诊断。",
       "reviewTitle": "导入宠物",
       "reviewDescription": "将已预览的宠物包复制到 OpenBitFun。导入后可单独选择使用，当前宠物保持不变。",

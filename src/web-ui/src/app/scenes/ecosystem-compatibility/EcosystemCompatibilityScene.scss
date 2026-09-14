@@ -927,6 +927,14 @@
     gap: var(--openbitfun-space-3);
   }
 
+  &__pet-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--openbitfun-space-2);
+  }
+
   &__pet-preview {
     inline-size: 4rem;
     block-size: 4.5rem;
@@ -1033,7 +1041,7 @@
 @container ecosystem-content (max-width: 520px) {
   .ecosystem-compatibility__pet-row {
     grid-template-columns: auto minmax(0, 1fr);
-    > :last-child { grid-column: 2; justify-self: start; }
+    > :last-child { grid-column: 1 / -1; justify-self: end; }
   }
 
   .ecosystem-compatibility__account-panel {

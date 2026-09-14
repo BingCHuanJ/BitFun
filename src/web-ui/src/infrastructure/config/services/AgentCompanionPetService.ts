@@ -11,6 +11,8 @@ const log = createLogger('AgentCompanionPetService');
 const BUILTIN_PET_BASE = '/agent-companion-pets';
 const BUILTIN_PET_DISPLAY_NAMES = builtinPetMetadata.displayNames;
 
+export const AGENT_COMPANION_PETS_CHANGED = 'agent-companion-pets-changed';
+
 export const DEFAULT_AGENT_COMPANION_PET: AgentCompanionPetSelection = {
   id: 'blue-golden',
   displayName: BUILTIN_PET_DISPLAY_NAMES.blueGolden,
@@ -257,8 +259,6 @@ export async function resolveAgentCompanionPet(pet: AgentCompanionPetSelection) 
 }
 
 
-export const AGENT_COMPANION_PETS_CHANGED = 'agent-companion-pets-changed';
-
 export interface ExternalPetCandidate {
   sourceKey: string;
   fingerprint: string;
@@ -267,6 +267,7 @@ export interface ExternalPetCandidate {
   imported: AgentCompanionPetSelection | null;
   copyModified: boolean;
   sourceChanged: boolean;
+  builtinId?: string;
 }
 
 export interface ExternalPetCatalog {
@@ -278,11 +279,14 @@ export interface ExternalPetCatalog {
 export async function listExternalAgentCompanionPets(): Promise<ExternalPetCatalog> {
   const response = await api.invoke<{
     importOperationsVersion?: number;
+    builtinImportVersion?: number;
     external?: ExternalPetCatalog;
-  }>('list_agent_companion_pets', { request: { includeExternal: true } });
+  }>('list_agent_companion_pets', { request: { includeExternal: true, builtinImportVersion: 1 } });
   if (response.importOperationsVersion !== 1 || !response.external
     || !Array.isArray(response.external.candidates) || !Array.isArray(response.external.diagnostics)
-    || response.external.candidates.some((entry) => typeof entry.sourceKey !== 'string'
+    || response.external.candidates.some((entry) => (entry.builtinId != null
+      && (typeof entry.builtinId !== 'string' || !entry.builtinId || response.builtinImportVersion !== 1))
+      || typeof entry.sourceKey !== 'string'
       || typeof entry.fingerprint !== 'string' || typeof entry.pet?.packagePath !== 'string'
       || typeof entry.previewDataUrl !== 'string' || !entry.previewDataUrl.startsWith('data:image/png;base64,'))) {
     throw new Error('Pet discovery or reviewed import is unavailable on this host');
@@ -292,7 +296,9 @@ export async function listExternalAgentCompanionPets(): Promise<ExternalPetCatal
 
 export async function importReviewedAgentCompanionPet(candidate: ExternalPetCandidate): Promise<AgentCompanionPetSelection> {
   const pet = await api.invoke<AgentCompanionPetSelection>('import_agent_companion_pet_package', {
-    request: { path: candidate.pet.packagePath, expectedFingerprint: candidate.fingerprint },
+    request: { path: candidate.pet.packagePath, expectedFingerprint: candidate.fingerprint,
+      ...(candidate.builtinId ? { builtinId: candidate.builtinId } : {}),
+    },
   });
   globalEventBus.emit(AGENT_COMPANION_PETS_CHANGED, {});
   return pet;

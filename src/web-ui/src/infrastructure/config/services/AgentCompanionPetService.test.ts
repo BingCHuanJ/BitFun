@@ -81,7 +81,7 @@ describe('reviewed external pet protocol', () => {
       candidates: [{ sourceKey: 'cat', fingerprint: 'hash', pet: { packagePath: '/source/cat' }, previewDataUrl: 'file:///private/image' }], diagnostics: [],
     } });
     await expect(listExternalAgentCompanionPets()).rejects.toThrow('unavailable');
-    expect(invoke).toHaveBeenCalledWith('list_agent_companion_pets', { request: { includeExternal: true } });
+    expect(invoke).toHaveBeenCalledWith('list_agent_companion_pets', { request: { includeExternal: true, builtinImportVersion: 1 } });
   });
 
   it('sends the reviewed fingerprint and emits changes only after a successful copy', async () => {
@@ -105,5 +105,32 @@ describe('reviewed external pet protocol', () => {
       });
       expect(changed).toHaveBeenCalledTimes(1);
     } finally { off(); }
+  });
+});
+
+
+describe('bundled pet compatibility', () => {
+  it('requires explicit bundled-import support while keeping custom-only older hosts usable', async () => {
+    const { listExternalAgentCompanionPets } = await import('./AgentCompanionPetService');
+    const candidate = { builtinId: 'codex', sourceKey: 'builtin:codex', fingerprint: 'hash', pet: { packagePath: '/app/app.asar' }, previewDataUrl: 'data:image/png;base64,AA==' };
+    invoke.mockResolvedValueOnce({ importOperationsVersion: 1, external: { candidates: [candidate], diagnostics: [] } });
+    await expect(listExternalAgentCompanionPets()).rejects.toThrow('unavailable');
+    invoke.mockResolvedValueOnce({ importOperationsVersion: 1, external: { candidates: [], diagnostics: [] } });
+    await expect(listExternalAgentCompanionPets()).resolves.toEqual({ candidates: [], diagnostics: [] });
+    invoke.mockResolvedValueOnce({ importOperationsVersion: 1, builtinImportVersion: 1, external: { candidates: [candidate], diagnostics: [] } });
+    await expect(listExternalAgentCompanionPets()).resolves.toMatchObject({ candidates: [{ builtinId: 'codex' }] });
+  });
+
+  it('sends the stable bundled identity with the reviewed fingerprint', async () => {
+    const { importReviewedAgentCompanionPet, DEFAULT_AGENT_COMPANION_PET } = await import('./AgentCompanionPetService');
+    invoke.mockResolvedValueOnce(DEFAULT_AGENT_COMPANION_PET);
+    await importReviewedAgentCompanionPet({
+      builtinId: 'codex', sourceKey: 'builtin:codex', fingerprint: 'reviewed',
+      pet: { ...DEFAULT_AGENT_COMPANION_PET, source: 'codex', packagePath: '/installed/app.asar' },
+      previewDataUrl: 'data:image/png;base64,AA==', imported: null, copyModified: false, sourceChanged: false,
+    });
+    expect(invoke).toHaveBeenLastCalledWith('import_agent_companion_pet_package', {
+      request: { path: '/installed/app.asar', builtinId: 'codex', expectedFingerprint: 'reviewed' },
+    });
   });
 });

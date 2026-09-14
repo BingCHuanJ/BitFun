@@ -482,6 +482,8 @@ pub struct ImportAgentCompanionPetPackageRequest {
     pub path: String,
     #[serde(default)]
     pub expected_fingerprint: Option<String>,
+    #[serde(default)]
+    pub builtin_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -497,6 +499,8 @@ pub use openbitfun_services_core::pet_packages::PetPackage as AgentCompanionPetP
 pub struct ListAgentCompanionPetsRequest {
     #[serde(default)]
     pub include_external: bool,
+    #[serde(default)]
+    pub builtin_import_version: Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -504,6 +508,7 @@ pub struct ListAgentCompanionPetsRequest {
 pub struct ListAgentCompanionPetsResponse {
     pub pets: Vec<AgentCompanionPetPackageDto>,
     pub import_operations_version: u32,
+    pub builtin_import_version: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external: Option<openbitfun_services_core::pet_packages::PetCatalog>,
 }
@@ -2525,11 +2530,57 @@ mod pet_package_tests {
         let old: ImportAgentCompanionPetPackageRequest =
             serde_json::from_value(serde_json::json!({"path": "legacy-pet"})).unwrap();
         assert!(old.expected_fingerprint.is_none());
+        assert!(old.builtin_id.is_none());
         let request: ListAgentCompanionPetsRequest =
             serde_json::from_value(serde_json::json!({})).unwrap();
         assert!(!request.include_external);
+        assert!(request.builtin_import_version.is_none());
     }
 
+    #[test]
+    fn bundled_pet_request_requires_review() {
+        let temp = tempfile::tempdir().unwrap();
+        let request =
+            serde_json::from_value(serde_json::json!({"path":"app.asar", "builtinId":"codex"}))
+                .unwrap();
+        assert!(import_pet_request(temp.path(), request)
+            .unwrap_err()
+            .contains("reviewed fingerprint"));
+    }
+
+    #[test]
+    #[ignore = "Imports installed Codex pets into an isolated temporary directory"]
+    fn installed_builtin_pets_can_be_previewed_and_imported() {
+        let temp = tempfile::tempdir().unwrap();
+        let sources =
+            openbitfun_core::external_sources::external_builtin_pet_sources("codex", None);
+        assert!(sources.diagnostics.is_empty(), "{:?}", sources.diagnostics);
+        assert!(!sources.pets.is_empty());
+        for source in sources.pets {
+            let identity = format!("codex:builtin:{}", source.id);
+            let candidate = openbitfun_services_core::pet_packages::candidate_from_bytes(
+                temp.path(),
+                &identity,
+                &source.archive_path,
+                &source.manifest,
+                source.image,
+            )
+            .unwrap();
+            assert!(candidate
+                .preview_data_url
+                .starts_with("data:image/png;base64,"));
+            let request = serde_json::from_value(serde_json::json!({
+                "path": source.archive_path, "builtinId":source.id, "expectedFingerprint":candidate.fingerprint,
+            })).unwrap();
+            let imported = import_pet_request(temp.path(), request).unwrap();
+            assert!(Path::new(&imported.spritesheet_path).is_file());
+            assert_eq!(
+                imported.sprite_version_number,
+                candidate.pet.sprite_version_number
+            );
+            println!("Validated bundled pet: {}", imported.display_name);
+        }
+    }
     #[test]
     fn pet_manifest_versions_are_validated_and_exported() {
         for version in [None, Some(1), Some(2)] {
@@ -2656,6 +2707,9 @@ pub async fn list_agent_companion_pets(
     state: State<'_, AppState>,
     request: Option<ListAgentCompanionPetsRequest>,
 ) -> Result<ListAgentCompanionPetsResponse, String> {
+    let include_builtins = request
+        .as_ref()
+        .is_some_and(|r| r.builtin_import_version == Some(1));
     let mut response = list_agent_companion_pets_impl(&state).await?;
     if request.is_some_and(|r| r.include_external) {
         let source_root = openbitfun_core::external_sources::external_pet_source_root("codex")
@@ -2663,7 +2717,33 @@ pub async fn list_agent_companion_pets(
         let installed_root = companion_user_packages_dir(&state);
         response.external = Some(
             tokio::task::spawn_blocking(move || {
-                openbitfun_services_core::pet_packages::catalog(&source_root, &installed_root)
+                let mut catalog =
+                    openbitfun_services_core::pet_packages::catalog(&source_root, &installed_root);
+                if !include_builtins {
+                    return catalog;
+                }
+                let bundled =
+                    openbitfun_core::external_sources::external_builtin_pet_sources("codex", None);
+                catalog.diagnostics.extend(bundled.diagnostics);
+                for source in bundled.pets {
+                    let identity = format!("codex:builtin:{}", source.id);
+                    match openbitfun_services_core::pet_packages::candidate_from_bytes(
+                        &installed_root,
+                        &identity,
+                        &source.archive_path,
+                        &source.manifest,
+                        source.image,
+                    ) {
+                        Ok(mut candidate) => {
+                            candidate.builtin_id = Some(source.id);
+                            catalog.candidates.push(candidate);
+                        }
+                        Err(error) => catalog
+                            .diagnostics
+                            .push(format!("Codex built-in pet {}: {error}", source.id)),
+                    }
+                }
+                catalog
             })
             .await
             .map_err(|e| e.to_string())?,
@@ -2679,6 +2759,7 @@ pub(crate) async fn list_agent_companion_pets_impl(
     Ok(ListAgentCompanionPetsResponse {
         pets,
         import_operations_version: 1,
+        builtin_import_version: 1,
         external: None,
     })
 }
@@ -2689,15 +2770,42 @@ pub async fn import_agent_companion_pet_package(
     request: ImportAgentCompanionPetPackageRequest,
 ) -> Result<AgentCompanionPetPackageDto, String> {
     let root = companion_user_packages_dir(&state);
-    tokio::task::spawn_blocking(move || {
-        openbitfun_services_core::pet_packages::import(
+    tokio::task::spawn_blocking(move || import_pet_request(&root, request))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn import_pet_request(
+    root: &Path,
+    request: ImportAgentCompanionPetPackageRequest,
+) -> Result<AgentCompanionPetPackageDto, String> {
+    if let Some(id) = request.builtin_id {
+        let expected = request
+            .expected_fingerprint
+            .as_deref()
+            .ok_or("Built-in pet import requires a reviewed fingerprint")?;
+        let mut catalog =
+            openbitfun_core::external_sources::external_builtin_pet_sources("codex", Some(&id));
+        let source = catalog.pets.pop().ok_or_else(|| {
+            if catalog.diagnostics.is_empty() {
+                "Built-in pet is unavailable".to_string()
+            } else {
+                catalog.diagnostics.join("; ")
+            }
+        })?;
+        return openbitfun_services_core::pet_packages::import_bytes(
             &root,
-            Path::new(&request.path),
-            request.expected_fingerprint.as_deref(),
-        )
-    })
-    .await
-    .map_err(|e| e.to_string())?
+            &format!("codex:builtin:{id}"),
+            &source.manifest,
+            source.image,
+            expected,
+        );
+    }
+    openbitfun_services_core::pet_packages::import(
+        &root,
+        Path::new(&request.path),
+        request.expected_fingerprint.as_deref(),
+    )
 }
 
 pub(crate) async fn import_agent_companion_pet_package_impl(
