@@ -1603,11 +1603,11 @@ main {
   line-height: 1.45;
 }
 
-.field input,
+.field :is([data-openbitfun-component="input"], input[type="file"]),
 .field select,
 .field textarea,
-.review-actions input,
-.moderation-panel input {
+.review-actions [data-openbitfun-component="input"],
+.moderation-panel [data-openbitfun-component="input"] {
   width: 100%;
   min-height: 34px;
   padding: 7px 9px;
@@ -1640,16 +1640,16 @@ main {
   cursor: pointer;
 }
 
-.field input:focus,
+.field [data-openbitfun-component="input"]:focus-within,
 .field select:focus,
 .field textarea:focus,
-.review-actions input:focus,
-.moderation-panel input:focus {
+.review-actions [data-openbitfun-component="input"]:focus-within,
+.moderation-panel [data-openbitfun-component="input"]:focus-within {
   border-color: var(--openbitfun-color-accent-default);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
 }
 
-.field input[readonly] {
+.field [data-openbitfun-component="input"]:has(input[readonly]) {
   background: var(--openbitfun-color-surface-tertiary);
   color: var(--openbitfun-color-content-muted);
 }
@@ -2551,4 +2551,21 @@ footer a:hover {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+.market-input[data-openbitfun-component='input'] {
+  block-size: auto;
+  min-width: 0;
+}
+.market-input[data-openbitfun-component='input'] > input {
+  font: inherit;
+  letter-spacing: inherit;
+  height: auto;
+}
+.search-field > .market-input {
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }

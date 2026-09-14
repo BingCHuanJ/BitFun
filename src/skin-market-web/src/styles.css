@@ -2278,3 +2278,18 @@ img {
     justify-content: center;
   }
 }
+
+.search-field > .market-input[data-openbitfun-component='input'] {
+  flex: 1;
+  min-width: 0;
+  block-size: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.market-input[data-openbitfun-component='input'] > input {
+  font: inherit;
+  letter-spacing: inherit;
+  height: auto;
+}

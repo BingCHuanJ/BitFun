@@ -1,3 +1,4 @@
+import { Input } from '@openbitfun/ui';
 import { ArrowRight, Search as MagnifyingGlass } from 'lucide-react';
 import {
   useCallback,
@@ -168,7 +169,7 @@ export function CatalogPage({
           <label className="search-field">
             <span className="sr-only">{t('searchLabel')}</span>
             <MagnifyingGlass size={20} aria-hidden="true" />
-            <input
+            <Input className="market-input"
               type="search"
               value={queryInput}
               onChange={(event) => setQueryInput(event.currentTarget.value)}

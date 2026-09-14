@@ -1,3 +1,4 @@
+import { Input } from '@openbitfun/ui';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CubeFocus as MarketLogo, GithubLogo, IconContext } from '@phosphor-icons/react';
 import {
@@ -516,7 +517,7 @@ function CatalogPage({
           <label className="search-field">
             <MagnifyingGlass size={18} aria-hidden="true" />
             <span className="sr-only">{t('search')}</span>
-            <input
+            <Input className="market-input"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('search')}
@@ -918,7 +919,7 @@ function DetailPage({
           <div className="moderation-panel">
             <label>
               <span>{t('moderationReason')}</span>
-              <input
+              <Input className="market-input"
                 value={moderationReason}
                 onChange={(event) => setModerationReason(event.target.value)}
               />
@@ -1053,16 +1054,16 @@ function SubmitPage({
           <legend>{t('listingSection')}</legend>
           <div className="form-grid">
             <Field label={t('slugLabel')}>
-              <input name="slug" required pattern="[a-z0-9][a-z0-9-]{2,62}" defaultValue={initialSlug} readOnly={Boolean(listingId)} />
+              <Input className="market-input" name="slug" required pattern="[a-z0-9][a-z0-9-]{2,62}" defaultValue={initialSlug} readOnly={Boolean(listingId)} />
             </Field>
             <Field label={t('releaseNumberLabel')}>
-              <input name="releaseNumber" type="number" min="1" required defaultValue={initialRelease} readOnly={Boolean(listingId)} />
+              <Input className="market-input" name="releaseNumber" type="number" min="1" required defaultValue={initialRelease} readOnly={Boolean(listingId)} />
             </Field>
             <Field label={t('nameLabel')}>
-              <input name="name" required maxLength={80} />
+              <Input className="market-input" name="name" required maxLength={80} />
             </Field>
             <Field label={t('iconLabel')}>
-              <input name="icon" defaultValue="✦" maxLength={8} />
+              <Input className="market-input" name="icon" defaultValue="✦" maxLength={8} />
             </Field>
             <Field label={t('categoryLabel')}>
               <select name="category" defaultValue="utilities">
@@ -1072,7 +1073,7 @@ function SubmitPage({
               </select>
             </Field>
             <Field label={t('tagsLabel')}>
-              <input name="tags" placeholder={t('tagsPlaceholder')} />
+              <Input className="market-input" name="tags" placeholder={t('tagsPlaceholder')} />
             </Field>
           </div>
           <Field label={t('descriptionLabel')}>
@@ -1084,10 +1085,10 @@ function SubmitPage({
           <legend>{t('releaseSection')}</legend>
           <div className="form-grid">
             <Field label={t('minOpenBitFunVersionLabel')}>
-              <input name="minOpenBitFunVersion" required defaultValue="1.0.0" />
+              <Input className="market-input" name="minOpenBitFunVersion" required defaultValue="1.0.0" />
             </Field>
             <Field label={t('publicRepositoryOptional')}>
-              <input name="repositoryUrl" type="url" placeholder="https://github.com/…" />
+              <Input className="market-input" name="repositoryUrl" type="url" placeholder="https://github.com/…" />
             </Field>
             <Field label={t('licenseTypeLabel')}>
               <select name="licenseKind">
@@ -1096,7 +1097,7 @@ function SubmitPage({
               </select>
             </Field>
             <Field label={t('licenseLabel')}>
-              <input name="licenseValue" required defaultValue="MIT" />
+              <Input className="market-input" name="licenseValue" required defaultValue="MIT" />
             </Field>
           </div>
           <Field label={t('changelog')}>
@@ -1454,7 +1455,7 @@ function AdminPage({
                 >
                   {t('approve')}
                 </button>
-                <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={t('rejectionReason')} />
+                <Input className="market-input" value={reason} onChange={(event) => setReason(event.target.value)} placeholder={t('rejectionReason')} />
                 <button
                   className="button button-danger"
                   disabled={!reason.trim()}
