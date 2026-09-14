@@ -405,7 +405,13 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         </div>
 
         {/* Path Breadcrumb / Input */}
-        <div className="remote-file-browser__breadcrumb" data-openbitfun-component="ssh-remote" data-openbitfun-part="breadcrumb">
+        <ScrollArea
+          className="remote-file-browser__breadcrumb"
+          data-openbitfun-component="ssh-remote"
+          data-openbitfun-part="breadcrumb"
+          orientation="horizontal"
+          scrollbarVisibility="hidden"
+        >
           {isEditingPath ? (
             <Input
               ref={pathInputRef}
@@ -461,7 +467,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
               )}
             </div>
           )}
-        </div>
+        </ScrollArea>
 
         {/* Toolbar */}
         <div className="remote-file-browser__toolbar" data-openbitfun-component="ssh-remote" data-openbitfun-part="toolbar">
