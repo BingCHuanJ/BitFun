@@ -1,4 +1,4 @@
-import { Textarea, Button } from '@openbitfun/ui';
+import { Textarea, Button, Disclosure } from '@openbitfun/ui';
 import { GithubLogo } from '@phosphor-icons/react';
 import { RefreshCw as ArrowClockwise, ShieldCheck, CircleAlert as WarningCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -203,7 +203,7 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
                     <div><dt>{t('reviewPreviewHash')}</dt><dd>{detail.previewSha256 || t('notDeclared')}</dd></div>
                     <div><dt>{t('reviewBundleHash')}</dt><dd>{detail.reviewBundleHash || t('notDeclared')}</dd></div>
                   </dl>
-                  {detail.manifest !== undefined && <details className="manifest-panel"><summary>{t('reviewManifest')}</summary><pre>{JSON.stringify(detail.manifest, null, 2)}</pre></details>}
+                  {detail.manifest !== undefined && <Disclosure presentation="native" className="manifest-panel" summary={t('reviewManifest')}><pre>{JSON.stringify(detail.manifest, null, 2)}</pre></Disclosure>}
                   <div className="review-actions">
                     <label htmlFor="review-reason">{t('reviewReason')}</label>
                     <Textarea className="market-textarea" id="review-reason" rows={4} maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} placeholder={t('reviewReasonPlaceholder')} />

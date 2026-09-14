@@ -1,4 +1,4 @@
-import { Textarea, Button } from '@openbitfun/ui';
+import { Textarea, Button, Disclosure } from '@openbitfun/ui';
 import {
   ArrowLeft,
   ExternalLink as ArrowSquareOut,
@@ -358,8 +358,7 @@ function ReleaseHistory({
         ))}
       </div>
       {older.length ? (
-        <details className="older-releases">
-          <summary>{t('olderReleases', { count: older.length })}</summary>
+        <Disclosure presentation="native" className="older-releases" summary={t('olderReleases', { count: older.length })}>
           <div className="release-list">
             {older.map((release) => (
               <ReleaseItem
@@ -375,7 +374,7 @@ function ReleaseHistory({
               />
             ))}
           </div>
-        </details>
+        </Disclosure>
       ) : null}
     </section>
   );
