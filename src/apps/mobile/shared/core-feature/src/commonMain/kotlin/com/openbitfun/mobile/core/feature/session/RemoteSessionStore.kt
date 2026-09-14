@@ -1363,12 +1363,15 @@ public class RemoteSessionStore internal constructor(
         }
     }
 
+    private var draftRevision: Long = 0
+
     private fun sendMessage(intent: RemoteSessionIntent.SendMessage, plan: RemoteSessionIntent.BuildPlan? = null) {
         val sessionId = intent.sessionId.trim()
         val content = intent.content
         if (sessionId.isEmpty() || (content.trim().isEmpty() && intent.images.isNullOrEmpty())) return
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
         if (current.busy || current.selectedSessionId != sessionId) return
+        val submittedDraftRevision = draftRevision
         val activeTurnId = current.timeline?.activeTurn?.turnId?.takeIf { it.isNotBlank() }
         val steering = plan == null && activeTurnId != null && "dialog_steer_v1" in hostCapabilities
         val wireImages = intent.images?.map { image ->
@@ -1435,7 +1438,7 @@ public class RemoteSessionStore internal constructor(
                     // An acknowledgement owns only the submitted draft. Keep
                     // newer typing and let each native picker remove only the
                     // acknowledged images; failed sends retain their pixels.
-                    val draftUnchanged = plan == null && ready.draft == current.draft && ready.draft.trim() == content.trim()
+                    val draftUnchanged = plan == null && draftRevision == submittedDraftRevision && ready.draft == current.draft && ready.draft.trim() == content.trim()
                     if (draftUnchanged) deletePersistedDraft(sessionId)
                     _state.value = ready.copy(
                         timeline = timelineStore.snapshot(),
@@ -1472,6 +1475,7 @@ public class RemoteSessionStore internal constructor(
     private fun updateDraft(text: String) {
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
         val id = current.selectedSessionId ?: return
+        draftRevision++
         savePersistedDraft(id, text)
         _state.value = current.copy(draft = text)
     }

@@ -483,4 +483,9 @@
     <string name="miniapps_close">Close</string>
     <string name="miniapps_back">Back</string>
     <string name="chat_attachment_recovery_failed">Unable to restore or save image drafts. Tap to retry.</string>
+    <string name="chat_subagent_output">Subtask output</string>
+    <string name="miniapps_all">All apps</string>
+    <string name="miniapps_offline">Available offline</string>
+    <string name="miniapps_load_failed">Unable to load apps. Please retry.</string>
+    <string name="account_authorization_open_failed">Unable to open the authorization page. Please retry.</string>
 </resources>

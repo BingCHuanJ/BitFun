@@ -17,6 +17,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +48,11 @@ internal data class PlanActions(
     val build: (com.openbitfun.mobile.core.feature.session.PlanToolDescriptor) -> Unit = {},
 )
 internal val LocalPlanActions = androidx.compose.runtime.staticCompositionLocalOf { PlanActions() }
+
+internal class ToolDisclosure(selectedState: MutableState<String?>) {
+    var selected by selectedState
+}
+internal val LocalToolDisclosure = staticCompositionLocalOf<ToolDisclosure?> { null }
 
 private const val REJECT_REASON = "Rejected from the Android client"
 private const val CANCEL_REASON = "Cancelled from the Android client"
@@ -203,7 +211,13 @@ internal fun ToolStatusRow(
         }
         return
     }
-    var expanded by remember(tool.id) { mutableStateOf(false) }
+    var localExpanded by rememberSaveable(tool.id) { mutableStateOf(false) }
+    val disclosure = LocalToolDisclosure.current
+    val expanded = disclosure?.let { it.selected == tool.id } ?: localExpanded
+    val toggle = {
+        if (disclosure == null) localExpanded = !localExpanded
+        else disclosure.selected = if (expanded) null else tool.id
+    }
     val blocking = tool.actions.isNotEmpty()
     val emphasized = expanded || blocking || tool.phase == ToolPhase.FAILED
     val canExpand = tool.expandable
@@ -254,7 +268,7 @@ internal fun ToolStatusRow(
                         if (openable) {
                             onOpenFile(tool.filePath, tool.fileLabel)
                         } else {
-                            expanded = !expanded
+                            toggle()
                         }
                     },
             )
@@ -263,7 +277,7 @@ internal fun ToolStatusRow(
                     modifier = Modifier
                         .size(width = 32.dp, height = 28.dp)
                         .testTag(TOOL_EXPAND_TEST_TAG)
-                        .clickable { expanded = !expanded },
+                        .clickable { toggle() },
                     contentAlignment = Alignment.Center,
                 ) {
                     Chevron(
