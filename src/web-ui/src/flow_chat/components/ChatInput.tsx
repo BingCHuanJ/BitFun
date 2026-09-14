@@ -5991,7 +5991,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 >
                   {t('chatInput.targetMain')}
                   {inputTarget === 'main' && currentSessionTitle && (
-                    <OverflowText className="openbitfun-chat-input__target-tab-name" data-openbitfun-component="chat-input" data-openbitfun-part="targetName">{currentSessionTitle}</OverflowText>
+                    <>
+                      <span className="openbitfun-chat-input__target-tab-separator" aria-hidden="true">·</span>
+                      <OverflowText className="openbitfun-chat-input__target-tab-name" data-openbitfun-component="chat-input" data-openbitfun-part="targetName">{currentSessionTitle}</OverflowText>
+                    </>
                   )}
                 </button>
                 <button data-overflow-trigger
@@ -6006,7 +6009,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 >
                   {activeBtwTargetLabel}
                   {inputTarget === 'btw' && activeBtwSessionTitle && (
-                    <OverflowText className="openbitfun-chat-input__target-tab-name" data-openbitfun-component="chat-input" data-openbitfun-part="targetName">{activeBtwSessionTitle}</OverflowText>
+                    <>
+                      <span className="openbitfun-chat-input__target-tab-separator" aria-hidden="true">·</span>
+                      <OverflowText className="openbitfun-chat-input__target-tab-name" data-openbitfun-component="chat-input" data-openbitfun-part="targetName">{activeBtwSessionTitle}</OverflowText>
+                    </>
                   )}
                 </button>
               </div>
