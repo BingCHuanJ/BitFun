@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Checkbox, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Icon, IconButton, Input, LoadingState, OverflowText, ScrollArea, SearchField, Select, StatusPill, type IconSource } from '@openbitfun/ui';
+import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
+import { Alert, Button, Checkbox, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeaderActions, DialogHeading, DialogTitle, Icon, IconButton, Input, LoadingState, OverflowText, ScrollArea, SearchField, Select, StatusPill, type IconSource } from '@openbitfun/ui';
 import { EcosystemDialog as Dialog } from './EcosystemDialog';
 import { EcosystemBatchLayout } from './EcosystemBatchLayout';
 import EcosystemAccounts, { ecosystemAccountProvider } from './EcosystemAccounts';
 import { presentEcosystemContent } from './ecosystemContentPresentation';
+import { ecosystemDiscoveryCache, rememberEcosystemHooks, rememberEcosystemSkills } from './ecosystemDiscoveryCache';
 import { suggestSkillImportName, importErrorMessage } from './ecosystemSkillImport';
 import { applyEcosystemBatchUndo, type BatchUndoEntry, type BatchUndoResult } from './ecosystemBatchUndo';
-import { Bot, CircleUserRound, FileText, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
+import { CircleUserRound, FileText, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useSkillsSceneStore } from '@/app/scenes/skills/skillsSceneStore';
@@ -40,7 +41,7 @@ const CONTENT_ICONS: Record<EcosystemImportItemKind, IconSource> = {
   settings: { name: 'settings' },
   command: { name: 'command-mac' },
   tool: { glyph: Wrench },
-  subagent: { glyph: Bot },
+  subagent: { name: 'user' },
   skill: { glyph: Package },
   mcp: { glyph: Server },
   hook: { glyph: Webhook },
@@ -55,7 +56,15 @@ type Review =
   | { kind: 'skill'; item: ContentItem; skill: SkillInfo; level: SkillLevel; targetName?: string; preview?: SkillImportPreview }
   | { kind: 'hook'; item: ContentItem; plan: ExternalHookImportPlan };
 
+export interface ExternalAgentContentHandle {
+  refresh: () => Promise<void>;
+}
+
 interface Props {
+  scopeKey?: string;
+  /** The scene owns placement; this catalog keeps the refresh lifecycle and disabled state. */
+  refreshControlRef?: Ref<ExternalAgentContentHandle>;
+  onRefreshDisabledChange?: (disabled: boolean) => void;
   runtime: EcosystemProductRuntime;
   snapshot: ExternalSourceCatalogSnapshot | null;
   catalogFailed: boolean;
@@ -64,39 +73,33 @@ interface Props {
 }
 
 /** An external catalog, never an embedded native manager. Mount separately for each host/workspace/agent. */
-export default function ExternalAgentContent({ runtime, snapshot, catalogFailed, onRefresh, onSupplementalCounts }: Props) {
+export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRefreshDisabledChange, runtime, snapshot, catalogFailed, onRefresh, onSupplementalCounts }: Props) {
   const contentId = useId();
   const { t, formatNumber } = useI18n('scenes/ecosystem-compatibility');
   const notification = useNotification();
   const { workspace, workspacePath } = useCurrentWorkspace();
   const peer = usePeerDeviceModeOptional();
+  const cache = ecosystemDiscoveryCache(scopeKey ?? JSON.stringify([peer?.peerMode.active ? peer.peerMode.deviceId : undefined, workspace?.id, workspace?.workspaceKind, workspacePath]));
+  const automaticDiscovery = snapshot !== null && (snapshot.discovery?.enabled ?? true);
   const localImportSupported = isTauriRuntime() && !peer?.peerMode.active
     && workspace?.workspaceKind !== WorkspaceKind.Remote;
-  const openNativeManagement = (kind: EcosystemImportItemKind) => {
-    if (!localImportSupported) return;
-    if (kind === 'skill') {
-      useSkillsSceneStore.getState().openNativeSkills();
-      useSceneStore.getState().openScene('skills');
-    } else if (kind === 'mcp' || kind === 'hook') {
-      useSettingsStore.getState().openDestination(kind === 'mcp'
-        ? { pageId: 'tools.mcp' } : { pageId: 'tools.automation', viewId: 'hooks' });
-      useSceneStore.getState().openScene('settings');
-    }
-  };
-  const [skills, setSkills] = useState<SkillInfo[]>([]);
-  const [skillImportVersion, setSkillImportVersion] = useState(0);
-  const [skillDiagnostics, setSkillDiagnostics] = useState<SkillScanDiagnostic[]>([]);
-  const [hooks, setHooks] = useState<ExternalHookImportSnapshot | null>(null);
+  const [skills, setSkills] = useState<SkillInfo[]>(() => cache.skills ?? []);
+  const [skillImportVersion, setSkillImportVersion] = useState(() => cache.skillImportVersion ?? 0);
+  const [skillDiagnostics, setSkillDiagnostics] = useState<SkillScanDiagnostic[]>(() => cache.skillDiagnostics?.filter((entry) => entry.sourceId === runtime.spec.ecosystemId) ?? []);
+  const [hooks, setHooks] = useState<ExternalHookImportSnapshot | null>(() => cache.hooks ?? null);
   const [instructionSnapshot, setInstructionSnapshot] = useState<{ workspacePath: typeof workspacePath; catalog: InstructionSourceCatalog | null } | null>(null);
   const instructions = localImportSupported && instructionSnapshot?.workspacePath === workspacePath
     ? instructionSnapshot?.catalog ?? null : null;
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [accountRefreshVersion, setAccountRefreshVersion] = useState(0);
+  const [accountExpanded, setAccountExpanded] = useState(false);
   const [loadFailures, setLoadFailures] = useState<string[]>([]);
   const [plan, setPlan] = useState<ExternalMcpImportPlanV1 | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [planFailed, setPlanFailed] = useState(false);
   const [search, setSearch] = useState('');
-  const [kind, setKind] = useState<string | null>(null);
+  const [kind, setKind] = useState<EcosystemImportItemKind | null>(null);
   const [detail, setDetail] = useState<ContentItem | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [batch, setBatch] = useState<BatchImportEntry[] | null>(null);
@@ -114,11 +117,27 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   const reviewSequence = useRef(0);
   const mcpPlanSequence = useRef(0);
 
-  const loadSupplemental = useCallback(async (refresh = false) => {
+  const openNativeManagement = (kind: EcosystemImportItemKind) => {
+    if (!localImportSupported) return;
+    setKind(null);
+    setNotice(null);
+    if (kind === 'skill') {
+      useSkillsSceneStore.getState().openNativeSkills();
+      useSceneStore.getState().openScene('skills');
+    } else if (kind === 'mcp' || kind === 'hook') {
+      useSettingsStore.getState().openDestination(kind === 'mcp'
+        ? { pageId: 'tools.mcp' } : { pageId: 'tools.automation', viewId: 'hooks' });
+      useSceneStore.getState().openScene('settings');
+    }
+  };
+
+  const loadSupplemental = useCallback(async (refresh = false, collectPending = false) => {
+    if (!refresh && !automaticDiscovery && !collectPending) { setLoading(false); return; }
     const sequence = ++loadSequence.current;
     setLoading(true);
     const [skillResult, hookResult, instructionResult] = await Promise.allSettled([
-      configAPI.getSkillScanReport({ workspacePath: workspacePath || undefined, forceRefresh: refresh }),
+      collectPending ? Promise.resolve(null)
+        : configAPI.getSkillScanReport({ workspacePath: workspacePath || undefined, forceRefresh: refresh }),
       localImportSupported
         ? externalHooksAPI.getImportSnapshot(workspacePath || undefined, refresh)
         : externalHooksAPI.getCatalog(workspacePath || undefined, refresh).then((catalog) => ({
@@ -128,30 +147,35 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     ]);
     if (!alive.current || sequence !== loadSequence.current) return;
     const failures: string[] = [];
-    if (skillResult.status === 'fulfilled') {
-      setSkills(skillResult.value.skills);
+    if (skillResult.status === 'fulfilled' && skillResult.value) {
+      cache.skillImportVersion = skillResult.value.importOperationsVersion ?? 0;
+      setSkills(rememberEcosystemSkills(cache, skillResult.value.skills, skillResult.value.diagnostics));
       setSkillImportVersion(skillResult.value.importOperationsVersion ?? 0);
       setSkillDiagnostics(skillResult.value.diagnostics.filter((entry) => entry.sourceId === runtime.spec.ecosystemId));
-    } else { setSkills([]); setSkillDiagnostics([]); failures.push('skill'); }
-    if (hookResult.status === 'fulfilled') setHooks(hookResult.value);
-    else { setHooks(null); failures.push('hook'); }
+    } else if (skillResult.status === 'rejected') { failures.push('skill'); }
+    if (hookResult.status === 'fulfilled') {
+      setHooks(rememberEcosystemHooks(cache, hookResult.value));
+    } else { failures.push('hook'); }
     setInstructionSnapshot({ workspacePath, catalog: instructionResult.status === 'fulfilled' ? instructionResult.value : null });
     if (instructionResult.status === 'rejected') failures.push('instruction');
     setLoadFailures(failures);
     setLoading(false);
-  }, [localImportSupported, runtime.spec.ecosystemId, workspacePath]);
+  }, [automaticDiscovery, cache, localImportSupported, runtime.spec.ecosystemId, workspacePath]);
 
   useEffect(() => {
     alive.current = true;
-    void loadSupplemental();
     return () => { alive.current = false; loadSequence.current += 1; reviewSequence.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    void loadSupplemental();
   }, [loadSupplemental]);
 
   useEffect(() => {
     if (!hooks?.catalog.discoveryPending) return;
-    const timer = window.setTimeout(() => void loadSupplemental(), 1000);
+    const timer = window.setTimeout(() => void loadSupplemental(false, true), 1000);
     return () => window.clearTimeout(timer);
-  }, [hooks?.catalog.discoveryPending, hooks, loadSupplemental]);
+  }, [automaticDiscovery, hooks?.catalog.discoveryPending, hooks, loadSupplemental]);
 
   const items = useMemo<ContentItem[]>(() => {
     const catalog = buildEcosystemImportItems(snapshot, runtime);
@@ -194,16 +218,19 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   }, [hooks, loading, onSupplementalCounts, skills]);
 
   const hasMcp = items.some((item) => item.kind === 'mcp' && item.discovered);
-  const refreshMcpPlan = useCallback(async () => {
+  const refreshMcpPlan = useCallback(async (explicit = false) => {
+    if (!automaticDiscovery && !explicit) return;
     const sequence = ++mcpPlanSequence.current;
     setPlan(null);
     if (!localImportSupported || !hasMcp) { setPlanLoading(false); return; }
     setPlanLoading(true);
+    setPlanFailed(false);
     const next = await externalSourcesAPI.planMcpImport(workspacePath || undefined).catch(() => null);
     if (!alive.current || sequence !== mcpPlanSequence.current) return;
     setPlan(next);
+    setPlanFailed(next === null);
     setPlanLoading(false);
-  }, [hasMcp, localImportSupported, workspacePath]);
+  }, [automaticDiscovery, hasMcp, localImportSupported, workspacePath]);
   useEffect(() => {
     void refreshMcpPlan();
     return () => { mcpPlanSequence.current += 1; };
@@ -247,8 +274,13 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       const providerFailed = item.kind === 'hook' && hooks?.catalog.providers.some((provider) => (
         provider.ecosystemId === runtime.spec.ecosystemId && hooks.catalog.failedProviderIds.includes(provider.providerId)
       ));
-      if (loading || (item.kind === 'hook' && hooks?.catalog.discoveryPending)) discoveryState = 'checking';
-      else if (loadFailures.includes(item.kind) || (item.kind === 'skill' && !item.discovered && skillDiagnostics.length > 0) || providerFailed) discoveryState = 'discoveryUnavailable';
+      const hasScanned = item.kind === 'skill' ? cache.skills !== undefined : cache.hooks !== undefined;
+      if (!snapshot) discoveryState = catalogFailed ? 'discoveryUnavailable' : 'checking';
+      else if (!automaticDiscovery && !hasScanned) discoveryState = 'notScanned';
+      else if (loading || (item.kind === 'hook' && hooks?.catalog.discoveryPending)) discoveryState = 'checking';
+      else if (loadFailures.includes(item.kind) || (item.kind === 'skill'
+        && ((!item.discovered && skillDiagnostics.length > 0) || (item.skill && cache.staleSkillKeys?.has(item.skill.key))))
+        || providerFailed) discoveryState = 'discoveryUnavailable';
     } else discoveryState = catalogDiscoveryState(snapshot, runtime.spec.ecosystemId, item.kind);
     return presentEcosystemContent({
       item, discoveryState, catalogFailed, localImportSupported,
@@ -258,6 +290,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       hookImportSupported: !!item.hookSource && ['claude-code', 'codex'].includes(item.hookSource.ecosystemId),
       planLoading,
       mcpDisposition: plan?.items.find((entry) => entry.candidateId === item.candidateId)?.disposition,
+      mcpPlanDeferred: !automaticDiscovery && !plan && !planFailed,
     });
   };
   const contentState = (item: ContentItem) => presentation(item).state;
@@ -336,7 +369,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         }
       });
       if (alive.current) {
-        void refreshMcpPlan();
+        void refreshMcpPlan(true);
         void loadSupplemental(true);
         void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
       }
@@ -365,8 +398,11 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         if (!alive.current || sequence !== reviewSequence.current) return;
         if (next.source.ecosystemId !== runtime.spec.ecosystemId || next.source.key.providerId !== item.hookSource.key.providerId || next.source.key.sourceId !== item.hookSource.key.sourceId) { setNotice(t('content.previewFailed')); return; }
         setReview({ kind: 'hook', item, plan: next });
-      } else if (item.kind === 'mcp' && plan) {
-        setReview({ kind: 'mcp', item, plan });
+      } else if (item.kind === 'mcp') {
+        const next = plan ?? await externalSourcesAPI.planMcpImport(workspacePath || undefined);
+        if (!alive.current || sequence !== reviewSequence.current) return;
+        setPlan(next);
+        setReview({ kind: 'mcp', item, plan: next });
       }
     } catch {
       if (alive.current && sequence === reviewSequence.current) setNotice(t('content.previewFailed'));
@@ -420,7 +456,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         setHooks(result.outcome.snapshot);
       }
       if (!alive.current) return;
-      if (captured.kind === 'mcp') void refreshMcpPlan();
+      if (captured.kind === 'mcp') void refreshMcpPlan(true);
       else setCompleted((current) => new Set([...current, captured.item.id]));
       setReview(null);
       setDetail(null);
@@ -480,7 +516,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         const nativeKey = captured.review.receipt.nativeKey;
         setSkills((current) => current.filter((entry) => entry.key !== nativeKey));
       }
-      if (captured.review.kind === 'mcp') void refreshMcpPlan();
+      if (captured.review.kind === 'mcp') void refreshMcpPlan(true);
       void loadSupplemental(true);
       void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
     } catch (error) {
@@ -522,7 +558,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       if (!alive.current) return;
       setSelected(new Set());
       void loadSupplemental(true);
-      void refreshMcpPlan();
+      void refreshMcpPlan(true);
       void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
     } catch (error) { if (alive.current) setNotice(`${t('content.undoFailed')} ${importErrorMessage(error)}`); }
     finally { if (alive.current) setBusy(false); }
@@ -536,8 +572,18 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         || skills.some((entry) => isOpenBitFunManagedSkill(entry) && entry.level === review.level
           && [entry.dirName.toLowerCase(), entry.name.toLowerCase()].includes(review.targetName!.toLowerCase()))))
         || (skillImportVersion < 1 && skillCollision(review.skill, review.level)));
-  const visible = items.filter((item) => item.kind === kind
-    && `${item.name} ${item.description ?? ''} ${item.sourceLocation ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const categoryItems = items.filter((item) => item.kind === kind);
+  // Category placeholders describe discovery in the overview; only real entries belong in the list.
+  const categoryEntries = categoryItems.filter((item) => item.discovered);
+  const visible = categoryEntries.filter((item) =>
+    `${item.name} ${item.description ?? ''} ${item.sourceLocation ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const emptyState = categoryEntries.length === 0 && categoryItems[0]
+    ? refreshing ? 'checking' : contentState(categoryItems[0]) : null;
+  const canScanEmptyCategory = emptyState !== null
+    && ['notDetected', 'notScanned', 'discoveryUnavailable', 'checking'].includes(emptyState);
+  const copyActionsSupported = localImportSupported && (kind === 'skill' || kind === 'mcp'
+    || (kind === 'hook' && ['claude-code', 'codex'].includes(runtime.spec.ecosystemId)));
+  const categoryDialogId = `${contentId}-category`;
   const requestedDetail = review?.item ?? detail;
   const viewed = requestedDetail?.kind === 'instruction'
     ? items.find((item) => item.id === requestedDetail.id && item.discovered) ?? null
@@ -547,17 +593,35 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     entry.source.providerId === viewed.hookSource!.key.providerId && entry.source.sourceId === viewed.hookSource!.key.sourceId
   )) ?? [] : [];
 
+  const refreshContent = async () => {
+    if (busy || refreshing) return;
+    setRefreshing(true);
+    setAccountRefreshVersion((value) => value + 1);
+    setNotice(null);
+    void refreshMcpPlan(true);
+    const results = await Promise.allSettled([loadSupplemental(true), onRefresh()]);
+    if (!alive.current) return;
+    if (results.some((result) => result.status === 'rejected')) setNotice(t('content.scanFailed'));
+    setRefreshing(false);
+  };
+
+  useImperativeHandle(refreshControlRef, () => ({ refresh: refreshContent }));
+  useLayoutEffect(() => {
+    onRefreshDisabledChange?.(busy || loading || refreshing);
+  }, [busy, loading, refreshing, onRefreshDisabledChange]);
+
   return (
     <section className="ecosystem-compatibility__section" data-external-agent-content={runtime.spec.ecosystemId}>
       <div className="ecosystem-compatibility__section-heading ecosystem-compatibility__section-heading--actions">
         <div><h2>{t('content.title', { name: runtime.spec.name })}</h2><p>{t('content.description')}</p></div>
-        <div className="ecosystem-compatibility__import-action">
-          {localImportSupported ? <><Button size="sm" variant="primary" disabled={busy || loading || planLoading} onClick={() => void prepareBatch()}>{t('content.importAll')}</Button>
-            <Button size="sm" variant="outline" disabled={busy || loading || !items.some((item) => contentState(item) === 'imported')} onClick={() => void prepareBatchUndo()}>{t('content.undoAll')}</Button></> : null}
-          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setAccountRefreshVersion((value) => value + 1); setNotice(null); void refreshMcpPlan(); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
-        </div>
+        {localImportSupported ? (
+          <div className="ecosystem-compatibility__import-action">
+            <Button size="sm" variant="primary" disabled={busy || loading || planLoading} onClick={() => void prepareBatch()}>{t('content.importAll')}</Button>
+            <Button size="sm" variant="outline" disabled={busy || loading || !items.some((item) => contentState(item) === 'imported')} onClick={() => void prepareBatchUndo()}>{t('content.undoAll')}</Button>
+          </div>
+        ) : null}
       </div>
-      {notice && !review && !undo && !batch && !batchUndo ? <Alert className="ecosystem-compatibility__notice ecosystem-compatibility__feedback" role="status" showIcon={false} message={notice} /> : null}
+      {notice && !kind && !review && !undo && !batch && !batchUndo ? <Alert className="ecosystem-compatibility__notice ecosystem-compatibility__feedback" role="status" showIcon={false} message={notice} /> : null}
       {loading ? <LoadingState size="sm">{t('loading')}</LoadingState> : null}
       <div className="ecosystem-compatibility__content-overview" role="table" aria-label={t('content.title', { name: runtime.spec.name })}>
         <div className="ecosystem-compatibility__content-summary ecosystem-compatibility__content-summary--header" role="row">
@@ -567,82 +631,110 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         </div>
       {Array.from(new Set(items.map((item) => item.kind))).map((group) => {
         const accountProvider = ecosystemAccountProvider(runtime.spec.id);
-        if (group === 'account' && accountProvider) return <EcosystemAccounts key={`${group}:${accountProvider}`} provider={accountProvider} supported={localImportSupported} refreshVersion={accountRefreshVersion} expanded={kind === group} onToggle={() => { setKind(kind === group ? null : group); setSearch(''); setSelected(new Set()); }} />;
+        if (group === 'account' && accountProvider) return <EcosystemAccounts key={`${group}:${accountProvider}`} provider={accountProvider} supported={localImportSupported} refreshVersion={accountRefreshVersion} expanded={accountExpanded} onToggle={() => { setAccountExpanded((expanded) => !expanded); setSearch(''); setSelected(new Set()); }} />;
         const groupItems = items.filter((item) => item.kind === group);
         const representative = groupItems[0];
         const count = groupItems.filter((item) => item.discovered).length;
         const discoverySupported = representative.discoverySupport === 'supported';
-        const expandable = discoverySupported || count > 0;
-        const expanded = kind === group;
-        const groupId = `${contentId}-${group}`;
-        const copyActionsSupported = localImportSupported && (group === 'skill' || group === 'mcp'
-          || (group === 'hook' && ['claude-code', 'codex'].includes(runtime.spec.ecosystemId)));
+        const viewable = discoverySupported || count > 0;
         const description = !discoverySupported
           ? t('import.discoveryUnsupportedDescription', { name: runtime.spec.name, type: t(`capabilities.${group}`) })
+          : presentation(representative).descriptionKey === 'content.lastKnownResult' ? t('content.lastKnownResult')
           : count > 0 ? t('content.groupSummary', { count: formatNumber(count) })
             : stateDescription(representative, contentState(representative));
         return <div key={group} data-content-group={group} role="rowgroup" className="ecosystem-compatibility__content-group">
-          <div className="ecosystem-compatibility__content-summary" role="row">
+          <div className="ecosystem-compatibility__content-summary" role="row" data-discovery-support={representative.discoverySupport}>
             <span role="cell" className="ecosystem-compatibility__import-item">
               <span className="ecosystem-compatibility__import-item-icon"><Icon {...CONTENT_ICONS[group]} size="md" /></span>
               <span className="ecosystem-compatibility__import-item-copy">
-                <strong><OverflowText>{t(`capabilities.${group}`)}</OverflowText></strong>
+                <strong className="ecosystem-compatibility__content-title"><OverflowText>{t(`capabilities.${group}`)}</OverflowText></strong>
                 <small>{description}</small>
               </span>
             </span>
             <span role="cell">{runtime.spec.name}</span>
             <span role="cell" className="ecosystem-compatibility__content-summary-state">
-              <StatusPill tone="neutral">{t(discoverySupported ? 'import.states.discoverySupported' : 'import.states.discoveryUnsupported')}</StatusPill>
-              {expandable ? <IconButton size="sm" variant="quiet"
-                icon={<Icon name={expanded ? 'chevron-down' : 'chevron-right'} size="sm" />}
-                aria-label={t(expanded ? 'content.collapseCategory' : 'content.expandCategory', { type: t(`capabilities.${group}`) })}
-                aria-expanded={expanded} aria-controls={groupId}
-                onClick={() => { setKind(expanded ? null : group); setSearch(''); setSelected(new Set()); }} /> : null}
+              {discoverySupported
+                ? <StatusPill tone="neutral" title={t('import.states.discoverySupported')}>
+                  {count > 0 ? t('content.itemCount', { count: formatNumber(count) })
+                    : t(`import.states.${presentation(representative).state}`)}
+                </StatusPill>
+                : <OverflowText className="ecosystem-compatibility__unsupported-state">{t('import.states.discoveryUnsupported')}</OverflowText>}
+              {viewable ? <IconButton size="sm" variant="quiet"
+                icon={<Icon name="chevron-right" size="sm" />}
+                aria-label={t('content.viewCategory', { type: t(`capabilities.${group}`) })}
+                aria-haspopup="dialog" aria-controls={categoryDialogId}
+                onClick={() => { setAccountExpanded(false); setKind(group); setSearch(''); setSelected(new Set()); setNotice(null); }} /> : null}
             </span>
           </div>
-        <div role="row" hidden={!expanded}>
-        <div id={groupId} role="cell" aria-colspan={3} className="ecosystem-compatibility__content-expanded">
-        {expanded ? <>
-      <div className="ecosystem-compatibility__content-filters">
-        <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('content.search')} aria-label={t('content.search')} />
-        {copyActionsSupported ? <Button size="sm" variant="outline" disabled={busy || loading || planLoading} onClick={() => void prepareBatch(group)}>{t('content.importCategory')}</Button> : null}
-        {copyActionsSupported ? <>
-          <Button size="sm" variant="outline" disabled={busy || !visible.some((item) => selected.has(item.id) && presentation(item).canImport)} onClick={() => void prepareBatch(group, true)}>{t('content.importSelected')}</Button>
-          <Button size="sm" variant="outline" disabled={busy || !visible.some((item) => selected.has(item.id) && contentState(item) === 'imported')} onClick={() => void prepareBatchUndo(group, true)}>{t('content.undoSelected')}</Button>
-          <span>{t('content.selectedCount', { count: formatNumber(visible.filter((item) => selected.has(item.id)).length) })}</span>
-        </> : null}
-      </div>
-      {group === 'skill' ? skillDiagnostics.map((entry) => <Alert key={`${entry.path}:${entry.message}`} role="status" className="ecosystem-compatibility__notice" showIcon={false} message={<>{entry.path}: {entry.message}</>} />) : null}
-      <ScrollArea className="ecosystem-compatibility__content-list" tabIndex={0} aria-label={t(`capabilities.${group}`)}>
-      <div className="ecosystem-compatibility__import-table" role="table" aria-label={t('content.title', { name: runtime.spec.name })}>
-        <div className="ecosystem-compatibility__import-row ecosystem-compatibility__import-row--header" role="row">
-          <span role="columnheader" className="ecosystem-compatibility__selection-cell">{localImportSupported && group !== 'instruction' ? <Checkbox size="sm" aria-label={t('content.selectVisible')} disabled={busy} checked={visible.some((item) => item.discovered) && visible.filter((item) => item.discovered).every((item) => selected.has(item.id))} onChange={(event) => { const checked = event.target.checked; setSelected((current) => { const next = new Set(current); visible.filter((item) => item.discovered).forEach((item) => checked ? next.add(item.id) : next.delete(item.id)); return next; }); }} /> : null}{t('import.columns.item')}</span><span role="columnheader">{t('import.columns.source')}</span><span role="columnheader">{t('content.importStatus')}</span><span role="columnheader">{t('import.columns.action')}</span>
-        </div>
-        {visible.map((item) => {
-          const { state, canImport: importable } = presentation(item);
-          return <div key={item.id} className="ecosystem-compatibility__import-row" role="row" data-import-kind={item.kind} data-import-state={state} data-discovery-support={item.discoverySupport} data-import-discovered={item.discovered ? 'true' : 'false'}>
-            <span role="cell" className="ecosystem-compatibility__selection-cell">{localImportSupported && item.kind !== 'instruction' && item.discovered ? <Checkbox size="sm" aria-label={t('content.selectItem', { name: item.name })} checked={selected.has(item.id)} disabled={busy} onChange={(event) => { const checked = event.target.checked; setSelected((current) => { const next = new Set(current); if (checked) next.add(item.id); else next.delete(item.id); return next; }); }} /> : null}<span className="ecosystem-compatibility__import-item-copy"><strong><OverflowText>{item.discovered ? item.name : t(`capabilities.${item.kind}`)}</OverflowText></strong><small>{t(`capabilities.${item.kind}`)} · {stateDescription(item, state)}</small></span></span>
-            <span role="cell" className="ecosystem-compatibility__import-source"><strong>{item.sourceName}</strong><small>{item.sourceLocation}</small>{item.instruction ? <small>{t(item.instruction.scope === 'user' ? 'content.instructions.user' : 'content.instructions.project')} · {t(item.instruction.pathPatterns.length ? 'content.instructions.conditional' : 'content.instructions.startup')}</small> : null}</span>
-            <span role="cell"><StatusPill tone={state === 'imported' ? 'success' : 'neutral'}>{t(state === 'review' ? 'content.reviewRequired' : `import.states.${state}`)}</StatusPill></span>
-            <span role="cell" className="ecosystem-compatibility__import-action">
-              {item.discovered ? <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.view')} ${item.name}`} onClick={() => { setNotice(null); setDetail(item); }}>{t('content.view')}</Button> : null}
-              {importable ? <Button size="sm" variant="outline" disabled={busy} aria-label={`${t('content.prepareImport')} ${item.name}`} onClick={() => void prepareImport(item)}>{t('content.prepareImport')}</Button> : null}
-              {state === 'imported' && localImportSupported && ['skill', 'mcp', 'hook'].includes(item.kind) ? <Button size="sm" variant="text" disabled={busy} onClick={() => openNativeManagement(item.kind)}>{t('content.manageCopy')}</Button> : null}
-              {state === 'imported' && localImportSupported ? <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.undo')} ${item.name}`} onClick={() => void prepareUndo(item)}>{t('content.undo')}</Button> : null}
-              {state === 'imported' && item.skill && skillImportVersion >= 1 && !importedSkill(item)?.importId ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void prepareImport(item)}>{t('content.repairSource')}</Button> : null}
-            </span>
-          </div>;
-        })}
-      </div>
-      {group === 'instruction' && instructions?.failedEcosystems.some((id) => id === 'shared' || id === runtime.spec.ecosystemId) ? <p role="status">{t('content.instructions.partial')}</p> : null}
-      {visible.length === 0 ? <p>{t('content.noMatches')}</p> : null}
-      </ScrollArea>
-        </> : null}
-        </div>
-        </div>
         </div>;
       })}
       </div>
+      <Dialog
+        id={categoryDialogId}
+        className="ecosystem-compatibility__catalog-dialog"
+        data-ecosystem-category={kind ?? undefined}
+        open={kind !== null}
+        onOpenChange={(open) => { if (!open && !busy) { setKind(null); setSearch(''); setSelected(new Set()); setNotice(null); } }}
+        size="xl"
+        closeOnEscape={!busy}
+        closeOnPointerOutside={!busy}
+      >
+        {kind ? <>
+          <DialogHeader>
+            <DialogHeading>
+              <DialogTitle>{runtime.spec.name} · {t(`capabilities.${kind}`)}</DialogTitle>
+            </DialogHeading>
+            <DialogHeaderActions>
+              <IconButton size="sm" variant="quiet" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading || refreshing} onClick={() => void refreshContent()} />
+              {!busy ? <DialogClose /> : null}
+            </DialogHeaderActions>
+          </DialogHeader>
+          <DialogBody className="ecosystem-compatibility__catalog-body">
+            {categoryEntries.length > 0 ? <div className="ecosystem-compatibility__content-filters">
+              <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('content.search')} aria-label={t('content.search')} />
+              {copyActionsSupported && visible.length > 0 ? <>
+                <Button size="sm" variant="outline" disabled={busy || loading || planLoading} onClick={() => void prepareBatch(kind)}>{t('content.importCategory')}</Button>
+                <Button size="sm" variant="outline" disabled={busy || !visible.some((item) => selected.has(item.id) && presentation(item).canImport)} onClick={() => void prepareBatch(kind, true)}>{t('content.importSelected')}</Button>
+                <Button size="sm" variant="outline" disabled={busy || !visible.some((item) => selected.has(item.id) && contentState(item) === 'imported')} onClick={() => void prepareBatchUndo(kind, true)}>{t('content.undoSelected')}</Button>
+                <span>{t('content.selectedCount', { count: formatNumber(visible.filter((item) => selected.has(item.id)).length) })}</span>
+              </> : null}
+            </div> : null}
+            {notice && !review && !undo && !batch && !batchUndo ? <Alert className="ecosystem-compatibility__notice ecosystem-compatibility__feedback" role="status" showIcon={false} message={notice} /> : null}
+            <ScrollArea className={`ecosystem-compatibility__content-list${visible.length === 0 ? ' ecosystem-compatibility__content-list--empty' : ''}`} tabIndex={0} aria-label={t(`capabilities.${kind}`)}>
+            {kind === 'skill' ? skillDiagnostics.map((entry) => <Alert key={`${entry.path}:${entry.message}`} role="status" className="ecosystem-compatibility__notice" showIcon={false} message={<>{entry.path}: {entry.message}</>} />) : null}
+            {visible.length > 0 ? <div className="ecosystem-compatibility__import-table" role="table" aria-label={t('content.title', { name: runtime.spec.name })}>
+              <div className="ecosystem-compatibility__import-row ecosystem-compatibility__import-row--header" role="row">
+                <span role="columnheader" className="ecosystem-compatibility__selection-cell">{localImportSupported && kind !== 'instruction' ? <Checkbox size="sm" aria-label={t('content.selectVisible')} disabled={busy} checked={visible.every((item) => selected.has(item.id))} onChange={(event) => { const checked = event.target.checked; setSelected((current) => { const next = new Set(current); visible.forEach((item) => checked ? next.add(item.id) : next.delete(item.id)); return next; }); }} /> : null}{t('import.columns.item')}</span><span role="columnheader">{t('import.columns.source')}</span><span role="columnheader">{t('content.importStatus')}</span><span role="columnheader">{t('import.columns.action')}</span>
+              </div>
+              {visible.map((item) => {
+                const { state, canImport: importable } = presentation(item);
+                return <div key={item.id} className="ecosystem-compatibility__import-row" role="row" data-import-kind={item.kind} data-import-state={state} data-discovery-support={item.discoverySupport} data-import-discovered={item.discovered ? 'true' : 'false'}>
+                  <span role="cell" className="ecosystem-compatibility__selection-cell">{localImportSupported && item.kind !== 'instruction' ? <Checkbox size="sm" aria-label={t('content.selectItem', { name: item.name })} checked={selected.has(item.id)} disabled={busy} onChange={(event) => { const checked = event.target.checked; setSelected((current) => { const next = new Set(current); if (checked) next.add(item.id); else next.delete(item.id); return next; }); }} /> : null}<span className="ecosystem-compatibility__import-item-copy"><strong><OverflowText>{item.name}</OverflowText></strong><small>{t(`capabilities.${item.kind}`)} · {stateDescription(item, state)}</small></span></span>
+                  <span role="cell" className="ecosystem-compatibility__import-source"><strong>{item.sourceName}</strong><small>{item.sourceLocation}</small>{item.instruction ? <small>{t(item.instruction.scope === 'user' ? 'content.instructions.user' : 'content.instructions.project')} · {t(item.instruction.pathPatterns.length ? 'content.instructions.conditional' : 'content.instructions.startup')}</small> : null}</span>
+                  <span role="cell">{state === 'discoveryUnsupported'
+                    ? <OverflowText className="ecosystem-compatibility__unsupported-state">{t('import.states.discoveryUnsupported')}</OverflowText>
+                    : <StatusPill tone={state === 'imported' ? 'success' : 'neutral'}>{t(state === 'review' ? 'content.reviewRequired' : `import.states.${state}`)}</StatusPill>}</span>
+                  <span role="cell" className="ecosystem-compatibility__import-action">
+                    <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.view')} ${item.name}`} onClick={() => { setNotice(null); setDetail(item); }}>{t('content.view')}</Button>
+                    {importable ? <Button size="sm" variant="outline" disabled={busy} aria-label={`${t('content.prepareImport')} ${item.name}`} onClick={() => void prepareImport(item)}>{t('content.prepareImport')}</Button> : null}
+                    {state === 'imported' && localImportSupported && ['skill', 'mcp', 'hook'].includes(item.kind) ? <Button size="sm" variant="text" disabled={busy} onClick={() => openNativeManagement(item.kind)}>{t('content.manageCopy')}</Button> : null}
+                    {state === 'imported' && localImportSupported ? <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.undo')} ${item.name}`} onClick={() => void prepareUndo(item)}>{t('content.undo')}</Button> : null}
+                    {state === 'imported' && item.skill && skillImportVersion >= 1 && !importedSkill(item)?.importId ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void prepareImport(item)}>{t('content.repairSource')}</Button> : null}
+                  </span>
+                </div>;
+              })}
+            </div> : <div className="ecosystem-compatibility__content-empty" data-content-empty-state={emptyState ?? 'noMatches'} role="status">
+              {emptyState === 'checking' ? <LoadingState size="sm">{t('import.states.checking')}</LoadingState>
+                : <p>{kind === 'instruction' && emptyState === 'discoveryUnavailable' && categoryItems[0]
+                  ? stateDescription(categoryItems[0], emptyState)
+                  : t(emptyState ? `import.states.${emptyState}` : 'content.noMatches')}</p>}
+              {canScanEmptyCategory ? <Button size="sm" variant="outline" disabled={busy || emptyState === 'checking'} onClick={() => void refreshContent()}>{t('content.scan')}</Button> : null}
+            </div>}
+            {kind === 'instruction' && instructions?.failedEcosystems.some((id) => id === 'shared' || id === runtime.spec.ecosystemId) ? <p role="status">{t('content.instructions.partial')}</p> : null}
+            </ScrollArea>
+          </DialogBody>
+        </> : null}
+      </Dialog>
       <Dialog className="ecosystem-compatibility__batch-dialog" open={batchUndo !== null} onOpenChange={(open) => { if (!open && !busy) { setBatchUndo(null); setNotice(null); } }} size="lg" closeOnPointerOutside={!busy}>
         <DialogHeader><DialogHeading><DialogTitle>{t(batchUndoResults ? busy ? 'content.batchUndoing' : 'content.batchUndoResults' : 'content.batchUndoTitle')}</DialogTitle></DialogHeading>{!busy ? <DialogClose /> : null}</DialogHeader>
         <EcosystemBatchLayout entries={batchUndo ?? []} getKind={(entry) => entry.review.kind} busy={busy} processed={batchUndoResults?.length}

@@ -253,6 +253,7 @@
     "marketDownloadFailed": "Failed to download: {{error}}",
     "enabled": "enabled",
     "disabled": "disabled",
-    "revealPathFailed": "Could not open in file explorer: {{error}}"
+    "revealPathFailed": "Could not open in file explorer: {{error}}",
+    "copyPathFailed": "Failed to copy path: {{error}}"
   }
 }

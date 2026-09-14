@@ -183,7 +183,7 @@
     <string name="session_view_details">查看详情</string>
     <string name="session_delete_confirm">删除后将无法恢复这条会话。</string>
     <string name="session_details">会话详情</string>
-    <string name="session_agent_type">Agent 类型</string>
+    <string name="session_agent_type">智能体类型</string>
     <string name="session_workspace">工作区</string>
     <string name="session_workspace_path">工作区路径</string>
     <string name="session_created_at">创建时间</string>

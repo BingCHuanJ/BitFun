@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "124222af073f8c5164b15b625723c0e3b81f0b200e41855cd343ef1f07d5f39b",
-  "commandCount": 649,
+  "catalogDigest": "5473331e06ecd4bfafbf9b547d48b4fe1561ccf69d86fdfde51ea10dc919531c",
+  "commandCount": 650,
   "coverage": {
-    "commandCount": 649,
-    "documentedCommandCount": 611,
+    "commandCount": 650,
+    "documentedCommandCount": 612,
     "implementationCommandCount": 38,
     "implementationDigest": "60b4319c9031d08dca0394488100c536ffd5bf4d766d7426c3a36eddfaf73b19"
   },
@@ -2894,6 +2894,22 @@
       "rustPath": "get_external_source_control_snapshot",
       "sourceFile": "src/apps/desktop/src/api/external_sources_api.rs",
       "signature": "fn get_external_source_control_snapshot( request: ExternalSourceSnapshotRequest, ) -> ExternalSourceOperationResult<ExternalSourceControlResponse>",
+      "remoteWorkspacePolicy": "RemoteUnsupported"
+    },
+    {
+      "id": "get_external_source_discovery_snapshot",
+      "moduleId": "external_sources",
+      "capabilityId": "feature.ecosystem-compatibility",
+      "capabilityIds": [
+        "feature.ecosystem-compatibility"
+      ],
+      "documentedItemIds": [
+        "feature.ecosystem-compatibility:source-discovery"
+      ],
+      "visibility": "documented",
+      "rustPath": "get_external_source_discovery_snapshot",
+      "sourceFile": "src/apps/desktop/src/api/external_sources_api.rs",
+      "signature": "fn get_external_source_discovery_snapshot( request: ExternalSourceSnapshotRequest, ) -> ExternalSourceOperationResult<ExternalSourceDiscoverySnapshotV1>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {

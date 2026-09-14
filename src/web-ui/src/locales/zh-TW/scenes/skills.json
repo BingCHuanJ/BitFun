@@ -253,6 +253,7 @@
     "marketDownloadFailed": "下載失敗: {{error}}",
     "enabled": "啟用",
     "disabled": "停用",
-    "revealPathFailed": "無法在資源管理器中開啟: {{error}}"
+    "revealPathFailed": "無法在資源管理器中開啟: {{error}}",
+    "copyPathFailed": "複製路徑失敗: {{error}}"
   }
 }

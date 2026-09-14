@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:fb68ec1d8a713246",
+  "digest": "fnv1a64:c168bd7c025d6880",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -2332,6 +2332,17 @@
     },
     {
       "id": "get_external_source_control_snapshot",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "proxied"
+      },
+      "cliPeer": {
+        "kind": "handled"
+      }
+    },
+    {
+      "id": "get_external_source_discovery_snapshot",
       "surface": "tauri_command",
       "remoteWorkspace": "RemoteUnsupported",
       "peer": {

@@ -1328,6 +1328,7 @@ pub async fn run() {
             apply_external_mcp_import_command,
             reveal_external_source_location,
             get_external_source_control_snapshot,
+            get_external_source_discovery_snapshot,
             apply_external_source_control_action_command,
             get_external_ecosystem_awareness_command,
             acknowledge_external_ecosystems_command,
