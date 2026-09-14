@@ -308,6 +308,38 @@
       "unsupportedHost": "当前宿主或远程工作区尚不支持查看指令来源，不会替用本机来源。",
       "partial": "部分指令来源读取失败，以下保留可读取的来源。",
       "readOnly": "由指令读取器应用"
+    },
+    "accounts": {
+      "description": "查看在 OpenBitFun 中接入的订阅账号。",
+      "providers": {
+        "codex": "Codex / ChatGPT",
+        "opencode": "OpenCode Console（Zen）"
+      },
+      "notes": {
+        "codex": "使用现有模型设置中的登录入口连接 ChatGPT 订阅。此处显示 OpenBitFun 的授权状态，不读取 Codex CLI 的登录凭据。登录后仍需在模型设置中添加要使用的模型。",
+        "opencode": "使用现有模型设置中的登录入口连接 OpenCode Console（Zen）。此处不读取 OpenCode 的外部登录凭据；Go 使用独立的 API Key 配置。登录后仍需添加要使用的模型。"
+      },
+      "states": {
+        "unsupportedHost": "当前环境暂不支持账号接入",
+        "loading": "正在读取账号状态",
+        "failed": "账号状态读取失败，请刷新重试",
+        "unavailable": "当前主机未提供此账号接入方式",
+        "vaultUnavailable": "凭据存储暂不可用",
+        "reauthenticationRequired": "需要重新登录",
+        "connected": "已接入 OpenBitFun",
+        "notConnected": "尚未接入 OpenBitFun"
+      },
+      "manage": "管理账号与模型",
+      "connect": "前往模型设置登录",
+      "labels": {
+        "unsupportedHost": "暂不支持",
+        "failed": "读取失败",
+        "unavailable": "暂不可用",
+        "vaultUnavailable": "凭据不可用",
+        "reauthenticationRequired": "需重新登录",
+        "connected": "已接入",
+        "notConnected": "未接入"
+      }
     }
   },
   "sourceSettings": {
