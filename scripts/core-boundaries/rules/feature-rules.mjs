@@ -44,7 +44,7 @@ export const optionalDependencyFeatureOwnerRules = [
       'services-core optional implementation dependencies must stay behind their exact owner capability',
     dependencies: [
       { depName: 'aes-gcm', ownerFeatures: ['credential-vault'] },
-      { depName: 'anyhow', ownerFeatures: ['credential-vault', 'dispatch-workspace', 'workspace-runtime'] },
+      { depName: 'anyhow', ownerFeatures: ['credential-vault', 'dispatch-workspace', 'workspace-runtime', 'workspace-transfer'] },
       { depName: 'async-trait', ownerFeatures: ['permission', 'workspace-runtime'] },
       { depName: 'base64', ownerFeatures: ['credential-vault', 'filesystem'] },
       {
@@ -52,7 +52,7 @@ export const optionalDependencyFeatureOwnerRules = [
         ownerFeatures: ['filesystem', 'local-storage', 'product-identity', 'workspace-persistence'],
       },
       { depName: 'openbitfun-events', ownerFeatures: ['local-storage', 'session-event-format'] },
-      { depName: 'openbitfun-runtime-ports', ownerFeatures: ['permission', 'workspace-runtime', 'workspace-persistence'] },
+      { depName: 'openbitfun-runtime-ports', ownerFeatures: ['permission', 'workspace-runtime', 'workspace-persistence', 'workspace-transfer'] },
       { depName: 'chrono', ownerFeatures: ['filesystem', 'local-storage', 'workspace-persistence'] },
       { depName: 'chrono-tz', ownerFeatures: ['token-usage-statistics'] },
       { depName: 'dunce', ownerFeatures: ['runtime-ownership', 'workspace-identity', 'workspace-runtime'] },
@@ -84,6 +84,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'local-storage',
           'runtime-ownership',
           'workspace-identity',
+          'workspace-transfer',
         ],
       },
       { depName: 'which', ownerFeatures: ['process-runtime'] },
@@ -103,6 +104,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'workspace-instructions',
           'workspace-runtime',
           'workspace-text-runtime',
+          'workspace-transfer',
         ],
       },
     ],
@@ -499,8 +501,9 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('permission', 'permission'),
           capabilityForwarder('workspace-runtime', 'runtime-event-port'),
           capabilityForwarder('workspace-runtime', 'workspace-ports'),
+          capabilityForwarder('workspace-transfer', 'workspace-ports'),
         ],
-        ['permission', 'workspace-runtime', 'workspace-persistence'],
+        ['permission', 'workspace-runtime', 'workspace-persistence', 'workspace-transfer'],
       )],
       ['openbitfun-services-integrations', capabilityConsumer(
         [capabilityEdge([], { optional: true })],
@@ -1134,6 +1137,7 @@ export const coreClosedFeatureProfileRules = [
       'git',
       'model-catalog',
       'openbitfun-services-integrations/remote-connect',
+      'openbitfun-services-core/workspace-transfer',
     ],
     allowedTransitiveFeatureRefs: [
       'ai-adapter-runtime',
@@ -1462,6 +1466,7 @@ export const coreClosedFeatureProfileRules = [
       'dep:tokio',
       'tokio/fs',
       'tokio/rt',
+      'tokio/sync',
     ],
     exact: true,
     reason: 'services-core filesystem must own only local file operations and recursive search dependencies',
@@ -1563,6 +1568,17 @@ export const coreClosedFeatureProfileRules = [
     requiredFeatureRefs: ['dep:tokio', 'tokio/rt'],
     exact: true,
     reason: 'services-core workspace-text-runtime must own only bounded asynchronous local workspace reads',
+  },
+  {
+    manifestPath: 'src/crates/services/services-core/Cargo.toml',
+    featureName: 'workspace-transfer',
+    requiredFeatureRefs: [
+      'dep:anyhow', 'dep:openbitfun-runtime-ports',
+      'openbitfun-runtime-ports/workspace-ports', 'dep:sha2', 'dep:tokio',
+      'tokio/fs', 'tokio/io-util', 'tokio/rt', 'tokio/sync',
+    ],
+    exact: true,
+    reason: 'workspace-transfer owns bounded upload IO and optimistic commit through injected workspace ports, without process or transport implementations',
   },
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',

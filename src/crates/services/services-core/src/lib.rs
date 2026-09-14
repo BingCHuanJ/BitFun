@@ -17,6 +17,8 @@ pub mod dispatch_contract;
 pub mod dispatch_workspace;
 #[cfg(any(feature = "local-storage", feature = "runtime-ownership"))]
 mod file_lock;
+#[cfg(any(feature = "filesystem", feature = "workspace-transfer"))]
+pub mod file_write_lock;
 #[cfg(feature = "filesystem")]
 pub mod filesystem;
 #[cfg(any(feature = "markdown", feature = "workspace-instructions"))]
@@ -77,3 +79,5 @@ pub mod workspace_identity;
 #[cfg(feature = "workspace-instructions")]
 pub mod workspace_instructions;
 pub mod workspace_text;
+#[cfg(feature = "workspace-transfer")]
+pub mod workspace_transfer;

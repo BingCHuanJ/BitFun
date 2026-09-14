@@ -230,8 +230,10 @@
       "startup_window_control"
     ],
     "fileTransferPrimitives": [
+      "local_file_download",
       "export_local_file_to_path",
-      "paste_files"
+      "paste_files",
+      "workspace_file_upload"
     ],
     "htmlPreview": [
       "html_preview_create",
@@ -241,6 +243,12 @@
       "account_get_credential_hint",
       "account_login",
       "account_token_expired"
+    ],
+    "relaySessionSynchronization": [
+      "account_load_older_session",
+      "account_subscribe_session",
+      "account_unsubscribe_session",
+      "get_session_interaction_mailbox"
     ]
   },
   "capabilities": [
@@ -9499,6 +9507,9 @@
     },
     "editor_ai": {
       "capabilityId": "feature.ai-assistant"
+    },
+    "local_file_download": {
+      "capabilityId": "feature.files-editor"
     },
     "clipboard_file": {
       "capabilityId": "feature.files-editor"

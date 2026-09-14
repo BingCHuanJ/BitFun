@@ -16,7 +16,7 @@ import {
   MobileSheet,
 } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
-import LanguageToggleButton from './LanguageToggleButton';
+import { MOBILE_LOCALES } from '../i18n/localeRegistry';
 
 interface SettingsDevice {
   device_id: string;
@@ -61,7 +61,7 @@ export default function CompactSettingsSheet({
   renderDeviceIcon,
   selectedDeviceId,
 }: CompactSettingsSheetProps) {
-  const { t } = useI18n();
+  const { t, language, setLanguage } = useI18n();
 
   return (
     <MobileSheet
@@ -93,10 +93,22 @@ export default function CompactSettingsSheet({
             <small>{t(isDark ? 'settings.dark' : 'settings.light')}</small>
             <span className="harmony-sidebar__theme-switch" data-checked={isDark} aria-hidden="true" />
           </MobileButton>
-          <div className="harmony-sidebar__settings-row">
+          <div className="harmony-sidebar__settings-row harmony-sidebar__settings-row--language">
             <span className="harmony-sidebar__settings-row-icon" aria-hidden="true"><LucideGlobe width="20" height="20" stroke="currentColor" aria-hidden="true" /></span>
             <span className="harmony-sidebar__settings-label">{t('settings.language')}</span>
-            <LanguageToggleButton className="harmony-sidebar__settings-language" />
+            <div className="harmony-sidebar__settings-languages" role="group" aria-label={t('settings.language')}>
+              {MOBILE_LOCALES.map((locale) => (
+                <MobileButton
+                  key={locale.id}
+                  appearance="plain"
+                  className="harmony-sidebar__settings-language"
+                  aria-pressed={language === locale.id}
+                  onClick={() => setLanguage(locale.id)}
+                >
+                  {locale.shortName}
+                </MobileButton>
+              ))}
+            </div>
           </div>
         </MobileCard>
 

@@ -297,6 +297,7 @@ mcp-runtime = [
     "tokio/rt-multi-thread",
 ]
 remote-connect = [
+    "openbitfun-services-core/workspace-transfer",
     "agent-runtime",
     "git",
     "model-catalog",
@@ -463,6 +464,8 @@ ssh-remote = [
 ]
 
 [dev-dependencies]
+# Loopback Socket.IO fixture for remote controller interaction tests.
+tokio-tungstenite = { workspace = true }
 openbitfun-runtime-services = { path = "../../execution/runtime-services", features = ["test-support"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -68,7 +68,7 @@ internal fun ConversationTimelineView(
     hasMoreMessages: Boolean,
     onLoadOlder: () -> Unit,
     enabled: Boolean,
-    onApproveTool: (String) -> Unit,
+    onApproveTool: (String, String?) -> Unit,
     onRejectTool: (String, String) -> Unit,
     onCancelTool: (String, String) -> Unit,
     onAnswerTool: (String, String) -> Unit,

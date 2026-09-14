@@ -48,7 +48,7 @@ internal const val SUBAGENT_GROUP_TEST_TAG: String = "subagent-group"
 /** What the app has to be handed to draw any block, gathered so nesting stays cheap. */
 internal data class MessageBlockCallbacks(
     val enabled: Boolean,
-    val onApproveTool: (String) -> Unit,
+    val onApproveTool: (String, String?) -> Unit,
     val onRejectTool: (String, String) -> Unit,
     val onCancelTool: (String, String) -> Unit,
     val onAnswerTool: (String, String) -> Unit,

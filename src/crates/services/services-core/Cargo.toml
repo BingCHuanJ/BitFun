@@ -69,6 +69,7 @@ credential-vault = [
 diagnostics = ["dep:regex"]
 diff = ["dep:similar", "dep:tokio", "tokio/rt", "tokio/time"]
 filesystem = [
+    "tokio/sync",
     "dep:base64",
     "dep:chrono",
     "dep:ignore",
@@ -136,6 +137,17 @@ workspace-instructions = [
     "tokio/rt",
 ]
 markdown = ["dep:regex", "dep:serde_yaml"]
+workspace-transfer = [
+    "dep:anyhow",
+    "dep:openbitfun-runtime-ports",
+    "openbitfun-runtime-ports/workspace-ports",
+    "dep:sha2",
+    "dep:tokio",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/rt",
+    "tokio/sync",
+]
 workspace-runtime = [
     "dep:anyhow",
     "dep:async-trait",

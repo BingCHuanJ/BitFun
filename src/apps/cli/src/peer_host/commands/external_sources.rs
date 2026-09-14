@@ -118,27 +118,16 @@ pub(super) async fn workspace_root(
             "Workspace path is not available on this Host",
         )
     })?;
-    let current = state
-        .workspace_service
-        .get_current_workspace()
-        .await
-        .ok_or_else(|| {
-            ExternalSourceOperationError::new(
-                ExternalSourceOperationErrorCode::HostUnavailable,
-                "No workspace is open on the CLI Host",
-                true,
-            )
-        })?;
-    let current = current.root_path.canonicalize().map_err(|_| {
-        ExternalSourceOperationError::new(
-            ExternalSourceOperationErrorCode::HostUnavailable,
-            "The CLI Host workspace is not available",
-            true,
-        )
-    })?;
-    if current != requested {
+    let opened = state.workspace_service.get_opened_workspaces().await;
+    let known_local_workspace = opened.iter().any(|workspace| {
+        !matches!(
+            workspace.workspace_kind,
+            openbitfun_core::service::workspace::manager::WorkspaceKind::Remote
+        ) && workspace.root_path.canonicalize().ok().as_ref() == Some(&requested)
+    });
+    if !known_local_workspace {
         return Err(ExternalSourceOperationError::invalid_request(
-            "External compatibility is limited to the current Host workspace",
+            "External compatibility requires an opened local Host workspace",
         ));
     }
     Ok(Some(requested))

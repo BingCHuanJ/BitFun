@@ -6,7 +6,7 @@ use crate::api::path_target::{
     create_directory as create_desktop_directory, create_empty_file,
     delete_directory as delete_desktop_directory, delete_file as delete_desktop_file,
     get_path_metadata, path_exists, read_text_file, rename_path, resolve_desktop_path_target,
-    write_text_file, DesktopPathTarget,
+    DesktopPathTarget,
 };
 use crate::api::search_api::{
     build_content_search_request, group_search_results, prepare_content_search_runner,
@@ -516,6 +516,8 @@ pub struct WriteFileContentRequest {
     pub content: String,
     #[serde(default, rename = "remoteConnectionId")]
     pub remote_connection_id: Option<String>,
+    #[serde(default, rename = "expectedHash")]
+    pub expected_hash: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -561,6 +563,10 @@ pub struct GetDirectoryChildrenPaginatedRequest {
     pub limit: Option<usize>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub sort_by: Option<String>,
+    #[serde(default)]
+    pub sort_order: Option<String>,
 }
 
 pub type ExplorerGetFileTreeRequest = GetFileTreeRequest;
@@ -1265,6 +1271,35 @@ pub async fn open_remote_workspace(
     use openbitfun_core::service::remote_ssh::normalize_remote_workspace_path;
     use openbitfun_core::service::remote_ssh::workspace_state::remote_workspace_stable_id;
     use openbitfun_core::service::workspace::WorkspaceCreateOptions;
+
+    let ssh = state.get_ssh_manager_async().await?;
+    let saved = ssh
+        .get_saved_connections()
+        .await
+        .into_iter()
+        .find(|profile| profile.id == request.connection_id)
+        .ok_or("Remote workspace requires a connection saved on this host")?;
+    if request
+        .ssh_host
+        .as_deref()
+        .is_some_and(|host| !host.trim().is_empty() && host.trim() != saved.host)
+    {
+        return Err("SSH host identity does not match the saved connection".into());
+    }
+    if !request.remote_path.starts_with('/') || request.remote_path.contains('\0') {
+        return Err("Remote workspace path must be an absolute POSIX path".into());
+    }
+    ssh.ensure_connected(&request.connection_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let files = state.get_remote_file_service_async().await?;
+    if !files
+        .is_dir(&request.connection_id, &request.remote_path)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        return Err("Remote workspace path is not a directory".into());
+    }
 
     let remote_path = normalize_remote_workspace_path(&request.remote_path);
 
@@ -2335,9 +2370,14 @@ async fn get_directory_children_paginated_response(
         .get_directory_contents_with_remote_hint(&request.path, preferred)
         .await
     {
-        Ok(nodes) => {
+        Ok(mut nodes) => {
+            openbitfun_core::service::filesystem::sort_directory_nodes(
+                &mut nodes,
+                request.sort_by.as_deref(),
+                request.sort_order.as_deref(),
+            )?;
             let total = nodes.len();
-            let has_more = total > offset + limit;
+            let has_more = total > offset.saturating_add(limit);
             let page_nodes: Vec<_> = nodes.into_iter().skip(offset).take(limit).collect();
 
             Ok(serde_json::json!({
@@ -2817,13 +2857,39 @@ pub async fn write_file_content(
     state: State<'_, AppState>,
     request: WriteFileContentRequest,
 ) -> Result<(), String> {
-    write_text_file(
+    let target = resolve_desktop_path_target(
         &state,
         &request.file_path,
-        &request.content,
         request.remote_connection_id.as_deref(),
     )
-    .await
+    .await?;
+    use openbitfun_core::service::filesystem::path_operations::{
+        write_local_text_checked, write_text_checked,
+    };
+    match target {
+        DesktopPathTarget::Local { resolved_path, .. } => {
+            write_local_text_checked(
+                &state.filesystem_service,
+                &resolved_path.to_string_lossy(),
+                &request.content,
+                request.expected_hash.as_deref(),
+            )
+            .await
+        }
+        DesktopPathTarget::Remote {
+            requested_path,
+            entry,
+        } => {
+            write_text_checked(
+                &state.filesystem_service,
+                &requested_path,
+                &request.content,
+                Some(&entry.connection_id),
+                request.expected_hash.as_deref(),
+            )
+            .await
+        }
+    }
 }
 
 #[tauri::command]
@@ -5529,4 +5595,18 @@ mod remote_guard_tests {
         .expect("deserialize legacy metadata request");
         assert!(legacy.remote_connection_id.is_none());
     }
+}
+
+#[tauri::command]
+pub async fn workspace_file_upload(
+    request: openbitfun_core::service::filesystem::upload::WorkspaceUploadRequest,
+) -> Result<serde_json::Value, String> {
+    let account = crate::api::remote_connect_api::account_status()
+        .await?
+        .user_id
+        .ok_or("Sign in to use workspace transfers")?;
+    let status =
+        openbitfun_core::service::filesystem::upload::workspace_file_upload(account, request)
+            .await?;
+    serde_json::to_value(status).map_err(|error| error.to_string())
 }

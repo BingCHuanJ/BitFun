@@ -86,6 +86,7 @@ cargo check -p openbitfun-services-core --no-default-features
 cargo test -p openbitfun-services-core --no-default-features --features process-runtime --lib system::info::tests
 cargo test -p openbitfun-services-core --no-default-features --features credential-vault --lib credential_vault::tests::
 cargo check -p openbitfun-services-core --no-default-features --features filesystem
+cargo test -p openbitfun-services-core --no-default-features --features filesystem --lib filesystem::tree::tests::large_files_remain_visible_in_metadata_listings
 cargo test -p openbitfun-services-core --no-default-features --features diagnostics --lib diagnostics::contract_tests::
 cargo test -p openbitfun-services-core --no-default-features --features diff --lib diff::contract_tests::
 cargo test -p openbitfun-services-core --no-default-features --features workspace-text-runtime --lib workspace_text::tests::
@@ -115,4 +116,10 @@ remain in Core through runtime extension traits on the shared records.
 
 ```bash
 cargo test -p openbitfun-services-core --no-default-features --features workspace-persistence,coordination-store,session-event-format --lib
+```
+
+For bounded workspace upload ownership, offset recovery, conflict detection, and account retirement:
+
+```bash
+cargo test -p openbitfun-services-core --no-default-features --features workspace-transfer,workspace-runtime --lib workspace_transfer::tests
 ```

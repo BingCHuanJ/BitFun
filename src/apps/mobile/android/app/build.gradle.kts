@@ -17,6 +17,7 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
+    sourceSets.getByName("main").assets.srcDir(file("../../../../shared/terminal/webview/generated"))
     namespace = "com.openbitfun.mobile.app"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
 

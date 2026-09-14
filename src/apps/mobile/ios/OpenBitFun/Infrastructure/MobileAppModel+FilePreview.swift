@@ -93,8 +93,17 @@ extension MobileAppModel {
         )
     }
 
+    func downloadWorkspaceFile(path: String, label: String) {
+        beginRemoteDownload(reference: path, label: label, sessionID: "")
+    }
+
     func downloadRemoteFile(reference: String, label: String) {
-        guard surface == .remote, remoteSessionSelected else { return }
+        guard remoteSessionSelected else { return }
+        beginRemoteDownload(reference: reference, label: label, sessionID: selectedSessionID)
+    }
+
+    private func beginRemoteDownload(reference: String, label: String, sessionID: String) {
+        guard surface == .remote, remoteConnected else { return }
         downloadExporterOpen = false
         pendingDownload = nil
         let modelID = ObjectIdentifier(self)
@@ -109,7 +118,7 @@ extension MobileAppModel {
         coreAdapter?.downloadRemoteFile(
             reference: reference,
             label: label,
-            sessionID: selectedSessionID
+            sessionID: sessionID
         )
     }
 
@@ -175,7 +184,7 @@ extension MobileAppModel {
                     remotePath: awaiting.target.remotePath,
                     name: awaiting.name,
                     mimeType: awaiting.mimeType,
-                    data: Self.data(from: awaiting.bytes),
+                    localURL: URL(fileURLWithPath: awaiting.localReference),
                     sessionID: awaiting.target.sessionId,
                     controlTargetEpoch: awaiting.target.controlTargetEpoch
                 )

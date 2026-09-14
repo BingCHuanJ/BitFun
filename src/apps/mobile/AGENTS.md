@@ -97,6 +97,10 @@ UiState or an Intent declared there, and no module above it is visible to them.
   same `commonTest` sources onto ART; they are not in CI, so run them by hand
   when touching either module.
 
+## Remote capability ownership
+
+Native mobile surfaces are controllers. Desktop and CLI own execution, files, terminals and SSH credentials. Mobile workspace selection may use only connections already saved on the controlled runtime; it must not create an SSH connection or instantiate another runtime. Carry the selected connection identity through every operation, and report missing identity instead of falling back to local files.
+
 ## Offline Mini Apps
 
 Android preBuild and the iOS resource phase run `miniapps/generate.cjs` (Node.js

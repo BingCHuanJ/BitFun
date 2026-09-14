@@ -20,6 +20,7 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteViewSettingsOpen = false
     @Published var remoteHasMore = false
     @Published var remoteHasMoreMessages = false
+    @Published var permissionMailbox: PermissionMailboxUiState?
     @Published var remoteConversationLoading = false
     @Published var remotePermissionMode = "ASK"
     @Published var remotePermissionFailure: String?
@@ -78,6 +79,11 @@ final class MobileAppModel: ObservableObject {
     @Published var accountSelectedDeviceID: String?
     @Published var accountRefreshing = false
     @Published var deviceDirectory: [MobileDeviceDirectoryEntry] = []
+    @Published var runtimeFiles: RuntimeFilesUiState?
+    @Published var runtimeDirectoryPicker: RuntimeFilesUiState?
+    @Published var runtimeTerminal: RuntimeTerminalUiState?
+    @Published var savedRuntimeConnections: [SavedRuntimeConnectionUiState] = []
+    @Published var savedRuntimeConnectionsFailed = false
     @Published var remoteWorkspaces: [MobileWorkspaceGroup] = []
     @Published var workspaceLoading = false
     @Published var workspaceLoadFailed = false
@@ -114,7 +120,7 @@ final class MobileAppModel: ObservableObject {
     var remoteCreateRequestDeviceKey: String?
     var committedRemoteCreate: CommittedRemoteCreate?
     var remoteLastAppliedAuthority: RemoteAuthorityScope?
-    var workspaceCatalog: [(path: String, name: String, selected: Bool)] = []
+    var workspaceCatalog: [(path: String, name: String, selected: Bool, remoteConnectionId: String?)] = []
     var pendingRemoteWorkspaceCreate: (path: String, agentType: String)?
     var pendingRemoteSessionRefreshWorkspacePath: String?
     var pendingDirectoryWorkspace: (deviceKey: String, path: String, epoch: UInt64)?
@@ -248,7 +254,7 @@ final class MobileAppModel: ObservableObject {
             completionNotifier.setBackground(phase == .background)
             coreAdapter?.setForeground(phase == .active)
         }
-        if phase == .active, accountUser != nil { refreshRemoteDevices() }
+        if phase == .active, accountUser != nil { coreAdapter?.resumeSessionStreams(); refreshRemoteDevices() }
     }
 
     func verifyRemoteConnection() {

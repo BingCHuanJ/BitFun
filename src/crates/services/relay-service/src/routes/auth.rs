@@ -419,23 +419,6 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
                             .await;
                 }
                 drop(_presence_projection_guard);
-                state
-                    .device_manager
-                    .broadcast_current_presence(&auth.user_id, |devices| {
-                        let devices = devices
-                            .iter()
-                            .map(|(device_id, device_name)| {
-                                crate::routes::websocket::DevicePresenceEntry {
-                                    device_id: device_id.clone(),
-                                    device_name: device_name.clone(),
-                                }
-                            })
-                            .collect();
-                        serde_json::to_string(
-                            &crate::routes::websocket::OutboundProtocol::DevicePresence { devices },
-                        )
-                        .ok()
-                    });
             } else {
                 drop(_presence_projection_guard);
             }

@@ -1,3 +1,4 @@
+import { InvalidationSync } from '../../../shared/relay-transport/InvalidationSync';
 import {
   ChevronLeft as LucideChevronLeft,
   ChevronRight as LucideChevronRight,
@@ -116,7 +117,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     };
   }, []);
 
-  const refreshDevices = useCallback(async () => {
+  const readDevices = useCallback(async () => {
     if (!client.hasAccountIdentity) return;
     const requestId = ++devicesRequestRef.current;
     const isCurrent = () => (
@@ -145,23 +146,25 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     }
   }, [client, friendlyError]);
 
+  const directorySyncRef = useRef<InvalidationSync | null>(null);
+  const refreshDevices = useCallback(() => directorySyncRef.current?.invalidate() ?? Promise.resolve(), []);
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const init = async () => {
-      if (cancelled || !mountedRef.current) return;
-      setLoading(true);
-      await refreshDevices();
-      if (cancelled || !mountedRef.current) return;
-      setLoading(false);
-      timer = setInterval(refreshDevices, 30_000);
-    };
-    void init();
+    const directorySync = new InvalidationSync(readDevices);
+    directorySyncRef.current = directorySync;
+    const refresh = () => { if (document.visibilityState === 'visible') void refreshDevices(); };
+    const stopPresence = client.onDeviceDirectoryChanged(refresh);
+    document.addEventListener('visibilitychange', refresh);
+    setLoading(true);
+    void refreshDevices().finally(() => { if (!cancelled) setLoading(false); });
     return () => {
       cancelled = true;
-      if (timer) clearInterval(timer);
+      directorySync.stop();
+      if (directorySyncRef.current === directorySync) directorySyncRef.current = null;
+      stopPresence();
+      document.removeEventListener('visibilitychange', refresh);
     };
-  }, [refreshDevices]);
+  }, [client, readDevices, refreshDevices]);
 
   const handleManualRefresh = useCallback(async () => {
     if (loading || switchingId) return;

@@ -403,3 +403,21 @@ test('mobile question clicks acknowledge once, input remains editable, and failu
     ]);
   } finally { await context.close(); }
 });
+
+test('a retired official relay token stays archived and is never rebound to the current endpoint', {timeout:40000}, async()=>{
+ const context=await browser.createIncognitoBrowserContext();const fixture=new RelayFixture();
+ try {
+  const page=await fixture.page(context,source.origin,OFFICIAL+'/?account-store-test=1');
+  const result=await page.evaluate(async endpoint=>{
+   const {BrowserAccountStore}=await import('/src/services/BrowserAccountStore.ts');
+   const retired=endpoint.replace(/\/v\/[^/]+$/, '/v/retired');
+   const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('openbitfun-mobile-account',1);request.onupgradeneeded=()=>request.result.createObjectStore('accounts',{keyPath:'relayUrl'});request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+   const old={version:1,relayUrl:retired,controllerDeviceId:'old-controller',privateKey:btoa(String.fromCharCode(...new Uint8Array(32).fill(3))),revision:1,session:{token:'old-database-token',userId:'42'}};
+   await new Promise((resolve,reject)=>{const tx=db.transaction('accounts','readwrite');tx.objectStore('accounts').put(old);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
+   const snapshot=await new BrowserAccountStore(endpoint).read();
+   const retained=await new Promise((resolve,reject)=>{const request=db.transaction('accounts').objectStore('accounts').get(retired);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+   db.close();return{session:snapshot.session,retained,old};
+  },OFFICIAL);
+  assert.equal(result.session,null);assert.deepEqual(result.retained,result.old);
+ }finally{await context.close();}
+});

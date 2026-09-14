@@ -105,12 +105,14 @@ enum MobileLaunchConfiguration {
             )
         }
         if arguments.contains("--download-preview") {
+            let previewURL = FileManager.default.temporaryDirectory.appendingPathComponent("openbitfun-download-preview.rs")
+            try? Data("fn main() {}\n".utf8).write(to: previewURL)
             model.pendingDownload = MobilePendingDownload(
                 reference: "computer://src/main.rs",
                 remotePath: "src/main.rs",
                 name: "main.rs",
                 mimeType: "text/x-rust",
-                data: Data("fn main() {}\n".utf8)
+                localURL: previewURL
             )
             model.downloadTargetPath = "src/main.rs"
             model.downloadPhase = .saving
@@ -295,7 +297,7 @@ private extension MobileAppModel {
             MobileDeviceDirectoryEntry(id: "preview-mac", name: "Studio Mac", online: true, expanded: true, status: "FAILED", error: "REMOTE_UNAVAILABLE", workspaces: [failedWorkspace], sessions: [failedSession]),
             MobileDeviceDirectoryEntry(id: "preview-offline", name: "Office PC", online: false, expanded: false, status: "READY", error: nil, workspaces: [offlineWorkspace], sessions: [cachedSession])
         ]
-        workspaceCatalog = [(path: "/workspace/OpenBitFun", name: "OpenBitFun", selected: true)]
+        workspaceCatalog = [(path: "/workspace/OpenBitFun", name: "OpenBitFun", selected: true, remoteConnectionId: nil)]
         remoteAssistants = [
             MobileAssistantOption(path: "/workspace/OpenBitFun/.openbitfun/assistants/review", name: "代码审查助手")
         ]
