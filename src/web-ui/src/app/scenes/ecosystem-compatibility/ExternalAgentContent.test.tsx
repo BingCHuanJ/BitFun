@@ -49,7 +49,6 @@ vi.mock('@openbitfun/ui', async (importOriginal) => {
     IconButton: ({ icon, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon: React.ReactNode }) => <button {...props}>{icon}</button>,
     Card: Wrapper,
     CardHeader: ({ title, description }: { title?: React.ReactNode; description?: React.ReactNode }) => <div>{title}{description}</div>,
-    Alert: ({ message }: { message: React.ReactNode }) => <div role="alert">{message}</div>,
     ScrollArea: Wrapper, LoadingState: Wrapper, OverflowText: Wrapper, StatusPill: Wrapper,
   };
 });

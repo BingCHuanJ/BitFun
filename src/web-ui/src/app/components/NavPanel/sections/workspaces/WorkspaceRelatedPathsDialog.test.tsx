@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { Simulate } from 'react-dom/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceInfo } from '@/shared/types';
 import WorkspaceRelatedPathsDialog from './WorkspaceRelatedPathsDialog';
@@ -19,14 +20,15 @@ vi.mock('@openbitfun/ui', async (importOriginal) => {
   const Wrapper = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
   return {
     Disclosure: (await importOriginal<typeof import('@openbitfun/ui')>()).Disclosure,
+    Textarea: (await importOriginal<typeof import('@openbitfun/ui')>()).Textarea,
     Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) => open ? <div role="dialog">{children}</div> : null,
     DialogBody: Wrapper, DialogHeader: Wrapper, DialogHeading: Wrapper, DialogTitle: Wrapper,
-    DialogClose: () => null, Icon: () => null, Input: () => null, Textarea: () => null,
+    DialogClose: () => null, Icon: () => null, Input: () => null,
     Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button disabled={disabled} onClick={onClick}>{children}</button>,
   };
 });
 
-describe('related directory diagnostics', () => {
+describe('related directory dialog', () => {
   let root: Root;
   let container: HTMLDivElement;
   const workspace = { id: 'workspace-1', name: 'Project', rootPath: '/project', workspaceKind: 'normal', relatedPaths: [] } as unknown as WorkspaceInfo;
@@ -68,5 +70,36 @@ describe('related directory diagnostics', () => {
     mocks.references.mockResolvedValue({ references: [], diagnostics: [] });
     await act(async () => root.render(<WorkspaceRelatedPathsDialog workspace={workspace} isOpen onClose={() => undefined} />));
     expect(container.querySelector('details')).toBeNull();
+  });
+
+  it('edits and saves a description through the actual shared Textarea', async () => {
+    mocks.references.mockResolvedValue({ references: [], diagnostics: [] });
+    mocks.update.mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    await act(async () => root.render(
+      <WorkspaceRelatedPathsDialog
+        workspace={{ ...workspace, relatedPaths: [{ path: '/project/reference', description: 'Reference implementation' }] }}
+        isOpen
+        onClose={onClose}
+      />,
+    ));
+    const field = container.querySelector('[data-openbitfun-component="textarea"]')!;
+    const input = field.querySelector('textarea')!;
+    expect(field.getAttribute('data-layout')).toBe('fill');
+    expect(field.getAttribute('data-resize')).toBe('none');
+    expect(input.value).toBe('Reference implementation');
+    const save = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'actions.save')!;
+    expect(save.disabled).toBe(true);
+    act(() => {
+      input.value = 'Reference implementation\nKeep this directory available for comparison.';
+      Simulate.change(input);
+    });
+    expect(save.disabled).toBe(false);
+    await act(async () => save.click());
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith('workspace-1', [{
+      path: '/project/reference',
+      description: 'Reference implementation\nKeep this directory available for comparison.',
+    }]);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
