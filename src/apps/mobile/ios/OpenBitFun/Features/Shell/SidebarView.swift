@@ -74,14 +74,16 @@ struct SidebarView: View {
         GeometryReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
                 if showsPrimaryNavigation { authenticatedHeader } else { signedOutHeader }
-                MiniAppsButton(model: model)
                 if searchVisible {
                     searchField
                 }
                 ScrollView(showsIndicators: false) {
-                    workspaceSection
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.bottom, 12)
+                    VStack(alignment: .leading, spacing: 0) {
+                        MiniAppsButton(model: model, sidebar: true)
+                        workspaceSection
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 12)
+                    }
                 }
                 .frame(minHeight: 0, maxHeight: .infinity)
                 .layoutPriority(-1)

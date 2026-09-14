@@ -3,11 +3,35 @@ import WebKit
 
 struct MiniAppsButton: View {
     @ObservedObject var model: MobileAppModel
+    var sidebar = false
     @State private var open = false
     var body: some View {
-        Button(model.localized("小应用")) { open = true }
-            .frame(minHeight: 44)
-            .fullScreenCover(isPresented: $open) { MiniAppsView(model: model) }
+        Group {
+            if sidebar {
+                Button { open = true } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 24))
+                            .frame(width: 24, height: 24)
+                            .accessibilityHidden(true)
+                        Text(model.localized("小应用"))
+                            .font(MobileDesignTypography.bodyLarge.font.weight(.medium))
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.leading, 4).padding(.trailing, 8)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(OpenBitFunTheme.ink)
+                .accessibilityLabel(model.localized("小应用"))
+                .padding(.vertical, 16)
+            } else {
+                Button(model.localized("小应用")) { open = true }
+                    .frame(minHeight: 44)
+            }
+        }
+        .fullScreenCover(isPresented: $open) { MiniAppsView(model: model) }
     }
 }
 

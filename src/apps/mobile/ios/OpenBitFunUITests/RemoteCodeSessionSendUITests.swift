@@ -887,6 +887,10 @@ final class MobileParityUITests: XCTestCase {
         app.launchMobileReady()
         let miniapps = app.buttons["小应用"].firstMatch
         XCTAssertTrue(miniapps.waitForExistence(timeout: 15))
+        let sidebar = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        sidebar.name = "OfflineMiniApp-Sidebar"
+        sidebar.lifetime = .keepAlways
+        add(sidebar)
         miniapps.tap()
         XCTAssertTrue(app.staticTexts["全部应用"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["离线可用"].exists)
