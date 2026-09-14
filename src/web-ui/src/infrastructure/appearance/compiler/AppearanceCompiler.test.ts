@@ -1047,7 +1047,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-openbitfun-product-component="tool-group-picker"][data-openbitfun-product-part="token"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="inline-diff-preview"][data-openbitfun-part="root"][data-openbitfun-state~="empty"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-product-component="export-image"][data-openbitfun-product-part="trigger"][data-openbitfun-state~="exporting"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="user-message-item"][data-openbitfun-part="root"][data-openbitfun-state~="failed"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-product-component="user-message-item"][data-openbitfun-product-part="root"][data-openbitfun-state~="failed"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="session-usage-report-card"][data-openbitfun-part="loading"][data-openbitfun-state~="loading"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="create-plan-display"][data-openbitfun-part="todos"][data-openbitfun-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="workspace-project-permissions-dialog"][data-openbitfun-part="rule"]');
