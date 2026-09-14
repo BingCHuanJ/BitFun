@@ -59,11 +59,15 @@ public sealed interface AccountUiState {
         public val refreshFailure: AccountFailureReason?,
         public val avatarUrl: String?,
     ) : AccountUiState {
-        /** Preserve the relay default used by legacy callers; authentication still belongs to AccountStore. */
+        /** Preserve callers created before explicit Relay selection was added. */
         public constructor(
-            userId: String, username: String, devices: List<AccountDeviceUi>,
-            selectedDeviceId: String?, selectedDeviceName: String?,
-        ) : this(userId, AccountDefaults.CLOUD_RELAY_URL, username, devices, selectedDeviceId, selectedDeviceName, false, null, null)
+            userId: String,
+            username: String,
+            devices: List<AccountDeviceUi>,
+            selectedDeviceId: String?,
+            selectedDeviceName: String?,
+        ) : this(userId, AccountDefaults.CLOUD_RELAY_URL, username, devices,
+            selectedDeviceId, selectedDeviceName, false, null, null)
 
         public constructor(
             userId: String, relayUrl: String, username: String, devices: List<AccountDeviceUi>,

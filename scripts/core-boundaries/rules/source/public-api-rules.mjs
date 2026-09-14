@@ -1178,6 +1178,8 @@ export const externalSourceCorePublicApiEntries = [
     'NativePromptCommandReconfirmationProjection',
     'NativePromptCommandConflictSnapshot',
     'native_prompt_command_conflicts',
+    'instruction_source_catalog',
+    'InstructionSourceCatalog',
     'set_native_prompt_command_conflict_choice',
     'external_source_conflict_choices',
     'set_external_prompt_command_conflict_choice',

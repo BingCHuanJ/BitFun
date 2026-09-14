@@ -1,3 +1,4 @@
+import { RemoteResponseMapper } from '../main/ets/services/RemoteResponseMapper';
 import { AccountLoginErrorPolicy } from '../main/ets/pages/policy/AccountLoginErrorPolicy';
 import { describe, it, expect } from '@ohos/hypium';
 import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
@@ -55,6 +56,15 @@ interface LoginFailureFixture { code?: number; statusCode?: number; }
 
 export default function conversationPresentationUnitTest() {
   describe('HarnessProfilePolicy', () => {
+    it('workspace_host_survives_mapping_and_legacy_payloads', 0, () => {
+      const workspaces = RemoteResponseMapper.recentWorkspaces([
+        { path: '/remote', name: 'App', remote_ssh_host: '10.0.0.8' },
+        { path: '/local', name: 'App' }
+      ]);
+      expect(workspaces[0].remoteSshHost).assertEqual('10.0.0.8');
+      expect(workspaces[0].name).assertEqual('App');
+      expect(workspaces[1].remoteSshHost).assertUndefined();
+    });
     it('maps mobile execution levels to canonical host Agents', 0, () => {
       expect(HarnessProfilePolicy.agentType('minimal')).assertEqual('minimal');
       expect(HarnessProfilePolicy.agentType('standard')).assertEqual('agentic');

@@ -1017,7 +1017,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-openbitfun-component="tiptap-editor"][data-openbitfun-part="inlineAiPanel"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="scheduled-jobs-view"][data-openbitfun-part="root"][data-openbitfun-target="workspace"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="scheduled-jobs-view"][data-openbitfun-part="job"][data-openbitfun-state~="expanded"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="deep-review-action-bar"][data-openbitfun-part="root"][data-openbitfun-phase="review_completed"][data-openbitfun-variant="success"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-product-component="deep-review-action-bar"][data-openbitfun-product-part="root"][data-openbitfun-phase="review_completed"][data-openbitfun-variant="success"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="rich-text-input"][data-openbitfun-part="contextTag"][data-openbitfun-context-type="widget-reference"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-product-component="model-round-item"][data-openbitfun-product-part="root"][data-openbitfun-status="streaming"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-product-component="model-round-item"][data-openbitfun-product-part="action"][data-openbitfun-state~="copied"]');

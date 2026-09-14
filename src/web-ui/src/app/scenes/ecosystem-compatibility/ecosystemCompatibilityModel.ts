@@ -72,6 +72,7 @@ export type EcosystemImportItemKind =
   | 'skill'
   | 'mcp'
   | 'hook'
+  | 'instruction'
   | 'memory'
   | 'plugin'
   | 'pet';
@@ -106,6 +107,7 @@ export const ECOSYSTEM_IMPORT_ITEM_KINDS: readonly EcosystemImportItemKind[] = [
   'skill',
   'mcp',
   'hook',
+  'instruction',
   'memory',
   'plugin',
   'pet',
@@ -133,12 +135,14 @@ const PRODUCT_NOT_APPLICABLE_KINDS = {
   opencode: ['pet'],
 } as const satisfies Record<EcosystemProductId, readonly EcosystemImportItemKind[]>;
 
-const OWNER_DETECTED_KINDS = new Set<EcosystemImportItemKind>(['skill', 'hook']);
+const OWNER_DETECTED_KINDS = new Set<EcosystemImportItemKind>(['skill', 'hook', 'instruction']);
 
 export function ecosystemDiscoverySupport(
   productId: EcosystemProductId,
   kind: EcosystemImportItemKind,
 ): EcosystemDiscoverySupport {
+  // The instruction owner also reports shared workspace AGENTS documents.
+  if (kind === 'instruction') return 'supported';
   const discoveryKinds = PRODUCT_DISCOVERY_KINDS[productId] as readonly EcosystemImportItemKind[];
   if (discoveryKinds.includes(kind)) return 'supported';
 
@@ -463,9 +467,10 @@ export function buildEcosystemImportItems(
     skill: 5,
     mcp: 6,
     hook: 7,
-    memory: 8,
-    plugin: 9,
-    pet: 10,
+    instruction: 8,
+    memory: 9,
+    plugin: 10,
+    pet: 11,
   };
   return items.sort((left, right) => (
     kindOrder[left.kind] - kindOrder[right.kind]
