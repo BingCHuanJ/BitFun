@@ -273,8 +273,11 @@ Still to migrate, in order: the interaction mailbox, then history positions.
     exposes equivalent replayable attach state and a negotiated response path.
 
 13. **Weak links use bounded, idempotency-aware recovery.** Presence gaps
-    and product RPC timeouts keep an attached peer's surface selected and show
-    a reconnecting notice. A single dedicated handshake owns recovery and its
+    and product RPC timeouts keep an attached peer's surface selected and request
+    a silent control probe. Only a failed control ping or re-attach marks the
+    connection degraded and shows the compact status beside the device controls.
+    A roster omission still requests event re-attachment even when ping succeeds;
+    a failed product request alone does not require re-attachment. A single dedicated handshake owns recovery and its
     retry counter; concurrent product failures must not consume it or postpone
     the timer. Retry delay is capped, not retry lifetime. A successful recovery
     re-attaches event delivery before publishing `ready`, without changing the
