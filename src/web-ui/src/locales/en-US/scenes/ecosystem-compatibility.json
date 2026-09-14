@@ -308,6 +308,39 @@
       "unsupportedHost": "Instruction source discovery is not available on this host or remote workspace. Local sources are not substituted.",
       "partial": "Some instruction sources could not be read. The available sources are listed below.",
       "readOnly": "Read by the instruction reader"
+    },
+    "accounts": {
+      "description": "View subscription accounts connected in OpenBitFun.",
+      "providers": {
+        "codex": "Codex / ChatGPT",
+        "opencode": "OpenCode Console (Zen)"
+      },
+      "notes": {
+        "codex": "Connect your ChatGPT subscription and choose models in model settings.",
+        "opencode": "Connect OpenCode Zen and add models in model settings. Go uses an API key."
+      },
+      "states": {
+        "unsupportedHost": "Account connections are unavailable in this environment",
+        "loading": "Loading account status",
+        "failed": "Could not load account status. Refresh to retry.",
+        "unavailable": "This host does not offer this account connection",
+        "vaultUnavailable": "Credential storage is unavailable",
+        "reauthenticationRequired": "Sign in again",
+        "connected": "Connected in OpenBitFun",
+        "notConnected": "Not connected in OpenBitFun"
+      },
+      "manage": "Manage account and models",
+      "connect": "Sign in through model settings",
+      "labels": {
+        "unsupportedHost": "Unsupported",
+        "failed": "Load failed",
+        "unavailable": "Unavailable",
+        "vaultUnavailable": "Vault offline",
+        "reauthenticationRequired": "Sign in again",
+        "connected": "Connected",
+        "notConnected": "Not connected"
+      },
+      "refresh": "Refresh account status"
     }
   },
   "sourceSettings": {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Button, Checkbox, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Icon, IconButton, Input, LoadingState, OverflowText, ScrollArea, SearchField, Select, StatusPill, type IconSource } from '@openbitfun/ui';
 import { EcosystemDialog as Dialog } from './EcosystemDialog';
 import { EcosystemBatchLayout } from './EcosystemBatchLayout';
+import EcosystemAccounts, { ecosystemAccountProvider } from './EcosystemAccounts';
 import { presentEcosystemContent } from './ecosystemContentPresentation';
 import { suggestSkillImportName, importErrorMessage } from './ecosystemSkillImport';
 import { applyEcosystemBatchUndo, type BatchUndoEntry, type BatchUndoResult } from './ecosystemBatchUndo';
@@ -90,6 +91,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   const instructions = localImportSupported && instructionSnapshot?.workspacePath === workspacePath
     ? instructionSnapshot?.catalog ?? null : null;
   const [loading, setLoading] = useState(true);
+  const [accountRefreshVersion, setAccountRefreshVersion] = useState(0);
   const [loadFailures, setLoadFailures] = useState<string[]>([]);
   const [plan, setPlan] = useState<ExternalMcpImportPlanV1 | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -552,7 +554,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         <div className="ecosystem-compatibility__import-action">
           {localImportSupported ? <><Button size="sm" variant="primary" disabled={busy || loading || planLoading} onClick={() => void prepareBatch()}>{t('content.importAll')}</Button>
             <Button size="sm" variant="outline" disabled={busy || loading || !items.some((item) => contentState(item) === 'imported')} onClick={() => void prepareBatchUndo()}>{t('content.undoAll')}</Button></> : null}
-          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setNotice(null); void refreshMcpPlan(); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
+          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setAccountRefreshVersion((value) => value + 1); setNotice(null); void refreshMcpPlan(); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
         </div>
       </div>
       {notice && !review && !undo && !batch && !batchUndo ? <p className="ecosystem-compatibility__feedback" role="status">{notice}</p> : null}
@@ -564,6 +566,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
           <span role="columnheader">{t('import.columns.state')}</span>
         </div>
       {Array.from(new Set(items.map((item) => item.kind))).map((group) => {
+        const accountProvider = ecosystemAccountProvider(runtime.spec.id);
+        if (group === 'account' && accountProvider) return <EcosystemAccounts key={`${group}:${accountProvider}`} provider={accountProvider} supported={localImportSupported} refreshVersion={accountRefreshVersion} expanded={kind === group} onToggle={() => { setKind(kind === group ? null : group); setSearch(''); setSelected(new Set()); }} />;
         const groupItems = items.filter((item) => item.kind === group);
         const representative = groupItems[0];
         const count = groupItems.filter((item) => item.discovered).length;

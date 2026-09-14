@@ -308,6 +308,39 @@
       "unsupportedHost": "目前主機或遠端工作區尚不支援查看指令來源，不會替用本機來源。",
       "partial": "部分指令來源讀取失敗，以下保留可讀取的來源。",
       "readOnly": "由指令讀取器套用"
+    },
+    "accounts": {
+      "description": "查看在 OpenBitFun 中接入的訂閱帳號。",
+      "providers": {
+        "codex": "Codex / ChatGPT",
+        "opencode": "OpenCode Console（Zen）"
+      },
+      "notes": {
+        "codex": "接入 ChatGPT 訂閱，在模型設定中選擇要使用的模型。",
+        "opencode": "接入 OpenCode Zen，在模型設定中新增模型；Go 使用 API Key 設定。"
+      },
+      "states": {
+        "unsupportedHost": "目前環境暫不支援帳號接入",
+        "loading": "正在讀取帳號狀態",
+        "failed": "帳號狀態讀取失敗，請重新整理後重試",
+        "unavailable": "目前主機未提供此帳號接入方式",
+        "vaultUnavailable": "憑證儲存暫不可用",
+        "reauthenticationRequired": "需要重新登入",
+        "connected": "已接入 OpenBitFun",
+        "notConnected": "尚未接入 OpenBitFun"
+      },
+      "manage": "管理帳號與模型",
+      "connect": "前往模型設定登入",
+      "labels": {
+        "unsupportedHost": "暫不支援",
+        "failed": "讀取失敗",
+        "unavailable": "暫不可用",
+        "vaultUnavailable": "憑證不可用",
+        "reauthenticationRequired": "需重新登入",
+        "connected": "已接入",
+        "notConnected": "未接入"
+      },
+      "refresh": "重新整理帳號狀態"
     }
   },
   "sourceSettings": {

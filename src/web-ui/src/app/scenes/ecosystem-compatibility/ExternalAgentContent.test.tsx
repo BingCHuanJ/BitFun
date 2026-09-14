@@ -8,7 +8,7 @@ import type { ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service
 import { buildEcosystemProductRuntimes, type EcosystemProductId } from './ecosystemCompatibilityModel';
 
 const mocks = vi.hoisted(() => ({
-  getInstructions: vi.fn(), openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
+  getAccounts: vi.fn(), getInstructions: vi.fn(), openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
   deleteSkill: vi.fn(), loadMcp: vi.fn(), saveMcp: vi.fn(), mutateHook: vi.fn(), getSkills: vi.fn(), validateSkill: vi.fn(), addSkill: vi.fn(), getHooks: vi.fn(), getHookCatalog: vi.fn(),
   planHook: vi.fn(), applyHook: vi.fn(), planMcp: vi.fn(), applyMcp: vi.fn(), refresh: vi.fn(),
   workspacePath: '/project', remote: false, peer: false, skillImportVersion: 0,
@@ -31,6 +31,7 @@ vi.mock('@/infrastructure/api/service-api/ExternalHooksAPI', () => ({ externalHo
 vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({ externalSourcesAPI: {
   planMcpImport: mocks.planMcp, applyMcpImport: mocks.applyMcp,
 } }));
+vi.mock('@/infrastructure/api/service-api/AIApi', () => ({ aiApi: { listSubscriptionAccounts: mocks.getAccounts } }));
 vi.mock('@/infrastructure/api/service-api/InstructionSourcesAPI', () => ({ instructionSourcesAPI: { getCatalog: mocks.getInstructions } }));
 vi.mock('@/infrastructure/api/service-api/MCPAPI', () => ({ MCPAPI: { loadMCPJsonConfig: mocks.loadMcp, saveMCPJsonConfig: mocks.saveMcp } }));
 vi.mock('@openbitfun/ui', () => {
@@ -45,6 +46,9 @@ vi.mock('@openbitfun/ui', () => {
     DialogClose: () => null, DialogFooter: Wrapper, DialogHeader: Wrapper, DialogHeading: Wrapper, DialogTitle: Wrapper, DialogBody: Wrapper,
     Icon: () => <span data-icon="true" />,
     IconButton: ({ icon, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon: React.ReactNode }) => <button {...props}>{icon}</button>,
+    Card: Wrapper,
+    CardHeader: ({ title, description }: { title?: React.ReactNode; description?: React.ReactNode }) => <div>{title}{description}</div>,
+    Alert: ({ message }: { message: React.ReactNode }) => <div role="alert">{message}</div>,
     ScrollArea: Wrapper, LoadingState: Wrapper, OverflowText: Wrapper, StatusPill: Wrapper,
   };
 });
@@ -95,6 +99,7 @@ describe('external agent content and explicit import boundary', () => {
     localStorage.clear();
     mocks.remote = false; mocks.peer = false; mocks.workspacePath = '/project'; mocks.skillImportVersion = 0;
     data = fixture();
+    mocks.getAccounts.mockResolvedValue([]);
     mocks.getInstructions.mockResolvedValue({ schemaVersion: 1, entries: [], failedEcosystems: [] });
     mocks.getSkills.mockImplementation(async () => [...data.skills]);
     mocks.getHooks.mockResolvedValue(data.hooks);
@@ -132,6 +137,99 @@ describe('external agent content and explicit import boundary', () => {
     const trigger = container.querySelector<HTMLButtonElement>(`[data-content-group="${kind}"] button[aria-expanded]`)!;
     if (trigger.getAttribute('aria-expanded') !== 'true') await act(async () => trigger.click());
   }
+
+  it('shows native account status only for the matching provider and opens existing settings', async () => {
+    mocks.getAccounts.mockResolvedValue([
+      { provider: 'codex', connected: true, account: 'codex@example.test' },
+      { provider: 'opencode', connected: true, account: 'other@example.test' },
+    ]);
+    await render();
+    await expand('account');
+    const account = container.querySelector('[data-content-group="account"]')!;
+    expect(account.textContent).toContain('codex@example.test');
+    expect(account.textContent).not.toContain('other@example.test');
+    expect(account.textContent).toContain('content.accounts.labels.connected');
+    expect(account.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(account.textContent).not.toContain('content.importSelected');
+    await click('content.accounts.manage');
+    expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'ai.models' });
+    expect(mocks.openScene).toHaveBeenCalledWith('settings');
+  });
+
+  it('offers the existing login path for a disconnected subscription', async () => {
+    mocks.getAccounts.mockResolvedValue([{ provider: 'opencode', connected: false }]);
+    await render('opencode');
+    await expand('account');
+    expect(container.textContent).toContain('content.accounts.labels.notConnected');
+    await click('content.accounts.connect');
+    expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'ai.models' });
+  });
+
+  it.each([
+    ['vault_unavailable', 'vaultUnavailable'],
+    ['reauthentication_required', 'reauthenticationRequired'],
+  ])('does not present %s as a healthy connection', async (flag, state) => {
+    mocks.getAccounts.mockResolvedValue([{ provider: 'codex', connected: true, [flag]: true }]);
+    await render();
+    await expand('account');
+    const account = container.querySelector('[data-content-group="account"]')!;
+    expect(account.textContent).toContain(`content.accounts.states.${state}`);
+    expect(account.textContent).not.toContain('content.accounts.labels.connected');
+    expect(account.textContent).toContain('content.accounts.connect');
+  });
+
+  it('rereads accounts on page refresh and clears stale success after a failure', async () => {
+    mocks.getAccounts.mockResolvedValue([{ provider: 'codex', connected: true, account: 'old@example.test' }]);
+    await render();
+    await expand('account');
+    mocks.getAccounts.mockRejectedValue(new Error('unavailable'));
+    const refresh = container.querySelector<HTMLButtonElement>('button[aria-label="content.refresh"]')!;
+    await act(async () => refresh.click());
+    expect(container.textContent).toContain('content.accounts.labels.failed');
+    expect(container.textContent).not.toContain('old@example.test');
+    mocks.getAccounts.mockResolvedValue([{ provider: 'codex', connected: false }]);
+    await act(async () => refresh.click());
+    expect(container.textContent).toContain('content.accounts.labels.notConnected');
+  });
+
+  it('hides local account identity immediately on a peer switch and does not query peer accounts', async () => {
+    mocks.getAccounts.mockResolvedValue([{ provider: 'codex', connected: true, account: 'local@example.test' }]);
+    await render();
+    await expand('account');
+    const calls = mocks.getAccounts.mock.calls.length;
+    mocks.peer = true;
+    await render();
+    expect(container.textContent).not.toContain('local@example.test');
+    expect(container.textContent).toContain('content.accounts.states.unsupportedHost');
+    expect(mocks.getAccounts).toHaveBeenCalledTimes(calls);
+    expect(container.textContent).not.toContain('content.accounts.manage');
+  });
+
+  it('ignores a pending local account response after switching to a peer', async () => {
+    let resolve!: (value: unknown[]) => void;
+    mocks.getAccounts.mockReturnValue(new Promise((done) => { resolve = done; }));
+    await render();
+    mocks.peer = true;
+    await render();
+    await act(async () => resolve([{ provider: 'codex', connected: true, account: 'late@example.test' }]));
+    await expand('account');
+    expect(container.textContent).not.toContain('late@example.test');
+    expect(container.textContent).toContain('content.accounts.states.unsupportedHost');
+  });
+
+  it('keeps a provider missing from an older host unavailable instead of offering login', async () => {
+    mocks.getAccounts.mockResolvedValue([{ provider: 'codex', connected: false }]);
+    await render('opencode');
+    await expand('account');
+    expect(container.textContent).toContain('content.accounts.states.unavailable');
+    expect(container.textContent).not.toContain('content.accounts.connect');
+  });
+
+  it('does not query subscriptions for an ecosystem without an account provider', async () => {
+    await render('claude-code');
+    expect(mocks.getAccounts).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-content-group="account"] button')).toBeNull();
+  });
 
   it('keeps copy management on imported rows without category management links', async () => {
     data.plan.items[0].disposition = 'already_imported';
@@ -271,7 +369,7 @@ describe('external agent content and explicit import boundary', () => {
     expect(overview.textContent).toContain('import.columns.state');
     expect(overview.querySelector('[data-content-group="skill"] [data-icon]')).not.toBeNull();
     expect(overview.querySelector('[data-content-group="skill"]')?.textContent).toContain('import.states.discoverySupported');
-    expect(overview.querySelector('[data-content-group="account"] button')).toBeNull();
+    expect(overview.querySelector('[data-content-group="account"] button[aria-expanded]')).not.toBeNull();
     await expand('skill');
     expect(container.textContent).toContain('codex-Skill');
     expect(container.textContent).not.toContain('codex-MCP');

@@ -798,6 +798,24 @@
     padding: 0 var(--openbitfun-space-4) var(--openbitfun-space-4);
   }
 
+  &__account-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--openbitfun-space-4);
+  }
+
+  &__account-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--openbitfun-space-2);
+  }
+
+  &__account-feedback {
+    grid-column: 1 / -1;
+  }
+
   &__content-list {
     max-block-size: min(28rem, 55dvh);
     min-inline-size: 0;
@@ -845,6 +863,10 @@
 }
 
 @container ecosystem-content (max-width: 520px) {
+  .ecosystem-compatibility__account-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .ecosystem-compatibility__content-summary {
     grid-template-columns: minmax(0, 1fr) auto;
 
