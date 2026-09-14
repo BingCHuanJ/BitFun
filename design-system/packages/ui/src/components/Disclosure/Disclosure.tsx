@@ -2,6 +2,8 @@ import {
   forwardRef,
   useId,
   useState,
+  useEffect,
+  type ButtonHTMLAttributes,
   type DetailsHTMLAttributes,
   type HTMLAttributes,
   type ReactNode,
@@ -11,10 +13,19 @@ import { OverflowText } from "../../primitives/OverflowText";
 import { Icon } from "../Icon";
 import styles from "./Disclosure.module.css";
 
+type DisclosureTriggerProps = Pick<ButtonHTMLAttributes<HTMLButtonElement>,
+  "aria-controls" | "aria-expanded" | "disabled" | "id" | "onClick" | "type">;
+
 interface CustomDisclosureProps
   extends Omit<HTMLAttributes<HTMLElement>, "children" | "onToggle" | "title"> {
   presentation?: "custom";
   actions?: ReactNode;
+  /** Compose a header with independent controls using the supplied toggle attributes. */
+  renderHeader?: (triggerProps: DisclosureTriggerProps) => ReactNode;
+  contentClassName?: string;
+  contentInnerClassName?: string;
+  unmountOnClose?: boolean;
+  exitDurationMs?: number;
   children: ReactNode;
   defaultOpen?: boolean;
   description?: ReactNode;
@@ -40,6 +51,11 @@ type InertContentAttributes = HTMLAttributes<HTMLDivElement> & { inert?: "" };
 const CustomDisclosure = forwardRef<HTMLElement, CustomDisclosureProps>(
   function Disclosure({
     actions,
+    renderHeader,
+    contentClassName,
+    contentInnerClassName,
+    unmountOnClose = false,
+    exitDurationMs = 180,
     children,
     className,
     defaultOpen = false,
@@ -59,6 +75,14 @@ const CustomDisclosure = forwardRef<HTMLElement, CustomDisclosureProps>(
     const resolvedOpen = open ?? uncontrolledOpen;
     const inertContentAttributes: InertContentAttributes = resolvedOpen ? {} : { inert: "" };
 
+    const [retained, setRetained] = useState(resolvedOpen);
+    useEffect(() => {
+      if (resolvedOpen) { setRetained(true); return; }
+      if (!retained) return;
+      const timer = setTimeout(() => setRetained(false), Math.max(0, exitDurationMs));
+      return () => clearTimeout(timer);
+    }, [resolvedOpen, retained, exitDurationMs]);
+
     function toggle() {
       if (disabled) return;
       const nextOpen = !resolvedOpen;
@@ -75,7 +99,14 @@ const CustomDisclosure = forwardRef<HTMLElement, CustomDisclosureProps>(
         data-open={resolvedOpen ? "true" : "false"}
         ref={ref}
       >
-        <div className={styles.header} data-openbitfun-part="header">
+        {renderHeader ? renderHeader({
+          'aria-controls': contentId,
+          'aria-expanded': resolvedOpen,
+          disabled,
+          id: triggerId,
+          onClick: toggle,
+          type: 'button',
+        }) : <div className={styles.header} data-openbitfun-part="header">
           <button data-overflow-trigger
             aria-controls={contentId}
             aria-expanded={resolvedOpen}
@@ -105,20 +136,21 @@ const CustomDisclosure = forwardRef<HTMLElement, CustomDisclosureProps>(
           {actions !== undefined && actions !== null && (
             <span className={styles.actions} data-openbitfun-part="actions">{actions}</span>
           )}
-        </div>
-        <div
+        </div>}
+        {(!unmountOnClose || resolvedOpen || retained) && <div
           {...inertContentAttributes}
           aria-hidden={!resolvedOpen}
           aria-labelledby={triggerId}
-          className={styles.content}
+          className={classNames(styles.content, contentClassName)}
+          data-open={resolvedOpen ? "true" : "false"}
           data-openbitfun-part="content"
           id={contentId}
           role="region"
         >
-          <div className={styles.contentInner} data-openbitfun-part="content-inner">
+          <div className={classNames(styles.contentInner, contentInnerClassName)} data-openbitfun-part="content-inner">
             {children}
           </div>
-        </div>
+        </div>}
       </section>
     );
   },
