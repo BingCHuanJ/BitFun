@@ -357,7 +357,7 @@ internal fun RemoteWorkspacePanel(
                 TextButton(
                     onClick = { onIntent(RemoteWorkspaceIntent.SelectWorkspace(workspace.path)) },
                     enabled = !state.busy && state.selected?.path != workspace.path,
-                ) { Text(workspace.name) }
+                ) { Text(workspace.displayName) }
             }
             if (state.assistants.isNotEmpty()) {
                 Text(stringResource(R.string.assistants_title), style = MaterialTheme.typography.titleSmall)

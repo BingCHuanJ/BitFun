@@ -370,7 +370,7 @@ export struct SidebarDeviceGroup {
             SidebarWorkspaceGroup({
               deviceId: this.device.deviceId,
               path: entry.path,
-              name: entry.name,
+              name: entry.remoteSshHost?.trim() ? `${entry.name} · ${entry.remoteSshHost.trim()}` : entry.name,
               sessions: this.sessionsFor(entry.path),
               selectedSessionId: this.selectedSessionId,
               runningSessionId: this.runningSessionId,
