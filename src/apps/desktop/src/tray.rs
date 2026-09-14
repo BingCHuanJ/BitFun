@@ -333,7 +333,9 @@ fn apply_unread_count(count: u32) -> tauri::Result<()> {
         };
         let icon =
             macos_tray_icon(count > 0).map_err(|error| tauri::Error::Anyhow(error.into()))?;
-        tray.set_icon(Some(icon))?;
+        // Replacing an image with set_icon resets its template flag on macOS.
+        // Apply both together so startup and count updates retain system tinting.
+        tray.set_icon_with_as_template(Some(icon), true)?;
         tray.set_title(Some(title))?;
     }
     #[cfg(not(target_os = "macos"))]
