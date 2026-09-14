@@ -8292,6 +8292,26 @@
           }
         }
       }
+    },
+    "全部应用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All apps"
+          }
+        }
+      }
+    },
+    "离线可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available offline"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

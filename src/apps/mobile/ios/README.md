@@ -107,3 +107,9 @@ The MiniApp build phase generates resources directly into the app bundle, so
 incremental builds include CSS and script edits without relying on a folder
 reference's timestamp. `miniapps.css` owns iOS font-family adaptations; the iframe
 sandbox and network restrictions remain in the shared document wrapper.
+
+The Mini App gallery follows the HarmonyOS full-page surface: a 56pt back/title
+bar, an offline header, and square preview tiles in two columns (three from
+600pt). The `miniapp-*.imageset` previews are PNG projections of HarmonyOS
+`miniapp_*_preview.webp` assets; retain their original artwork and center-crop
+them in the native view. App pages display their own name in the same header.

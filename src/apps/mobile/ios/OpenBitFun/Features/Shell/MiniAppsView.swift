@@ -7,7 +7,7 @@ struct MiniAppsButton: View {
     var body: some View {
         Button(model.localized("小应用")) { open = true }
             .frame(minHeight: 44)
-            .sheet(isPresented: $open) { MiniAppsView(model: model) }
+            .fullScreenCover(isPresented: $open) { MiniAppsView(model: model) }
     }
 }
 
@@ -25,48 +25,108 @@ private struct MiniAppsView: View {
     @State private var failure: String?
     private var locale: String { model.appLanguage == .english ? "en-US" : "zh-CN" }
 
+    private func copy(for app: BuiltinMiniApp) -> BuiltinMiniApp.Copy? {
+        app.locales[locale] ?? app.locales["en-US"]
+    }
+
     var body: some View {
-        NavigationStack {
-            Group {
-                if let selected {
-                    MiniAppWebView(appID: selected.id, locale: locale).id("\(selected.id)|\(locale)")
-                } else if let failure {
-                    Text(failure).padding()
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(apps) { app in
-                                let copy = app.locales[locale] ?? app.locales["en-US"]
-                                Button { selected = app } label: {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(copy?.name ?? app.id).font(MobileDesignTypography.titleSmall.font)
-                                        Text(copy?.description ?? "").font(MobileDesignTypography.bodyMedium.font)
-                                    }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
-                                        .background(OpenBitFunTheme.soft).clipShape(RoundedRectangle(cornerRadius: 16))
-                                }.buttonStyle(.plain)
-                            }
-                        }.padding(16)
-                    }
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button {
+                    if selected != nil { selected = nil } else { dismiss() }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 23, weight: .regular))
+                        .frame(width: 48, height: 48)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.localized("返回"))
+                Text(selected.flatMap { copy(for: $0)?.name } ?? model.localized("小应用"))
+                    .font(MobileDesignTypography.bodyLarge.font.weight(.medium))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                Color.clear.frame(width: 48, height: 48).accessibilityHidden(true)
             }
-            .background(OpenBitFunTheme.page)
-            .navigationTitle(model.localized("小应用"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if selected != nil { Button(model.localized("返回")) { selected = nil } }
-                }
-                ToolbarItem(placement: .topBarTrailing) { Button(model.localized("关闭")) { dismiss() } }
-            }
-            .task {
-                do {
-                    guard let url = Bundle.main.url(forResource: "catalog", withExtension: "json", subdirectory: "MiniApps") else {
-                        throw CocoaError(.fileNoSuchFile)
+            .padding(.horizontal, 12)
+            .frame(height: 56)
+            if let selected {
+                MiniAppWebView(appID: selected.id, locale: locale)
+                    .id("\(selected.id)|\(locale)")
+            } else {
+                GeometryReader { geometry in
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text(model.localized("全部应用"))
+                                .font(MobileDesignTypography.titleSmall.font.weight(.medium))
+                                .padding(.horizontal, 16).padding(.vertical, 10)
+                                .background(OpenBitFunTheme.soft, in: Capsule())
+                            Spacer()
+                            Text(model.localized("离线可用"))
+                                .font(MobileDesignTypography.labelSmall.font)
+                                .foregroundStyle(OpenBitFunTheme.muted)
+                        }
+                        .padding(.top, 16).padding(.bottom, 20)
+                        if let failure {
+                            Text(failure).font(MobileDesignTypography.bodyMedium.font)
+                                .foregroundStyle(OpenBitFunTheme.muted).padding(.vertical, 16)
+                            Button(model.localized("重试")) { loadApps() }
+                            Spacer()
+                        } else {
+                            ScrollView {
+                                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14),
+                                                         count: min(geometry.size.width, 1000) >= 600 ? 3 : 2),
+                                          alignment: .leading, spacing: 20) {
+                                    ForEach(apps) { app in
+                                        Button { selected = app } label: {
+                                            VStack(alignment: .leading, spacing: 10) {
+                                                OpenBitFunTheme.soft
+                                                    .aspectRatio(1, contentMode: .fit)
+                                                    .overlay {
+                                                        GeometryReader { preview in
+                                                            Image("miniapp-\(app.id)")
+                                                                .resizable().scaledToFill()
+                                                                .frame(width: preview.size.width, height: preview.size.height)
+                                                        }
+                                                    }
+                                                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                                                    .overlay(RoundedRectangle(cornerRadius: 24)
+                                                        .stroke(OpenBitFunTheme.line, lineWidth: 0.5))
+                                                    .accessibilityHidden(true)
+                                                Text(copy(for: app)?.name ?? app.id)
+                                                    .font(MobileDesignTypography.titleSmall.font.weight(.medium))
+                                                    .lineLimit(2)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(.horizontal, 4)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("\(copy(for: app)?.name ?? app.id), \(copy(for: app)?.description ?? "")")
+                                    }
+                                }
+                                .padding(.bottom, 24)
+                            }.scrollIndicators(.hidden)
+                        }
                     }
-                    apps = try JSONDecoder().decode([BuiltinMiniApp].self, from: Data(contentsOf: url))
-                } catch { failure = model.localized("无法加载小应用，请重试") }
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: 1000)
+                    .frame(maxWidth: .infinity)
+                }
             }
         }
+        .foregroundStyle(OpenBitFunTheme.ink)
+        .background(OpenBitFunTheme.page.ignoresSafeArea())
+        .task { loadApps() }
+    }
+
+    private func loadApps() {
+        failure = nil
+        do {
+            guard let url = Bundle.main.url(forResource: "catalog", withExtension: "json", subdirectory: "MiniApps") else {
+                throw CocoaError(.fileNoSuchFile)
+            }
+            apps = try JSONDecoder().decode([BuiltinMiniApp].self, from: Data(contentsOf: url))
+        } catch { failure = model.localized("无法加载小应用，请重试") }
     }
 }
 

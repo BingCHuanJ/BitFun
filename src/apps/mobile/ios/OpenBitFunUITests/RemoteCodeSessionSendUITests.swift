@@ -888,6 +888,12 @@ final class MobileParityUITests: XCTestCase {
         let miniapps = app.buttons["小应用"].firstMatch
         XCTAssertTrue(miniapps.waitForExistence(timeout: 15))
         miniapps.tap()
+        XCTAssertTrue(app.staticTexts["全部应用"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["离线可用"].exists)
+        let gallery = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        gallery.name = "OfflineMiniApp-Gallery"
+        gallery.lifetime = .keepAlways
+        add(gallery)
         for title in ["五子棋", "正则游乐场", "每日占卜"] {
             let entry = app.buttons.containing(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
             XCTAssertTrue(entry.waitForExistence(timeout: 10))
