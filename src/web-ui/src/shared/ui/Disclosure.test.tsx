@@ -84,4 +84,38 @@ describe('Disclosure presentation contracts', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
     expect(container.querySelector('input')).toBe(input);
   });
+  it('cancels delayed unmount when a composed header reopens the same draft', () => {
+    vi.useFakeTimers();
+    try {
+      const action = vi.fn();
+      act(() => root.render(
+        <Disclosure summary="Settings" unmountOnClose exitDurationMs={180}
+          renderHeader={trigger => <div><button {...trigger}>Details</button><button onClick={action}>Action</button></div>}>
+          <input defaultValue="Initial" />
+        </Disclosure>,
+      ));
+      const [toggle, other] = container.querySelectorAll('button');
+      act(() => other.click());
+      expect(action).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('input')).toBeNull();
+      act(() => toggle.click());
+      const input = container.querySelector('input')!;
+      input.value = 'Draft';
+      act(() => toggle.click());
+      expect(input.closest('[inert]')).not.toBeNull();
+      act(() => vi.advanceTimersByTime(179));
+      act(() => toggle.click());
+      act(() => vi.advanceTimersByTime(180));
+      expect(container.querySelector('input')).toBe(input);
+      expect(input.value).toBe('Draft');
+      expect(input.closest('[inert]')).toBeNull();
+      expect(toggle.getAttribute('aria-controls')).toBe(input.closest('[role="region"]')!.id);
+      act(() => toggle.click());
+      act(() => vi.advanceTimersByTime(180));
+      expect(container.querySelector('input')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
 });
