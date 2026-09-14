@@ -199,6 +199,7 @@
       "initialize_mcp_servers",
       "initialize_mcp_servers_non_destructive",
       "initialize_tray_after_startup",
+      "set_tray_unread_count",
       "initialize_workspace_startup_state",
       "reload_config"
     ],
