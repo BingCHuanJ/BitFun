@@ -37,6 +37,10 @@ export interface OverflowTextProps extends HTMLAttributes<HTMLElement> {
   lines?: number;
   /** Plain text defaults to marquee; rich composition defaults to a static fade. */
   behavior?: OverflowTextBehavior;
+  /** Single-line resting treatment; multiline clamps keep their existing layout. */
+  overflowStyle?: "fade" | "ellipsis";
+  /** Interaction-only text ignores virtual active state on itself and its owner. */
+  marqueeTrigger?: "interaction-or-active" | "interaction";
   /** Runs an overflowing marquee while its owning control is virtually active. */
   marqueeActive?: boolean;
 }
@@ -54,6 +58,8 @@ export const OverflowText = forwardRef<HTMLElement, OverflowTextProps>(
     className,
     lines,
     marqueeActive = false,
+    marqueeTrigger = "interaction-or-active",
+    overflowStyle = "fade",
     style,
     title,
     ...props
@@ -124,7 +130,7 @@ export const OverflowText = forwardRef<HTMLElement, OverflowTextProps>(
 
     useIsomorphicLayoutEffect(() => {
       updateOverflow();
-    }, [behavior, children, lines, updateOverflow]);
+    }, [behavior, children, lines, overflowStyle, updateOverflow]);
 
     useEffect(() => {
       if (measurementRef.current.isOverflowing) prepareTooltip();
@@ -160,7 +166,7 @@ export const OverflowText = forwardRef<HTMLElement, OverflowTextProps>(
           element.ownerDocument.defaultView?.removeEventListener("resize", updateOverflow);
         }
       };
-    }, [behavior, prepareTooltip, textOnly, updateOverflow]);
+    }, [behavior, overflowStyle, prepareTooltip, textOnly, updateOverflow]);
 
     const marqueeDuration = Math.max(
       MARQUEE_MIN_DURATION_MS,
@@ -182,17 +188,19 @@ export const OverflowText = forwardRef<HTMLElement, OverflowTextProps>(
       <Tag
         {...props}
         className={classNames(styles.root, className)}
-        data-marquee-active={marqueeActive ? "true" : undefined}
+        data-marquee-active={marqueeActive && marqueeTrigger !== "interaction" ? "true" : undefined}
+        data-marquee-trigger={marqueeTrigger}
         data-overflow={measurement.isOverflowing ? "true" : "false"}
         data-overflow-behavior={behavior}
         data-overflow-lines={lines}
+        data-overflow-style={lines ? undefined : overflowStyle}
         data-overflow-tooltip={hasOverflowTooltip ? "true" : undefined}
         data-overflow-text={title}
         ref={setElementRef}
         style={resolvedStyle}
         title={hasOverflowTooltip ? undefined : title}
       >
-        {behavior === "marquee" || (textOnly && lines === undefined) ? (
+        {behavior === "marquee" || ((textOnly || overflowStyle === "ellipsis") && lines === undefined) ? (
           <span className={styles.content} data-openbitfun-part="content" data-overflow-content="" ref={contentRef}>
             {children}
           </span>
@@ -200,7 +208,7 @@ export const OverflowText = forwardRef<HTMLElement, OverflowTextProps>(
       </Tag>
       {hasOverflowTooltip && (
         <Tooltip
-          active={marqueeActive}
+          active={marqueeActive && marqueeTrigger !== "interaction"}
           content={tooltipText}
           interactive
           onBeforeShow={prepareTooltip}

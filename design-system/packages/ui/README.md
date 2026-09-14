@@ -159,6 +159,15 @@ its virtual active state through this contract. Selected
 tabs do not animate automatically. Motion respects `prefers-reduced-motion`;
 reduced-motion users keep the static fade. Text and movement follow RTL direction.
 
+Use `overflowStyle="ellipsis"` when a single-line slot requires a visible ellipsis
+instead of a resting fade. It works with static `behavior="fade"` labels and with
+`behavior="marquee"`, which reveals the full text on interaction and returns to
+the ellipsis afterward. Reduced motion keeps the ellipsis. Multiline clamps retain
+their existing behavior. Set `marqueeTrigger="interaction"` to ignore virtual
+active state on both the label and its owner; the default
+`"interaction-or-active"` preserves existing listbox behavior. This also prevents
+virtual activation from opening the label's tooltip; actual hover/focus still works.
+
 Rich children default to fade to preserve the label's existing inline composition.
 Composite containers keep their icons/actions fixed and give each text slot its
 own `OverflowText`. Marquee measures and
@@ -227,6 +236,19 @@ Hosts without Web Animations render the current text immediately.
 
 The **RollingText** Design Lab entry includes manual standalone and TabGroup
 examples for repeated replacement and long labels.
+
+`ActionItem` and its `NavigationPanelItem` composition also accept
+`labelBehavior="static"` to preserve wrapping labels without an implicit overflow
+tooltip or marquee. Their default remains `"overflow"`. The public `label` part
+retains its typography, and the static label inherits whitespace from its owner.
+`NavigationPanelItem.className` styles the outer row; native button attributes and
+the ref reach its `trigger` part. Keep row layout separate from trigger styling.
+
+`TabGroupItem.tabProps` applies `className`, `style`, `title`, `aria-label`,
+`aria-describedby`, and `data-*` attributes directly to the native tab button.
+Use product-namespaced data attributes for product appearance identity. The
+component retains its own part marker, IDs, panel association, disabled state,
+selection, focus, and event handling. Keep IDs and panel IDs in the item fields.
 
 `TabGroup.renderItem(item, node, index)` can wrap the supplied standard item in
 a tooltip, context-menu owner, or drag target. Keep `node` intact so TabGroup

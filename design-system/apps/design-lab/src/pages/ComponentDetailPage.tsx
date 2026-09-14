@@ -1850,6 +1850,9 @@ export function ComponentDetailPage({
                 <NavigationPanelItem reserveLeadingSpace>
                   {t("components.preview.navigationPanelMoreItem")}
                 </NavigationPanelItem>
+                <NavigationPanelItem labelBehavior="static" style={{ maxInlineSize: 180, whiteSpace: "normal" }}>
+                  {t("components.preview.cardDescription")}
+                </NavigationPanelItem>
               </NavigationPanelSection>
             </NavigationPanelContent>
           </NavigationPanelBody>
