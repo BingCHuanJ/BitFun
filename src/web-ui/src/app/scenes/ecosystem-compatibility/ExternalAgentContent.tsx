@@ -5,7 +5,7 @@ import { EcosystemBatchLayout } from './EcosystemBatchLayout';
 import { presentEcosystemContent } from './ecosystemContentPresentation';
 import { suggestSkillImportName, importErrorMessage } from './ecosystemSkillImport';
 import { applyEcosystemBatchUndo, type BatchUndoEntry, type BatchUndoResult } from './ecosystemBatchUndo';
-import { Bot, CircleUserRound, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
+import { Bot, CircleUserRound, FileText, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useSkillsSceneStore } from '@/app/scenes/skills/skillsSceneStore';
@@ -21,6 +21,7 @@ import { WorkspaceKind } from '@/shared/types';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { externalSourcesAPI, type ExternalMcpImportPlanV1, type ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { externalHooksAPI, type ExternalHookImportPlan, type ExternalHookImportSnapshot, type ExternalHookSource } from '@/infrastructure/api/service-api/ExternalHooksAPI';
+import { instructionSourcesAPI, type InstructionSourceCatalog, type InstructionSourceEntry } from '@/infrastructure/api/service-api/InstructionSourcesAPI';
 import type { SkillInfo, SkillLevel, SkillScanDiagnostic, SkillImportPreview } from '@/infrastructure/config/types';
 import { getSkillSourceId, isOpenBitFunManagedSkill } from '@/infrastructure/config/skillSourcePresentation';
 import { buildEcosystemImportItems, catalogDiscoveryState, type EcosystemImportItem, type EcosystemImportItemKind, type EcosystemProductRuntime } from './ecosystemCompatibilityModel';
@@ -30,6 +31,7 @@ import { applyEcosystemBatch, type BatchImportEntry, type BatchImportResult } fr
 interface ContentItem extends EcosystemImportItem {
   skill?: SkillInfo;
   hookSource?: ExternalHookSource;
+  instruction?: InstructionSourceEntry;
 }
 
 const CONTENT_ICONS: Record<EcosystemImportItemKind, IconSource> = {
@@ -41,6 +43,7 @@ const CONTENT_ICONS: Record<EcosystemImportItemKind, IconSource> = {
   skill: { glyph: Package },
   mcp: { glyph: Server },
   hook: { glyph: Webhook },
+  instruction: { glyph: FileText },
   memory: { name: 'thinking' },
   plugin: { name: 'extension' },
   pet: { glyph: PawPrint },
@@ -83,6 +86,9 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   const [skillImportVersion, setSkillImportVersion] = useState(0);
   const [skillDiagnostics, setSkillDiagnostics] = useState<SkillScanDiagnostic[]>([]);
   const [hooks, setHooks] = useState<ExternalHookImportSnapshot | null>(null);
+  const [instructionSnapshot, setInstructionSnapshot] = useState<{ workspacePath: typeof workspacePath; catalog: InstructionSourceCatalog | null } | null>(null);
+  const instructions = localImportSupported && instructionSnapshot?.workspacePath === workspacePath
+    ? instructionSnapshot?.catalog ?? null : null;
   const [loading, setLoading] = useState(true);
   const [loadFailures, setLoadFailures] = useState<string[]>([]);
   const [plan, setPlan] = useState<ExternalMcpImportPlanV1 | null>(null);
@@ -109,13 +115,14 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   const loadSupplemental = useCallback(async (refresh = false) => {
     const sequence = ++loadSequence.current;
     setLoading(true);
-    const [skillResult, hookResult] = await Promise.allSettled([
+    const [skillResult, hookResult, instructionResult] = await Promise.allSettled([
       configAPI.getSkillScanReport({ workspacePath: workspacePath || undefined, forceRefresh: refresh }),
       localImportSupported
         ? externalHooksAPI.getImportSnapshot(workspacePath || undefined, refresh)
         : externalHooksAPI.getCatalog(workspacePath || undefined, refresh).then((catalog) => ({
           schemaVersion: 1 as const, revision: '', catalog, imports: [], diagnostics: [],
         })),
+      localImportSupported ? instructionSourcesAPI.getCatalog(workspacePath || undefined) : Promise.resolve(null),
     ]);
     if (!alive.current || sequence !== loadSequence.current) return;
     const failures: string[] = [];
@@ -126,6 +133,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     } else { setSkills([]); setSkillDiagnostics([]); failures.push('skill'); }
     if (hookResult.status === 'fulfilled') setHooks(hookResult.value);
     else { setHooks(null); failures.push('hook'); }
+    setInstructionSnapshot({ workspacePath, catalog: instructionResult.status === 'fulfilled' ? instructionResult.value : null });
+    if (instructionResult.status === 'rejected') failures.push('instruction');
     setLoadFailures(failures);
     setLoading(false);
   }, [localImportSupported, runtime.spec.ecosystemId, workspacePath]);
@@ -147,7 +156,13 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     const externalSkills = skills.filter((skill) => !isOpenBitFunManagedSkill(skill)
       && getSkillSourceId(skill) === runtime.spec.ecosystemId);
     const hookSources = hooks?.catalog.sources.filter((source) => source.ecosystemId === runtime.spec.ecosystemId) ?? [];
+    const instructionSources = instructions?.entries.filter((source) => source.ecosystemId === runtime.spec.ecosystemId || source.ecosystemId === 'shared') ?? [];
     return catalog.flatMap((item): ContentItem[] => {
+      if (item.kind === 'instruction' && instructionSources.length > 0) return instructionSources.map((instruction) => ({
+        ...item, id: `instruction:${instruction.scope}:${instruction.path}`, name: instruction.name,
+        sourceName: instruction.ecosystemId === 'shared' ? t('content.instructions.shared') : runtime.spec.name,
+        sourceLocation: instruction.path, discovered: true, instruction,
+      }));
       if (item.kind === 'skill' && externalSkills.length > 0) return externalSkills.map((skill) => ({
         ...item, id: `skill:${skill.key}`, name: skill.name, description: skill.description,
         sourceName: skill.sourceLabel || runtime.spec.name, sourceLocation: skill.path,
@@ -160,7 +175,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       }));
       return [item];
     });
-  }, [hooks, runtime, skills, snapshot]);
+  }, [hooks, instructions, runtime, skills, snapshot, t]);
 
   useEffect(() => {
     if (loading) return;
@@ -220,7 +235,13 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   };
   const presentation = (item: ContentItem) => {
     let discoveryState: ReturnType<typeof catalogDiscoveryState> = 'notDetected';
-    if (item.kind === 'skill' || item.kind === 'hook') {
+    if (item.kind === 'instruction') {
+      if (loading) discoveryState = 'checking';
+      else if (!localImportSupported || loadFailures.includes('instruction') || !instructions
+        || (!item.discovered && instructions.failedEcosystems.some((id) => id === 'shared' || id === runtime.spec.ecosystemId))) {
+        discoveryState = 'discoveryUnavailable';
+      }
+    } else if (item.kind === 'skill' || item.kind === 'hook') {
       const providerFailed = item.kind === 'hook' && hooks?.catalog.providers.some((provider) => (
         provider.ecosystemId === runtime.spec.ecosystemId && hooks.catalog.failedProviderIds.includes(provider.providerId)
       ));
@@ -239,6 +260,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   };
   const contentState = (item: ContentItem) => presentation(item).state;
   const stateDescription = (item: ContentItem, state: string) => {
+    if (item.kind === 'instruction' && !localImportSupported) return t('content.instructions.unsupportedHost');
     const { descriptionKey } = presentation(item);
     if (descriptionKey) return t(descriptionKey);
     if (state === 'unavailable') {
@@ -260,7 +282,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
     if (busy || !localImportSupported) return;
     setBusy(true);
     setNotice(null);
-    const candidates = items.filter((item) => (!group || item.kind === group) && item.discovered && (!selectedOnly || (selected.has(item.id)
+    const candidates = items.filter((item) => item.kind !== 'instruction' && (!group || item.kind === group) && item.discovered && (!selectedOnly || (selected.has(item.id)
       && `${item.name} ${item.description ?? ''} ${item.sourceLocation ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()))));
     const entries: BatchImportEntry[] = [];
     try {
@@ -514,7 +536,10 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         || (skillImportVersion < 1 && skillCollision(review.skill, review.level)));
   const visible = items.filter((item) => item.kind === kind
     && `${item.name} ${item.description ?? ''} ${item.sourceLocation ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()));
-  const viewed = review?.item ?? detail;
+  const requestedDetail = review?.item ?? detail;
+  const viewed = requestedDetail?.kind === 'instruction'
+    ? items.find((item) => item.id === requestedDetail.id && item.discovered) ?? null
+    : requestedDetail;
   const mcpDetail = viewed?.kind === 'mcp' ? snapshot?.mcpServers?.find((entry) => entry.candidateId === viewed.candidateId)?.definition : undefined;
   const hookEntries = viewed?.hookSource ? hooks?.catalog.entries.filter((entry) => (
     entry.source.providerId === viewed.hookSource!.key.providerId && entry.source.sourceId === viewed.hookSource!.key.sourceId
@@ -587,13 +612,13 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       <ScrollArea className="ecosystem-compatibility__content-list" tabIndex={0} aria-label={t(`capabilities.${group}`)}>
       <div className="ecosystem-compatibility__import-table" role="table" aria-label={t('content.title', { name: runtime.spec.name })}>
         <div className="ecosystem-compatibility__import-row ecosystem-compatibility__import-row--header" role="row">
-          <span role="columnheader" className="ecosystem-compatibility__selection-cell">{localImportSupported ? <Checkbox size="sm" aria-label={t('content.selectVisible')} disabled={busy} checked={visible.some((item) => item.discovered) && visible.filter((item) => item.discovered).every((item) => selected.has(item.id))} onChange={(event) => { const checked = event.target.checked; setSelected((current) => { const next = new Set(current); visible.filter((item) => item.discovered).forEach((item) => checked ? next.add(item.id) : next.delete(item.id)); return next; }); }} /> : null}{t('import.columns.item')}</span><span role="columnheader">{t('import.columns.source')}</span><span role="columnheader">{t('content.importStatus')}</span><span role="columnheader">{t('import.columns.action')}</span>
+          <span role="columnheader" className="ecosystem-compatibility__selection-cell">{localImportSupported && group !== 'instruction' ? <Checkbox size="sm" aria-label={t('content.selectVisible')} disabled={busy} checked={visible.some((item) => item.discovered) && visible.filter((item) => item.discovered).every((item) => selected.has(item.id))} onChange={(event) => { const checked = event.target.checked; setSelected((current) => { const next = new Set(current); visible.filter((item) => item.discovered).forEach((item) => checked ? next.add(item.id) : next.delete(item.id)); return next; }); }} /> : null}{t('import.columns.item')}</span><span role="columnheader">{t('import.columns.source')}</span><span role="columnheader">{t('content.importStatus')}</span><span role="columnheader">{t('import.columns.action')}</span>
         </div>
         {visible.map((item) => {
           const { state, canImport: importable } = presentation(item);
           return <div key={item.id} className="ecosystem-compatibility__import-row" role="row" data-import-kind={item.kind} data-import-state={state} data-discovery-support={item.discoverySupport} data-import-discovered={item.discovered ? 'true' : 'false'}>
-            <span role="cell" className="ecosystem-compatibility__selection-cell">{localImportSupported && item.discovered ? <Checkbox size="sm" aria-label={t('content.selectItem', { name: item.name })} checked={selected.has(item.id)} disabled={busy} onChange={(event) => { const checked = event.target.checked; setSelected((current) => { const next = new Set(current); if (checked) next.add(item.id); else next.delete(item.id); return next; }); }} /> : null}<span className="ecosystem-compatibility__import-item-copy"><strong><OverflowText>{item.discovered ? item.name : t(`capabilities.${item.kind}`)}</OverflowText></strong><small>{t(`capabilities.${item.kind}`)} · {stateDescription(item, state)}</small></span></span>
-            <span role="cell" className="ecosystem-compatibility__import-source"><strong>{item.sourceName}</strong><small>{item.sourceLocation}</small></span>
+            <span role="cell" className="ecosystem-compatibility__selection-cell">{localImportSupported && item.kind !== 'instruction' && item.discovered ? <Checkbox size="sm" aria-label={t('content.selectItem', { name: item.name })} checked={selected.has(item.id)} disabled={busy} onChange={(event) => { const checked = event.target.checked; setSelected((current) => { const next = new Set(current); if (checked) next.add(item.id); else next.delete(item.id); return next; }); }} /> : null}<span className="ecosystem-compatibility__import-item-copy"><strong><OverflowText>{item.discovered ? item.name : t(`capabilities.${item.kind}`)}</OverflowText></strong><small>{t(`capabilities.${item.kind}`)} · {stateDescription(item, state)}</small></span></span>
+            <span role="cell" className="ecosystem-compatibility__import-source"><strong>{item.sourceName}</strong><small>{item.sourceLocation}</small>{item.instruction ? <small>{t(item.instruction.scope === 'user' ? 'content.instructions.user' : 'content.instructions.project')} · {t(item.instruction.pathPatterns.length ? 'content.instructions.conditional' : 'content.instructions.startup')}</small> : null}</span>
             <span role="cell"><StatusPill tone={state === 'imported' ? 'success' : 'neutral'}>{t(state === 'review' ? 'content.reviewRequired' : `import.states.${state}`)}</StatusPill></span>
             <span role="cell" className="ecosystem-compatibility__import-action">
               {item.discovered ? <Button size="sm" variant="text" disabled={busy} aria-label={`${t('content.view')} ${item.name}`} onClick={() => { setNotice(null); setDetail(item); }}>{t('content.view')}</Button> : null}
@@ -605,6 +630,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
           </div>;
         })}
       </div>
+      {group === 'instruction' && instructions?.failedEcosystems.some((id) => id === 'shared' || id === runtime.spec.ecosystemId) ? <p role="status">{t('content.instructions.partial')}</p> : null}
       {visible.length === 0 ? <p>{t('content.noMatches')}</p> : null}
       </ScrollArea>
         </> : null}
@@ -688,6 +714,11 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
             <section className="ecosystem-compatibility__review-section"><h3>{t('content.sourceLocation')}</h3><p className="ecosystem-compatibility__path">{viewed.sourceLocation}</p></section>
             {viewed.description ? <section className="ecosystem-compatibility__review-section"><h3>{t('content.descriptionLabel')}</h3><p>{viewed.description}</p></section> : null}
             {stateDescription(viewed, contentState(viewed)) !== viewed.description ? <p className="ecosystem-compatibility__feedback">{stateDescription(viewed, contentState(viewed))}</p> : null}
+            {viewed.instruction ? <><p>{t('content.instructions.description')}</p><dl className="ecosystem-compatibility__metadata">
+              <dt>{t('content.instructions.scope')}</dt><dd>{t(viewed.instruction.scope === 'user' ? 'content.instructions.user' : 'content.instructions.project')}</dd>
+              <dt>{t('content.instructions.application')}</dt><dd>{t(viewed.instruction.pathPatterns.length ? 'content.instructions.conditional' : 'content.instructions.startup')}</dd>
+              {viewed.instruction.pathPatterns.length ? <><dt>{t('content.instructions.patterns')}</dt><dd>{viewed.instruction.pathPatterns.join(', ')}</dd></> : null}
+            </dl></> : null}
             {mcpDetail ? <dl className="ecosystem-compatibility__metadata"><dt>{t('content.transport')}</dt><dd>{mcpDetail.transport}</dd><dt>{t('content.command')}</dt><dd>{mcpDetail.commandPreview ?? mcpDetail.remoteUrlPreview ?? '—'}</dd><dt>{t('content.environmentKeys')}</dt><dd>{mcpDetail.environmentKeys?.join(', ') || '—'}</dd><dt>{t('content.headerNames')}</dt><dd>{mcpDetail.headerNames?.join(', ') || '—'}</dd></dl> : null}
             {hookEntries.map((entry) => <p key={entry.stableKey}>{entry.nativeEvent} · {entry.handlerKind}{entry.matcher.kind === 'pattern' ? ` · ${entry.matcher.display}` : ''}</p>)}
             {review ? <>

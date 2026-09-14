@@ -71,7 +71,8 @@
     "hook": "Hooks",
     "memory": "记忆",
     "plugin": "插件",
-    "pet": "宠物"
+    "pet": "宠物",
+    "instruction": "指令与规则"
   },
   "import": {
     "title": "导入与复用",
@@ -293,7 +294,21 @@
       "unknown": "已发现来源，但主机未确认使用状态；此页暂不支持副本导入。"
     },
     "hookDiscoveryOnly": "仅静态查看 Hook 来源和声明；此页不支持导入，也不会据此执行。",
-    "skillImportUnsupported": "当前主机未提供此格式的导入能力。请升级处理该来源的主机后重试。"
+    "skillImportUnsupported": "当前主机未提供此格式的导入能力。请升级处理该来源的主机后重试。",
+    "instructions": {
+      "description": "OpenBitFun 读取的指令来源。启动指令与按路径匹配的规则由现有读取器应用；此列表不表示某个会话已经加载了这些内容。",
+      "shared": "共享项目指令",
+      "scope": "作用范围",
+      "user": "用户配置",
+      "project": "当前项目",
+      "application": "应用时机",
+      "startup": "启动上下文",
+      "conditional": "读取匹配文件后",
+      "patterns": "相对于工作区的匹配路径",
+      "unsupportedHost": "当前宿主或远程工作区尚不支持查看指令来源，不会替用本机来源。",
+      "partial": "部分指令来源读取失败，以下保留可读取的来源。",
+      "readOnly": "由指令读取器应用"
+    }
   },
   "sourceSettings": {
     "health": {

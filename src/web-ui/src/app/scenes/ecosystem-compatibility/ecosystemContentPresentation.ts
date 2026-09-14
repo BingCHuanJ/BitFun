@@ -64,6 +64,7 @@ export function presentEcosystemContent(facts: ContentFacts): ContentPresentatio
     return result(facts.discoveryState, key);
   }
   if (!item.discovered) return result('notDetected', 'import.undetectedDescription');
+  if (item.kind === 'instruction') return result('discovered', 'content.instructions.readOnly');
   if (['command', 'tool', 'subagent'].includes(item.kind)) {
     const usage = item.usageState ?? 'unknown';
     return result(usage === 'unknown' ? 'discovered' : usage, `content.directUse.${usage}`);

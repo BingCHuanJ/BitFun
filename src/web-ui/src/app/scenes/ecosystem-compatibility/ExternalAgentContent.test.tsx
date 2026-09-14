@@ -8,7 +8,7 @@ import type { ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service
 import { buildEcosystemProductRuntimes, type EcosystemProductId } from './ecosystemCompatibilityModel';
 
 const mocks = vi.hoisted(() => ({
-  openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
+  getInstructions: vi.fn(), openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
   deleteSkill: vi.fn(), loadMcp: vi.fn(), saveMcp: vi.fn(), mutateHook: vi.fn(), getSkills: vi.fn(), validateSkill: vi.fn(), addSkill: vi.fn(), getHooks: vi.fn(), getHookCatalog: vi.fn(),
   planHook: vi.fn(), applyHook: vi.fn(), planMcp: vi.fn(), applyMcp: vi.fn(), refresh: vi.fn(),
   workspacePath: '/project', remote: false, peer: false, skillImportVersion: 0,
@@ -31,6 +31,7 @@ vi.mock('@/infrastructure/api/service-api/ExternalHooksAPI', () => ({ externalHo
 vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({ externalSourcesAPI: {
   planMcpImport: mocks.planMcp, applyMcpImport: mocks.applyMcp,
 } }));
+vi.mock('@/infrastructure/api/service-api/InstructionSourcesAPI', () => ({ instructionSourcesAPI: { getCatalog: mocks.getInstructions } }));
 vi.mock('@/infrastructure/api/service-api/MCPAPI', () => ({ MCPAPI: { loadMCPJsonConfig: mocks.loadMcp, saveMCPJsonConfig: mocks.saveMcp } }));
 vi.mock('@openbitfun/ui', () => {
   const Wrapper = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
@@ -94,6 +95,7 @@ describe('external agent content and explicit import boundary', () => {
     localStorage.clear();
     mocks.remote = false; mocks.peer = false; mocks.workspacePath = '/project'; mocks.skillImportVersion = 0;
     data = fixture();
+    mocks.getInstructions.mockResolvedValue({ schemaVersion: 1, entries: [], failedEcosystems: [] });
     mocks.getSkills.mockImplementation(async () => [...data.skills]);
     mocks.getHooks.mockResolvedValue(data.hooks);
     mocks.getHookCatalog.mockResolvedValue(data.hooks.catalog);
@@ -138,6 +140,61 @@ describe('external agent content and explicit import boundary', () => {
     await click('content.manageCopy', 'mcp');
     expect(mocks.openDestination).toHaveBeenCalledWith({ pageId: 'tools.mcp' });
     expect(mocks.openScene).toHaveBeenCalledWith('settings');
+  });
+
+  it('shows instruction ownership, scope and path matching without copy controls', async () => {
+    mocks.getInstructions.mockResolvedValue({ schemaVersion: 1, failedEcosystems: [], entries: [
+      { ecosystemId: 'codex', name: 'Codex user rules', path: '/user/AGENTS.md', scope: 'user', pathPatterns: [] },
+      { ecosystemId: 'claude-code', name: 'Claude path rule', path: '/project/.claude/rules/api.md', scope: 'project', pathPatterns: ['src/**/*.ts'] },
+      { ecosystemId: 'shared', name: 'AGENTS.md', path: '/project/AGENTS.md', scope: 'project', pathPatterns: [] },
+    ] });
+    await render(); await expand('instruction');
+    expect(container.textContent).toContain('Codex user rules');
+    expect(container.textContent).toContain('content.instructions.shared');
+    expect(container.textContent).not.toContain('Claude path rule');
+    const rows = container.querySelectorAll('[data-import-kind="instruction"]');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.getAttribute('data-import-state')).toBe('discovered');
+      expect(row.querySelector('input[type="checkbox"]')).toBeNull();
+      expect(row.textContent).not.toContain('content.prepareImport');
+      expect(row.textContent).not.toContain('content.undo');
+    }
+    await render('claude-code'); await expand('instruction');
+    await click('content.view', 'instruction');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('src/**/*.ts');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('content.instructions.conditional');
+    expect(mocks.applyMcp).not.toHaveBeenCalled();
+  });
+
+  it.each(['remote', 'peer'] as const)('does not substitute local instruction sources on a %s surface', async (surface) => {
+    mocks[surface] = true;
+    await render(); await expand('instruction');
+    expect(mocks.getInstructions).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-import-kind="instruction"]')?.getAttribute('data-import-state')).toBe('discoveryUnavailable');
+    expect(container.textContent).toContain('content.instructions.unsupportedHost');
+  });
+
+  it('shows a legacy host failure and recovers instruction discovery on refresh', async () => {
+    mocks.getInstructions.mockRejectedValueOnce(new Error('Unknown command'));
+    await render(); await expand('instruction');
+    expect(container.querySelector('[data-import-kind="instruction"]')?.getAttribute('data-import-state')).toBe('discoveryUnavailable');
+    const refresh = container.querySelector<HTMLButtonElement>('button[aria-label="content.refresh"]')!;
+    await act(async () => refresh.click());
+    expect(container.querySelector('[data-import-kind="instruction"]')?.getAttribute('data-import-state')).toBe('notDetected');
+  });
+
+  it('clears a local instruction detail when switching to a peer', async () => {
+    mocks.getInstructions.mockResolvedValue({ schemaVersion: 1, failedEcosystems: [], entries: [
+      { ecosystemId: 'codex', name: 'Local rules', path: '/private/local/AGENTS.md', scope: 'user', pathPatterns: [] },
+    ] });
+    await render(); await expand('instruction'); await click('content.view', 'instruction');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('/private/local/AGENTS.md');
+    mocks.peer = true;
+    await render();
+    expect(container.textContent).not.toContain('/private/local/AGENTS.md');
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(mocks.getInstructions).toHaveBeenCalledTimes(1);
   });
 
   it.each(['single', 'batch'])('binds the %s Skill import to its reviewed package and reports stale content', async (mode) => {

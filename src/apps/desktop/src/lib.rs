@@ -1322,6 +1322,7 @@ pub async fn run() {
             apply_external_hook_import_command,
             mutate_external_hook_import_command,
             get_external_source_snapshot,
+            get_instruction_source_catalog,
             get_workspace_reference_snapshot,
             plan_external_mcp_import_command,
             apply_external_mcp_import_command,

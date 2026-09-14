@@ -3,6 +3,8 @@
 //! Concrete ecosystem providers are selected only in this assembly module. The
 //! catalog and product surfaces remain provider- and ecosystem-neutral.
 
+pub use crate::instruction_sources::{instruction_source_catalog, InstructionSourceCatalog};
+
 pub use openbitfun_product_domains::external_integration_policy::{
     EffectiveExternalIntegrationPolicy, ExternalIntegrationAccess, ExternalIntegrationMode,
     ExternalIntegrationPolicyMutation, ExternalIntegrationPolicyOperation,
@@ -556,6 +558,26 @@ pub(crate) fn opencode_configured_skill_roots(
         workspace_root,
         &OpenCodeSkillRootProvider::default(),
     )
+}
+
+pub(crate) fn pi_configured_skill_roots(
+    workspace_root: Option<&Path>,
+) -> (
+    Vec<LocalConfiguredSkillRootContribution>,
+    Vec<(String, String)>,
+) {
+    let report = openbitfun_pi_adapter::PiSkillRootProvider::default().discover(workspace_root);
+    let roots = report
+        .roots
+        .into_iter()
+        .enumerate()
+        .map(|(precedence, root)| LocalConfiguredSkillRootContribution {
+            path: root.path,
+            scope: root.scope,
+            precedence,
+        })
+        .collect();
+    (roots, report.diagnostics)
 }
 
 fn opencode_configured_skill_roots_with_provider(
