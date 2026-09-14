@@ -24,6 +24,16 @@ struct ChatTimelineView: View {
                         .buttonStyle(.plain)
                         .disabled(model.busy)
                     }
+                    if model.surface == .remote, let mailbox = model.permissionMailbox {
+                        if mailbox.failed { Text(model.localized("Permission request could not be completed. Retry to refresh pending requests.")); Button(model.localized("重试")) { model.refreshPermissionMailbox() } }
+                        ForEach(mailbox.questions, id: \.id) { question in
+                            ToolStatusList(tools: [MobileAppModel.mapTool(question)], model: model)
+                                .simultaneousGesture(TapGesture().onEnded { model.startQuestionInteraction(question.id) })
+                        }
+                        ForEach(mailbox.requests, id: \.requestId) { request in
+                            PermissionMailboxRow(request: request, busy: mailbox.busy, model: model)
+                        }
+                    }
                     ForEach(model.timelineRows) { row in
                         ConversationRowView(row: row, model: model).id(row.id)
                     }
@@ -912,6 +922,8 @@ private struct ToolStatusRow: View {
     @ObservedObject var model: MobileAppModel
     @State private var expanded = false
     @State private var answer = ""
+    @State private var editingApproval = false
+    @State private var approvalInput = ""
     @State private var selectedOptions: [Int: Set<String>] = [:]
     @State private var otherAnswers: [Int: String] = [:]
 
@@ -957,9 +969,13 @@ private struct ToolStatusRow: View {
                     structuredAnswerPanel
                 }
             } else if tool.actions.contains("APPROVE") || tool.actions.contains("REJECT") {
+                if tool.actions.contains("APPROVE") {
+                    Button(model.localized("编辑后批准")) { approvalInput = tool.input.isEmpty ? "{}" : tool.input; editingApproval.toggle() }
+                    if editingApproval { TextEditor(text: $approvalInput).frame(minHeight: 120) }
+                }
                 HStack(spacing: 8) {
                     if tool.actions.contains("REJECT") { toolAction(model.localized("拒绝"), primary: false) { model.rejectTool(tool.id) } }
-                    if tool.actions.contains("APPROVE") { toolAction(model.localized("允许"), primary: true) { model.approveTool(tool.id) } }
+                    if tool.actions.contains("APPROVE") { toolAction(model.localized("允许"), primary: true) { model.approveTool(tool.id, updatedInput: editingApproval ? approvalInput : nil) }.disabled(editingApproval && ((try? JSONSerialization.jsonObject(with: Data(approvalInput.utf8))) as? [String: Any]) == nil) }
                 }
             }
             if tool.actions.contains("CANCEL") {
@@ -1172,5 +1188,31 @@ private struct ToolStatusRow: View {
 
     private var statusMark: String {
         switch tool.phase { case "FAILED": "!"; case "PENDING_CONFIRMATION": "?"; case "CANCELLED": "×"; case "COMPLETED": "✓"; default: "•" }
+    }
+}
+
+private struct PermissionMailboxRow: View {
+    let request: PermissionMailboxRequest
+    let busy: Bool
+    @ObservedObject var model: MobileAppModel
+    @State private var editing = false
+    @State private var input = "{}"
+    private var valid: Bool {
+        guard editing else { return true }
+        guard let data = input.data(using: .utf8), let object = try? JSONSerialization.jsonObject(with: data) else { return false }
+        return object is [String: Any]
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(request.source.isEmpty ? request.action : request.source)
+            Text(request.action)
+            Text(request.resources.joined(separator: "\n"))
+            if editing { TextEditor(text: $input).frame(minHeight: 90).disabled(busy) }
+            HStack {
+                Button(model.localized("编辑后批准")) { editing.toggle() }.disabled(busy)
+                Button(model.localized("批准")) { model.respondPermission(request.requestId, approve: true, updatedInput: editing ? input : nil) }.disabled(busy || !valid)
+                Button(model.localized("拒绝")) { model.respondPermission(request.requestId, approve: false, updatedInput: nil) }.disabled(busy)
+            }
+        }.padding(12)
     }
 }

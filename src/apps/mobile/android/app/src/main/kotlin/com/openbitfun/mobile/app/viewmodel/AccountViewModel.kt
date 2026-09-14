@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 
 internal class AccountViewModel(application: Application) : AndroidViewModel(application) {
     private val completionNotifier = com.openbitfun.mobile.app.platform.TaskCompletionNotifier(application)
-    fun setBackground(value: Boolean) { completionNotifier.setBackground(value) }
+    fun setBackground(value: Boolean) { completionNotifier.setBackground(value); if (!value) store.resumeSessionStreams() }
     private val identity = application.deviceIdentity()
     private val store = AccountStore.create(
         viewModelScope,

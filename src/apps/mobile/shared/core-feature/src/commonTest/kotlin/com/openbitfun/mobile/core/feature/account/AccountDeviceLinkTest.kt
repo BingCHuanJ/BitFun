@@ -8,13 +8,13 @@ class AccountDeviceLinkTest {
     @Test fun explicitLegacyConstructorsPreserveTheExistingDefaults() {
         assertNull(AccountDeviceLinkResult(AccountDeviceLinkStatus.INVALID, null).relayUrl)
         val legacy = AccountUiState.Ready("user", "name", emptyList(), null, null)
-        assertEquals("https://remote.openbitfun.com/v/1.0.0", legacy.relayUrl)
+        assertEquals("https://remote.openbitfun.com/v/1.0.1", legacy.relayUrl)
         assertEquals(false, legacy.refreshing)
         assertNull(legacy.refreshFailure)
     }
 
-    private val link = "https://remote.openbitfun.com/v/1.0.0/#/pair?did=desktop-1"
-    private val ready = AccountUiState.Ready(userId = "user", username = "name", relayUrl = "https://remote.openbitfun.com/v/1.0.0", devices = listOf(AccountDeviceUi("desktop-1", "Desktop", true, null)), selectedDeviceId = null, selectedDeviceName = null)
+    private val link = "https://remote.openbitfun.com/v/1.0.1/#/pair?did=desktop-1"
+    private val ready = AccountUiState.Ready(userId = "user", username = "name", relayUrl = "https://remote.openbitfun.com/v/1.0.1", devices = listOf(AccountDeviceUi("desktop-1", "Desktop", true, null)), selectedDeviceId = null, selectedDeviceName = null)
 
     @Test fun onlyAuthenticatedOnlineMembershipCanResolveTheTarget() {
         assertEquals(AccountDeviceLinkStatus.SIGN_IN_REQUIRED, resolveAccountDeviceLink(link, AccountUiState.SignedOut).status)

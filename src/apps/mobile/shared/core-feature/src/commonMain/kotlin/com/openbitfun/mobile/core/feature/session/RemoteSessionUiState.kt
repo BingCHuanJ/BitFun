@@ -231,7 +231,18 @@ public sealed interface RemoteSessionUiState {
         /** Monotonic authority revision for session-list projection on this store. */
         public val revision: Long,
         public val lastSentMessage: SentChatMessage?,
+        public val permissionMailbox: PermissionMailboxUiState,
     ) : RemoteSessionUiState {
+        public constructor(
+            sessions: List<RemoteSession>, selectedSessionId: String?, timeline: ChatTimelineState?, busy: Boolean,
+            permissionMode: SessionPermissionMode?, permissionModeFailure: PermissionModeFailure?, query: String,
+            agentFilter: SessionAgentFilter, hasMore: Boolean, hasMoreMessages: Boolean,
+            modelCatalog: RemoteModelCatalog?, modelCatalogFailure: ModelCatalogFailure?, draft: String,
+            revision: Long, lastSentMessage: SentChatMessage?,
+        ) : this(sessions, selectedSessionId, timeline, busy, permissionMode, permissionModeFailure, query,
+            agentFilter, hasMore, hasMoreMessages, modelCatalog, modelCatalogFailure, draft, revision,
+            lastSentMessage, PermissionMailboxUiState(emptyList(), false, false))
+
         /** Preserve the existing Swift/Kotlin initializer when adding acknowledgement state. */
         public constructor(
             sessions: List<RemoteSession>,
@@ -314,6 +325,9 @@ public sealed interface RemoteSessionUiState {
 }
 
 public sealed interface RemoteSessionIntent {
+    public data class StartQuestionInteraction(public val toolId: String) : RemoteSessionIntent
+    public data class RespondPermission(public val requestId: String, public val approve: Boolean, public val updatedInput: String?) : RemoteSessionIntent
+    public data object RefreshPermissionMailbox : RemoteSessionIntent
     public data object Load : RemoteSessionIntent
 
     public data object Refresh : RemoteSessionIntent
@@ -358,7 +372,9 @@ public sealed interface RemoteSessionIntent {
         public val instruction: String,
         public val modelId: String?,
         public val workspacePath: String?,
+        public val remoteConnectionId: String?,
     ) : RemoteSessionIntent {
+        public constructor(agentType: String, title: String, instruction: String, modelId: String?, workspacePath: String?) : this(agentType, title, instruction, modelId, workspacePath, null)
         public constructor(
             agentType: String,
             title: String,
@@ -377,7 +393,9 @@ public sealed interface RemoteSessionIntent {
         public val instruction: String,
         public val modelId: String?,
         public val workspacePath: String?,
+        public val remoteConnectionId: String?,
     ) : RemoteSessionIntent {
+        public constructor(requestId: String, agentType: String, title: String, instruction: String, modelId: String?, workspacePath: String?) : this(requestId, agentType, title, instruction, modelId, workspacePath, null)
         public constructor(
             requestId: String,
             agentType: String,

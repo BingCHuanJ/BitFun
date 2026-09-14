@@ -158,17 +158,17 @@ struct MobilePendingDownload: Identifiable, Equatable {
     let remotePath: String
     let name: String
     let mimeType: String
-    let data: Data
+    let localURL: URL
     let sessionID: String
     let controlTargetEpoch: Int32
 
-    init(reference: String, remotePath: String, name: String, mimeType: String, data: Data,
+    init(reference: String, remotePath: String, name: String, mimeType: String, localURL: URL,
          sessionID: String = "", controlTargetEpoch: Int32 = 0) {
         self.reference = reference
         self.remotePath = remotePath
         self.name = name
         self.mimeType = mimeType
-        self.data = data
+        self.localURL = localURL
         self.sessionID = sessionID
         self.controlTargetEpoch = controlTargetEpoch
     }
@@ -224,7 +224,7 @@ struct MobileDeviceDirectoryEntry: Identifiable, Equatable {
 }
 
 struct MobileWorkspaceGroup: Identifiable, Equatable {
-    var id: String { (deviceKey ?? "") + ":" + path }
+    var id: String { (deviceKey ?? "") + ":" + (remoteConnectionId ?? "") + ":" + path }
     let path: String
     let name: String
     let selected: Bool
@@ -232,6 +232,7 @@ struct MobileWorkspaceGroup: Identifiable, Equatable {
     var deviceKey: String? = nil
     var directoryExpanded = false
     var directoryStatus = "IDLE"
+    var remoteConnectionId: String? = nil
 }
 
 enum MobileSessionListSectionKind: Equatable {

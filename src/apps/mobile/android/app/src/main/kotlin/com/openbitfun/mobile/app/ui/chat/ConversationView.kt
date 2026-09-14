@@ -1,5 +1,8 @@
 package com.openbitfun.mobile.app.ui.chat
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -203,13 +206,14 @@ internal fun ConversationView(
         } else if (visibleRows.isEmpty()) {
             ConversationEmptyState(modifier = Modifier.weight(1f).fillMaxWidth())
         } else {
+            PermissionMailboxView(state.permissionMailbox, sessionId, onIntent)
             ConversationTimelineView(
                 rows = visibleRows,
                 hasMoreMessages = state.hasMoreMessages,
                 onLoadOlder = { onIntent(RemoteSessionIntent.LoadOlderMessages) },
                 enabled = !state.busy,
-                onApproveTool = { toolId ->
-                    onIntent(RemoteSessionIntent.ApproveTool(sessionId, toolId))
+                onApproveTool = { toolId, updatedInput ->
+                    onIntent(RemoteSessionIntent.ApproveTool(sessionId, toolId, updatedInput))
                 },
                 onRejectTool = { toolId, reason ->
                     onIntent(RemoteSessionIntent.RejectTool(sessionId, toolId, reason))
@@ -317,5 +321,44 @@ private fun ConversationLoadingState(modifier: Modifier) {
     ) {
         CircularProgressIndicator()
         Text(text = stringResource(R.string.chat_empty_loading))
+    }
+}
+
+@Composable
+private fun PermissionMailboxView(state: com.openbitfun.mobile.core.feature.session.PermissionMailboxUiState, sessionId: String, onIntent: (RemoteSessionIntent) -> Unit) {
+    Column {
+        if (state.failed) Text(stringResource(R.string.permission_mailbox_failed))
+        if (state.failed) androidx.compose.material3.TextButton(onClick = { onIntent(RemoteSessionIntent.RefreshPermissionMailbox) }) {
+            Text(stringResource(R.string.sessions_retry))
+        }
+        state.questions.forEach { question ->
+        com.openbitfun.mobile.app.ui.chat.tool.ToolStatusList(listOf(question), enabled = !state.busy,
+            onApprove = { _, _ -> }, onReject = { _, _ -> },
+            onCancel = { id, reason -> onIntent(RemoteSessionIntent.CancelTool(sessionId, id, reason)) },
+            onAnswer = { id, answer -> onIntent(RemoteSessionIntent.AnswerQuestion(sessionId, id, answer)) },
+            onAnswerStructured = { id, answers -> onIntent(RemoteSessionIntent.AnswerStructuredQuestion(sessionId, id, answers)) },
+            onOpenFile = { _, _ -> }, modifier = Modifier.fillMaxWidth().pointerInput(question.id) {
+                awaitEachGesture { awaitFirstDown(requireUnconsumed = false); onIntent(RemoteSessionIntent.StartQuestionInteraction(question.id)) }
+            })
+        }
+        state.requests.forEach { request ->
+            androidx.compose.runtime.key(request.requestId) {
+                var edit by remember { mutableStateOf(false) }
+                var input by remember { mutableStateOf("{}") }
+                val valid = !edit || runCatching { org.json.JSONObject(input) }.isSuccess
+                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Text(request.source.ifBlank { request.action })
+                    Text(request.action)
+                    Text(request.resources.joinToString("\n"))
+                    if (edit) androidx.compose.material3.OutlinedTextField(value = input, onValueChange = { input = it }, enabled = !state.busy,
+                        isError = !valid, modifier = Modifier.fillMaxWidth())
+                    androidx.compose.foundation.layout.Row {
+                        androidx.compose.material3.TextButton(onClick = { edit = !edit }, enabled = !state.busy) { Text(stringResource(R.string.tool_edit_approval)) }
+                        androidx.compose.material3.TextButton(onClick = { onIntent(RemoteSessionIntent.RespondPermission(request.requestId, true, if (edit) input else null)) }, enabled = !state.busy && valid) { Text(stringResource(R.string.tool_approve)) }
+                        androidx.compose.material3.TextButton(onClick = { onIntent(RemoteSessionIntent.RespondPermission(request.requestId, false, null)) }, enabled = !state.busy) { Text(stringResource(R.string.tool_reject)) }
+                    }
+                }
+            }
+        }
     }
 }

@@ -62,7 +62,7 @@ private val DETAIL_INDENT = 28.dp
 internal fun ToolStatusList(
     tools: List<ToolCard>,
     enabled: Boolean,
-    onApprove: (String) -> Unit,
+    onApprove: (String, String?) -> Unit,
     onReject: (String, String) -> Unit,
     onCancel: (String, String) -> Unit,
     onAnswer: (String, String) -> Unit,
@@ -80,7 +80,7 @@ internal fun ToolStatusList(
                 is ToolRow.Single -> ToolStatusRow(
                     tool = row.tool,
                     enabled = enabled,
-                    onApprove = { onApprove(row.tool.id) },
+                    onApprove = { input -> onApprove(row.tool.id, input) },
                     onReject = { reason -> onReject(row.tool.id, reason) },
                     onCancel = { reason -> onCancel(row.tool.id, reason) },
                     onAnswer = { answer -> onAnswer(row.tool.id, answer) },
@@ -171,7 +171,7 @@ private fun CollapsedToolGroup(
 internal fun ToolStatusRow(
     tool: ToolCard,
     enabled: Boolean,
-    onApprove: () -> Unit,
+    onApprove: (String?) -> Unit,
     onReject: (String) -> Unit,
     onCancel: (String) -> Unit,
     onAnswer: (String) -> Unit,
@@ -269,6 +269,7 @@ internal fun ToolStatusRow(
 
         if (ToolAction.APPROVE in tool.actions || ToolAction.REJECT in tool.actions) {
             ToolConfirmationPanel(
+                input = tool.input,
                 canApprove = ToolAction.APPROVE in tool.actions,
                 canReject = ToolAction.REJECT in tool.actions,
                 enabled = enabled,

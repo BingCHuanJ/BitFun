@@ -1,5 +1,14 @@
 package com.openbitfun.mobile.core.feature.session
 
+import com.openbitfun.mobile.core.persistence.RelayStreamStore
+import com.openbitfun.mobile.core.persistence.PersistedRelayFragment
+import com.openbitfun.mobile.core.transport.RemoteSessionStreamTransport
+import com.openbitfun.mobile.core.transport.SessionStreamReplica
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.collect
+import kotlinx.serialization.json.*
 import com.openbitfun.mobile.core.domain.RemoteSession
 import com.openbitfun.mobile.core.protocol.CommandStatus
 import com.openbitfun.mobile.core.protocol.RelayJson
@@ -399,7 +408,7 @@ class RemoteSessionStoreTest {
     fun staleCommittedCreateCancellationDoesNotClearNewerBusyState() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
-        transport.commandGates["get_session_messages"] = CompletableDeferred()
+        transport.commandGates["get_permission_mode"] = CompletableDeferred()
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("committed-cancel", "code", "", "", null, "/repo"))
         runCurrent()
         assertIs<CreateSessionOperationState.Succeeded>(store.createOperation.value)
@@ -596,7 +605,7 @@ class RemoteSessionStoreTest {
         runCurrent()
 
         assertIs<CreateSessionOperationState.Succeeded>(store.createOperation.value)
-        assertEquals(listOf("s-new"), assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions.map { it.id })
+        assertEquals("s-new", assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions.first().id)
         store.stop()
         runCurrent()
         assertIs<CreateSessionOperationState.Succeeded>(store.createOperation.value)
@@ -659,7 +668,7 @@ class RemoteSessionStoreTest {
     }
 
     @Test
-    fun assistantCreateLoadsIdleSelectsAssistantAndCreates() = runTest {
+    fun assistantCreateLoadsCatalogWithoutChangingRuntimeSelection() = runTest {
         val sessionTransport = FakeSessionTransport()
         val workspaceTransport = AssistantWorkspaceTransport()
         val session = RemoteSessionStore.create(this, sessionTransport, "device-a", null)
@@ -669,8 +678,8 @@ class RemoteSessionStoreTest {
         runCurrent()
 
         assertIs<CreateSessionOperationState.Succeeded>(session.createOperation.value)
-        assertEquals(listOf("list_recent_workspaces", "list_assistants", "get_workspace_info", "set_assistant", "get_workspace_info"), workspaceTransport.commands.map { it.cmd })
-        assertTrue(sessionTransport.commands.any { it.cmd == "create_session" && it.workspacePath == "/assistant" })
+        assertEquals(listOf("list_recent_workspaces", "list_assistants", "get_workspace_info", "host_invoke"), workspaceTransport.commands.map { it.cmd })
+        assertTrue(sessionTransport.commands.any { it.cmd == "create_session" && it.workspacePath == "/assistant" && it.agentType == "Claw" })
         session.stop()
     }
 
@@ -732,17 +741,19 @@ class RemoteSessionStoreTest {
     }
 
     @Test
-    fun assistantSelectionFailureNeverCreatesInOldWorkspace() = runTest {
+    fun assistantCreationDoesNotDependOnChangingGlobalSelection() = runTest {
         val sessionTransport = FakeSessionTransport()
         val workspaceTransport = AssistantWorkspaceTransport(selectionFailure = true)
         val session = RemoteSessionStore.create(this, sessionTransport, "device-a", null)
         val workspace = RemoteWorkspaceStore.create(this, workspaceTransport, StandardTestDispatcher(testScheduler), "device-a")
 
         session.createAssistantSession(workspace, "assistant-select-fail", "/assistant", "", "", null)
-        advanceUntilIdle()
+        runCurrent()
 
-        assertEquals(CreateSessionOperationFailure.WORKSPACE, assertIs<CreateSessionOperationState.Failed>(session.createOperation.value).reason)
-        assertTrue(sessionTransport.commands.none { it.cmd == "create_session" })
+        assertIs<CreateSessionOperationState.Succeeded>(session.createOperation.value)
+        assertTrue(workspaceTransport.commands.none { it.cmd == "set_assistant" })
+        assertTrue(sessionTransport.commands.any { it.cmd == "create_session" && it.workspacePath == "/assistant" && it.agentType == "Claw" })
+        session.stop()
     }
 
     @Test
@@ -778,24 +789,20 @@ class RemoteSessionStoreTest {
     @Test
     fun loadOlderMessagesPrependsThePreviousTranscriptPage() = runTest {
         val transport = FakeSessionTransport()
-        transport.messages = """[{"id":"m-new","role":"assistant","content":"new"}]"""
-        transport.olderMessages = """[{"id":"m-old","role":"user","content":"old"}]"""
-        val store = RemoteSessionStore.create(this, transport)
-
-        store.dispatch(RemoteSessionIntent.Open("s-code"))
-        runCurrent()
+        transport.initialEvents = listOf(richRecord("s-code", "new", 1, 2, "completed", "new"), historyReady(true))
+        transport.olderEvents = listOf(richRecord("s-code", "old", 0, 1, "completed", "old"), historyReady(false))
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
+        store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
         assertTrue(assertIs<RemoteSessionUiState.Ready>(store.state.value).hasMoreMessages)
-
-        store.dispatch(RemoteSessionIntent.LoadOlderMessages)
-        runCurrent()
-
+        store.dispatch(RemoteSessionIntent.LoadOlderMessages); runCurrent()
         val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
-        assertEquals(listOf("m-old", "m-new"), ready.timeline?.persistedMessages?.map { it.id })
-        assertEquals(false, ready.hasMoreMessages)
-        val request = transport.commands.last { it.cmd == "get_session_messages" }
-        assertEquals("m-new", request.beforeMessageId)
-        store.dispatch(RemoteSessionIntent.Stop)
+        assertEquals(listOf("old_user", "old_assistant", "new_user", "new_assistant"), ready.timeline?.persistedMessages?.map { it.id })
+        assertFalse(ready.hasMoreMessages)
+        assertEquals(1, transport.olderRequests)
+        assertTrue(transport.commands.none { it.cmd == "get_session_messages" })
+        store.stop()
     }
+
 
     @Test
     fun createSessionUsesTheWorkspaceTheDesktopIsOnNow() = runTest {
@@ -816,6 +823,26 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun defaultClawCreationLetsRuntimeResolveAndReturnAssistantWorkspace() = runTest {
+        val base = FakeSessionTransport()
+        val commands = mutableListOf<RemoteCommand>()
+        val transport = object : RemoteCommandTransport {
+            override suspend fun <T : CommandStatus> send(deserializer: DeserializationStrategy<T>, command: RemoteCommand, timeoutMs: Long): T {
+                commands += command
+                return if (command.cmd == "create_session") RelayJson.decodeFromString(deserializer, """{"resp":"ok","session_id":"s-new","workspace_path":"/runtime/assistant"}""") else base.send(deserializer, command, timeoutMs)
+            }
+        }
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.CreateSession("Claw")); runCurrent()
+        val create = commands.first { it.cmd == "create_session" }
+        assertEquals(null, create.workspacePath)
+        assertTrue(commands.none { it.cmd == "get_workspace_info" || it.cmd == "set_assistant" || it.cmd == "set_workspace" })
+        val created = assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions.first { it.id == "s-new" }
+        assertEquals("/runtime/assistant", created.workspacePath)
+        store.stop()
+    }
+
+    @Test
     fun crossWorkspaceCreateDoesNotSwitchTheDesktopAndStaysProjected() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
@@ -830,12 +857,14 @@ class RemoteSessionStoreTest {
                 instruction = "",
                 modelId = null,
                 workspacePath = "/other",
+                remoteConnectionId = "saved-ssh",
             ),
         )
         runCurrent()
 
         assertTrue(transport.commands.none { it.cmd == "get_workspace_info" })
         assertEquals("/other", transport.commands.first { it.cmd == "create_session" }.workspacePath)
+        assertEquals("saved-ssh", transport.commands.first { it.cmd == "create_session" }.remoteConnectionId)
         val created = assertIs<RemoteSessionUiState.Ready>(store.state.value)
             .sessions.first { it.id == "s-new" }
         assertEquals("/other", created.workspacePath)
@@ -979,7 +1008,7 @@ class RemoteSessionStoreTest {
     }
 
     @Test
-    fun editedToolApprovalIsGatedUnsupportedWithoutSending() = runTest {
+    fun editedToolApprovalPreservesTheJsonPatchOnTheWire() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
 
@@ -990,10 +1019,10 @@ class RemoteSessionStoreTest {
         )
         runCurrent()
 
-        assertTrue(transport.commands.none { it.cmd == "confirm_tool" })
+        assertEquals("{\"x\":1}", transport.commands.single { it.cmd == "confirm_tool" }.updatedInput.toString())
         val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
         assertFalse(ready.busy)
-        assertEquals(ToolApprovalEditSupport.UNSUPPORTED, ToolApprovalEditContract.support)
+        assertEquals(ToolApprovalEditSupport.SUPPORTED, ToolApprovalEditContract.support)
         store.dispatch(RemoteSessionIntent.Stop)
     }
 
@@ -1158,56 +1187,38 @@ class RemoteSessionStoreTest {
     }
 
     @Test
-    fun aDroppedPollKeepsTheTranscriptAndTheNextResponseRestoresTheConnection() = runTest {
+    fun aDroppedStreamKeepsTranscriptAndRecoveryRestoresConnectionWithoutPolling() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
-
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
-        assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
-        val beforeDrop = assertIs<RemoteSessionUiState.Ready>(store.state.value)
-
-        transport.pollFailure = RelayFailure.NetworkUnreachable
-        advanceTimeBy(10_000)
+        val before = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        transport.streamError?.invoke(RelayTransportException(RelayFailure.NetworkUnreachable))
         runCurrent()
-
-        val reconnecting = assertIs<RemoteSessionUiState.Ready>(store.state.value)
-        assertEquals(beforeDrop.selectedSessionId, reconnecting.selectedSessionId)
-        assertEquals(beforeDrop.timeline?.sessionId, reconnecting.timeline?.sessionId)
+        assertEquals(before.timeline?.sessionId, assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline?.sessionId)
         assertEquals(ConnectionPhase.RECONNECTING, store.connectionPhase.value)
-
-        transport.pollFailure = null
-        advanceTimeBy(10_000)
+        transport.streamCaughtUp?.invoke()
         runCurrent()
-
-        assertIs<RemoteSessionUiState.Ready>(store.state.value)
         assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
-        store.dispatch(RemoteSessionIntent.Stop)
+        advanceTimeBy(60_000); runCurrent()
+        assertTrue(transport.commands.none { it.cmd == "poll_session" })
+        store.stop()
     }
 
     @Test
     fun rapidCacheMissesIssueOnlyTheFirstAndLatestTranscriptRequests() = runTest {
         val transport = FakeSessionTransport()
-        transport.nonCancellableCommands += "get_session_messages"
-        val store = RemoteSessionStore.create(this, transport)
-
-        store.dispatch(RemoteSessionIntent.Open("s-code"))
-        runCurrent()
-        val firstRequest = transport.lateCommandContinuations.remove("get_session_messages")!!
-        store.dispatch(RemoteSessionIntent.Open("s-cowork"))
-        runCurrent()
-        store.dispatch(RemoteSessionIntent.Open("s-agentic"))
-        runCurrent()
-
-        assertEquals(1, transport.commands.count { it.cmd == "get_session_messages" })
-        firstRequest.resume(Unit)
-        runCurrent()
-
-        val transcriptRequests = transport.commands.filter { it.cmd == "get_session_messages" }
-        assertEquals(2, transcriptRequests.size)
-        assertEquals("s-agentic", transcriptRequests.last().sessionId)
-        store.stop()
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
+        for (session in listOf("s-code", "s-cowork", "s-agentic")) { store.dispatch(RemoteSessionIntent.Open(session)); runCurrent() }
+        transport.streamEvents.emit(richRecord("s-agentic", "latest", 0, 1, "completed", "current")); runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("s-agentic", ready.timeline?.sessionId)
+        assertEquals("current", ready.timeline?.persistedMessages?.last()?.text)
+        assertTrue(transport.commands.none { it.cmd == "get_session_messages" })
+        assertEquals(1, transport.activeSubscriptions)
+        store.stop(); runCurrent(); assertEquals(0, transport.activeSubscriptions)
     }
+
 
     @Test
     fun refreshRetriesThePermissionModeAlone() = runTest {
@@ -1239,35 +1250,20 @@ class RemoteSessionStoreTest {
      * the composer keeps offering Stop for a turn that is over.
      */
     @Test
-    fun theTranscriptIsReReadOnceTheTurnEnds() = runTest {
+    fun durableTurnCompletionReconcilesHistoryWithoutPerTokenRpc() = runTest {
         val transport = FakeSessionTransport()
-        transport.polls = listOf(
-            """{"resp":"ok","version":1,"changed":true,"session_state":"running",
-               "active_turn":{"turn_id":"t-1","status":"active","text":"All "}}""",
-            """{"resp":"ok","version":2,"changed":true,"session_state":"idle",
-               "active_turn":{"turn_id":"t-1","status":"completed","text":"All done"}}""",
-            """{"resp":"ok","version":2,"changed":false,"session_state":"idle"}""",
-        )
-        val store = RemoteSessionStore.create(this, transport)
-        store.dispatch(RemoteSessionIntent.Open("s-code"))
-        runCurrent()
-
-        // The desktop stores the turn as a message only after it ends, which is
-        // what the second read is for.
-        transport.messages = """[{"id":"m-1","role":"assistant","content":"All done"}]"""
-        // Past the active interval that carries the turn's end, and past the
-        // settle interval that follows it, so the poll after the re-read is out.
-        advanceTimeBy(1_000)
-        runCurrent()
-        store.dispatch(RemoteSessionIntent.Stop)
-
-        assertTrue(transport.commands.count { it.cmd == "get_session_messages" } >= 2)
-        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
-        assertNull(ready.timeline?.activeTurn, ready.timeline.toString())
-        // The re-read replaced the transcript wholesale, so the next poll is
-        // asked to describe everything rather than a delta from a spent version.
-        assertEquals(0, transport.commands.last { it.cmd == "poll_session" }.sinceVersion)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
+        store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent(); transport.commands.clear()
+        repeat(50) { transport.streamEvents.emit(richRecord("s-code", "t-1", 0, it.toLong()+1, "inprogress", "x".repeat(it+1))); runCurrent() }
+        assertEquals("x".repeat(50), assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline?.activeTurn?.text)
+        transport.streamEvents.emit(richRecord("s-code", "t-1", 0, 51, "completed", "All done")); runCurrent()
+        val timeline = assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline
+        assertNull(timeline?.activeTurn)
+        assertEquals("All done", timeline?.persistedMessages?.last()?.text)
+        assertTrue(transport.commands.isEmpty())
+        store.stop()
     }
+
 
     @Test
     fun aRefusedPermissionChangeLeavesTheSessionStanding() = runTest {
@@ -1321,7 +1317,23 @@ private class AssistantWorkspaceTransport(
     }
 }
 
-private class FakeSessionTransport : RemoteCommandTransport {
+private class FakeSessionTransport : RemoteCommandTransport, RemoteSessionStreamTransport {
+    var initialEvents = emptyList<JsonObject>()
+    var olderEvents = emptyList<JsonObject>()
+    var olderRequests = 0
+    var activeSubscriptions = 0
+    override suspend fun loadOlder(sessionId: String) { olderRequests++; olderEvents.forEach { streamEvents.emit(it) } }
+    val streamEvents = MutableSharedFlow<JsonObject>(extraBufferCapacity = 10)
+    var streamError: ((Throwable) -> Unit)? = null
+    var streamCaughtUp: (() -> Unit)? = null
+    override val streamIdentity = "test-account/device"
+    override suspend fun subscribe(sessionId: String, replica: SessionStreamReplica, onError: (Throwable) -> Unit, onCaughtUp: () -> Unit): Flow<JsonObject> = flow {
+        streamError = onError; streamCaughtUp = onCaughtUp
+        activeSubscriptions++
+        try { initialEvents.forEach { emit(it) }; onCaughtUp(); streamEvents.collect { emit(it) } }
+        finally { activeSubscriptions-- }
+    }
+
     val commands = mutableListOf<RemoteCommand>()
     var workspacePath: String = "/repo"
 
@@ -1418,7 +1430,7 @@ private class FakeSessionTransport : RemoteCommandTransport {
                   "default_models":{"primary":"model-primary"}
                 }
             }""".trimIndent()
-            "list_sessions" -> preparedListSessions ?: if (paged) pagedSessions(command.offset ?: 0) else allSessions()
+            "list_sessions" -> preparedListSessions ?: if (paged) pagedSessions(command.offset?.toInt() ?: 0) else allSessions()
             "get_session_messages" -> if (command.beforeMessageId != null) {
                 """{"resp":"ok","messages":${olderMessages ?: "[]"},"has_more":false}"""
             } else {
@@ -1452,3 +1464,25 @@ private class FakeSessionTransport : RemoteCommandTransport {
         const val IDLE_POLL = """{"resp":"ok","version":1,"changed":false,"session_state":"idle"}"""
     }
 }
+
+private class TestRelayStreamStore : RelayStreamStore {
+    override fun eventIds(stream: String) = emptyList<String>()
+    override fun cursor(stream: String) = 0L
+    override fun fragments(stream: String, eventId: String) = emptyList<String>()
+    override fun commit(stream: String, fragments: List<PersistedRelayFragment>, cursor: Long) {}
+}
+private fun streamEvent(name: String, text: String = ""): JsonObject = buildJsonObject {
+    put("session_id", "s-code"); put("event", "agentic://$name")
+    put("payload", buildJsonObject { put("sessionId", "s-code"); put("turnId", "t-1"); put("text", text) })
+}
+
+private fun richRecord(session: String, turn: String, index: Int, revision: Long, status: String, text: String): JsonObject = buildJsonObject {
+    put("session_id", session); put("event", "session-record")
+    put("payload", buildJsonObject {
+        put("sessionId", session); put("id", "item/$turn-text"); put("revision", revision)
+        put("turn", buildJsonObject { put("sessionId", session); put("turnId", turn); put("turnIndex", index); put("status", status); put("userMessage", buildJsonObject { put("id", "${turn}_user"); put("content", "question"); put("timestamp", 1) }) })
+        put("round", buildJsonObject { put("id", "$turn-round"); put("turnId", turn); put("roundIndex", 0) })
+        put("item", buildJsonObject { put("type", "text"); put("data", buildJsonObject { put("id", "$turn-text"); put("content", text); put("orderIndex", 0) }) })
+    })
+}
+private fun historyReady(more: Boolean): JsonObject = buildJsonObject { put("session_id", "s-code"); put("event", "relay://session-ready"); put("payload", buildJsonObject { put("hasMore", more) }) }
