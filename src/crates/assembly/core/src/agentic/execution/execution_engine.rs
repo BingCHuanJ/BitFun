@@ -4293,6 +4293,7 @@ impl ExecutionEngine {
                     tool_definitions.clone(),
                     Some(context_window),
                     round_lifecycle,
+                    Some(self.session_manager.as_ref()),
                 )
                 .await
             {
@@ -4452,13 +4453,15 @@ impl ExecutionEngine {
                 &round_result.assistant_message,
             );
 
-            // Update the in-memory message caches immediately so subsequent rounds see it.
-            if let Err(e) = self
-                .session_manager
-                .add_message(&context.session_id, round_result.assistant_message.clone())
-                .await
-            {
-                warn!("Failed to update assistant message in memory: {}", e);
+            if !round_result.assistant_message_committed {
+                // Update the in-memory message caches immediately so subsequent rounds see it.
+                if let Err(e) = self
+                    .session_manager
+                    .add_message(&context.session_id, round_result.assistant_message.clone())
+                    .await
+                {
+                    warn!("Failed to update assistant message in memory: {}", e);
+                }
             }
 
             // Add tool result messages to history
@@ -6123,6 +6126,7 @@ mod tests {
         .with_round_id(round_id.to_string());
         RoundResult {
             assistant_message: assistant,
+            assistant_message_committed: false,
             tool_calls: Vec::new(),
             tool_result_messages: vec![tool_result],
             has_more_rounds: true,

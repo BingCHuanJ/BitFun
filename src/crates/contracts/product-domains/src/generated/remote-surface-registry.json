@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:df958db3f7fb0f53",
+  "digest": "fnv1a64:708b24394aee421b",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -199,6 +199,18 @@
       }
     },
     {
+      "id": "account_load_older_session",
+      "surface": "tauri_command",
+      "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
       "id": "account_login",
       "surface": "tauri_command",
       "remoteWorkspace": "WorkspaceAgnostic",
@@ -247,7 +259,31 @@
       }
     },
     {
+      "id": "account_subscribe_session",
+      "surface": "tauri_command",
+      "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
       "id": "account_token_expired",
+      "surface": "tauri_command",
+      "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "account_unsubscribe_session",
       "surface": "tauri_command",
       "remoteWorkspace": "WorkspaceAgnostic",
       "peer": {
@@ -1286,8 +1322,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host has no handler for this command"
+        "kind": "handled"
       }
     },
     {
@@ -1298,8 +1333,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host has no handler for this command"
+        "kind": "handled"
       }
     },
     {
@@ -2828,6 +2862,17 @@
       }
     },
     {
+      "id": "get_session_interaction_mailbox",
+      "surface": "tauri_command",
+      "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "proxied"
+      },
+      "cliPeer": {
+        "kind": "handled"
+      }
+    },
+    {
       "id": "get_session_lineage",
       "surface": "tauri_command",
       "remoteWorkspace": "RemoteRouted",
@@ -3796,8 +3841,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host has no handler for this command"
+        "kind": "handled"
       }
     },
     {
@@ -4097,6 +4141,18 @@
       },
       "cliPeer": {
         "kind": "handled"
+      }
+    },
+    {
+      "id": "local_file_download",
+      "surface": "tauri_command",
+      "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
       }
     },
     {
@@ -4767,8 +4823,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not expose the remote-workspace UI surface"
+        "kind": "handled"
       }
     },
     {
@@ -5097,8 +5152,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host has no handler for this command"
+        "kind": "handled"
       }
     },
     {
@@ -5622,8 +5676,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host has no handler for this command"
+        "kind": "handled"
       }
     },
     {
@@ -6414,8 +6467,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host has no handler for this command"
+        "kind": "handled"
       }
     },
     {
@@ -7087,8 +7139,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7371,8 +7422,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7383,8 +7433,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7395,8 +7444,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7407,8 +7455,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7419,8 +7466,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7431,8 +7477,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7443,8 +7488,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7455,8 +7499,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7467,8 +7510,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7479,8 +7521,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7491,8 +7532,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7503,8 +7543,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7515,8 +7554,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7527,8 +7565,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host does not run this desktop IDE surface"
+        "kind": "handled"
       }
     },
     {
@@ -7837,6 +7874,17 @@
       }
     },
     {
+      "id": "workspace_file_upload",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteRouted",
+      "peer": {
+        "kind": "proxied"
+      },
+      "cliPeer": {
+        "kind": "handled"
+      }
+    },
+    {
       "id": "worktree_bind_session",
       "surface": "tauri_command",
       "remoteWorkspace": "RemoteUnsupported",
@@ -7940,8 +7988,7 @@
         "kind": "proxied"
       },
       "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the CLI peer host has no handler for this command"
+        "kind": "handled"
       }
     }
   ]

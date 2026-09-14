@@ -48,6 +48,13 @@ function repositoryPath(root, path) {
   return result;
 }
 
+// This crates.io source is patched only to select the product TLS provider.
+// It is an external dependency, not an OpenBitFun runtime owner. Resolved
+// feature checks below still include it and its full dependency closure.
+function isVendoredExternalManifest(root, manifestPath) {
+  return repositoryPath(root, manifestPath) === 'third_party/eioc/Cargo.toml';
+}
+
 function layerForManifest(manifestPath, { root, crateLayoutRules }) {
   const repoManifestPath = repositoryPath(root, manifestPath);
   if (repoManifestPath === null) {
@@ -160,7 +167,7 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
 const SERVICES_CORE_TOKIO_FEATURES = new Map([
   ['credential-vault', ['fs', 'io-util', 'rt']],
   ['diff', ['rt', 'time']],
-  ['filesystem', ['fs', 'rt']],
+  ['filesystem', ['fs', 'rt', 'sync']],
   ['json-io', ['fs', 'rt', 'sync', 'time']],
   ['local-storage', ['fs', 'rt', 'sync', 'time']],
   ['permission', ['rt']],
@@ -169,6 +176,7 @@ const SERVICES_CORE_TOKIO_FEATURES = new Map([
   ['workspace-instructions', ['fs', 'io-util', 'rt']],
   ['workspace-text-runtime', ['rt']],
   ['workspace-runtime', ['fs', 'io-util', 'process', 'rt', 'sync', 'time']],
+  ['workspace-transfer', ['fs', 'io-util', 'rt', 'sync']],
 ]);
 const SERVICES_CORE_BASE_TOKIO_FEATURES = [];
 const SERVICES_INTEGRATIONS_TOKIO_AGGREGATES = new Set(['product-full']);
@@ -2481,7 +2489,8 @@ export function discoverCargoManifestPaths(root) {
         }
         continue;
       }
-      if (entry.isFile() && entry.name === 'Cargo.toml') {
+      if (entry.isFile() && entry.name === 'Cargo.toml'
+        && !isVendoredExternalManifest(root, join(directory, entry.name))) {
         manifests.push(join(directory, entry.name));
       }
     }
@@ -2620,6 +2629,10 @@ export function collectCargoMetadataGraph({
         continue;
       }
       const packageManifestKey = normalizedPath(pkg.manifest_path);
+      if (isVendoredExternalManifest(root, pkg.manifest_path)
+        && pkg.name === 'eioc' && pkg.version === '0.5.0' && !workspaceMemberIds.has(pkg.id)) {
+        continue;
+      }
       if (workspaceMemberIds.has(pkg.id)) {
         coveredManifests.add(packageManifestKey);
       }

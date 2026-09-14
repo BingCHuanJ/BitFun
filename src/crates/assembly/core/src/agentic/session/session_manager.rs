@@ -7720,6 +7720,9 @@ impl SessionManager {
                                         },
                                         duration_ms: None,
                                     });
+                                    tool_item.status = Some(
+                                        if *is_error { "error" } else { "completed" }.to_string(),
+                                    );
                                     tool_item.end_time = Some(timestamp);
                                     break;
                                 }
@@ -7929,7 +7932,7 @@ impl SessionManager {
         Ok(())
     }
 
-    fn append_generation_rounds(
+    pub(crate) fn append_generation_rounds(
         turn: &mut DialogTurnData,
         turn_id: &str,
         new_messages: &[Message],
@@ -8010,8 +8013,12 @@ impl SessionManager {
                         tool_item.subagent_model_id = previous.subagent_model_id.clone();
                         tool_item.subagent_model_display_name =
                             previous.subagent_model_display_name.clone();
-                        tool_item.status = previous.status.clone().or(tool_item.status.clone());
-                        tool_item.interruption_reason = previous.interruption_reason.clone();
+                        // A runtime result settles the request immediately. A persisted
+                        // waiting/running checkpoint must not overwrite that newer fact.
+                        if tool_item.tool_result.is_none() {
+                            tool_item.status = previous.status.clone().or(tool_item.status.clone());
+                            tool_item.interruption_reason = previous.interruption_reason.clone();
+                        }
                     }
                 }
                 // Client-derived display cards are not part of the model's

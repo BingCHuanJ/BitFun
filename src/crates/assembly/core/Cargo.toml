@@ -297,6 +297,7 @@ mcp-runtime = [
     "tokio/rt-multi-thread",
 ]
 remote-connect = [
+    "openbitfun-services-core/workspace-transfer",
     "agent-runtime",
     "git",
     "model-catalog",
