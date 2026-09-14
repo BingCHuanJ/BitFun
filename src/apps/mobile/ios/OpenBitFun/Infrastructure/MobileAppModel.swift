@@ -32,9 +32,18 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteCreateDeviceError: String?
     @Published var selectedSessionID: String
     @Published var messages: [ChatMessage]
-    @Published var timelineRows: [MobileConversationRow] = []
+    @Published private var renderedTimelineRows: [MobileConversationRow] = []
+    var timelineRows: [MobileConversationRow] {
+        get { renderedTimelineRows }
+        set {
+            let next = MobileConversationRow.reconcile(newValue, with: renderedTimelineRows)
+            if next != renderedTimelineRows { renderedTimelineRows = next }
+        }
+    }
     @Published var draft = ""
     var lastAppliedRemoteSendID: String?
+    var pendingComposerSend: PendingComposerSend?
+    @Published var composerSendGeneration: UInt64 = 0
     @Published var drawerOpen = false
     @Published var settingsOpen = false
     @Published var remoteControlSettingsOpen = false
@@ -92,13 +101,13 @@ final class MobileAppModel: ObservableObject {
     var pairingGeneration: UInt64 = 0
     var accountGeneration: UInt64 = 0
     var remoteTargetEpoch: UInt64 = 0
-    var remoteExpectedDeviceKey: String?
+    @Published var remoteExpectedDeviceKey: String?
     var remoteBoundTargetKey: String?
     var remoteBoundTargetEpoch: UInt64?
     var pairingRetainedAccountAuthority: RetainedAccountAuthority?
     var accountDirectoryGeneration: UInt64 = 0
     var pendingDirectorySession: (deviceKey: String, sessionID: String, epoch: UInt64)?
-    var remoteInitialSessionReady = false
+    @Published var remoteInitialSessionReady = false
     var remoteInitialWorkspaceReady = false
     var remoteCreateRequestID: String?
     var remoteCreateRequestEpoch: UInt64 = 0
@@ -399,10 +408,11 @@ final class MobileAppModel: ObservableObject {
             showToast(localized("无法读取所选图片"))
             return
         }
-        guard remoteSessionSelected, connectionPhase != .disconnected, let coreAdapter else { return }
+        guard let sessionID = remoteSendSessionID, let coreAdapter else { return }
+        composerSendGeneration &+= 1
         isSending = true
         busy = true
-        coreAdapter.sendRemote(sessionID: selectedSessionID, content: normalized, images: attachments)
+        coreAdapter.sendRemote(sessionID: sessionID, content: normalized, images: attachments)
     }
 
     func renameSelectedSession(_ title: String) {

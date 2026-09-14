@@ -1191,7 +1191,7 @@ public class RemoteSessionStore internal constructor(
             } catch (error: Throwable) {
                 if (isCurrentWork(operationToken)) {
                     setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                    handleFailure(error, current)
+                    handleFailure(error, (_state.value as? RemoteSessionUiState.Ready) ?: current)
                 }
             }
         }
@@ -1229,7 +1229,7 @@ public class RemoteSessionStore internal constructor(
             } catch (error: Throwable) {
                 if (isCurrentWork(operationToken)) {
                     setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                    handleFailure(error, current)
+                    handleFailure(error, (_state.value as? RemoteSessionUiState.Ready) ?: current)
                 }
             }
         }
@@ -1326,14 +1326,21 @@ public class RemoteSessionStore internal constructor(
                     RemoteCommand(cmd = "get_session_messages", sessionId = sessionId, limit = 100),
                 )
                 if (timelineStore.snapshot().sessionId != sessionId) return@launch
-                timelineStore.setPersistedMessages(response.messages.map(RemoteResponseMapper::chatMessage))
+                val before = timelineStore.snapshot()
+                val messages = response.messages.map(RemoteResponseMapper::chatMessage)
+                // A bounded tail is not an authoritative replacement for history
+                // the user already paged in. Full snapshots may still remove rows.
+                if (response.hasMore) timelineStore.mergePersistedMessages(messages)
+                else timelineStore.setPersistedMessages(messages)
                 // Back to version zero, matching `onMessageCountKnown(0, …)`: the
                 // transcript just came from the source of truth, so the next poll
                 // should describe everything it knows rather than the delta since
                 // a version whose messages have already been replaced.
                 val cursor = ChatSessionCursor(
                     pollVersion = 0,
-                    knownMessageCount = response.messages.size,
+                    knownMessageCount = if (response.hasMore) {
+                        maxOf(before.cursor.knownMessageCount, response.messages.size)
+                    } else response.messages.size,
                     knownModelCatalogVersion = timelineStore.snapshot().cursor.knownModelCatalogVersion,
                 )
                 timelineStore.setCursor(cursor)
@@ -1343,7 +1350,7 @@ public class RemoteSessionStore internal constructor(
                 if (current is RemoteSessionUiState.Ready) {
                     _state.value = current.copy(
                         timeline = timelineStore.snapshot(),
-                        hasMoreMessages = response.hasMore,
+                        hasMoreMessages = response.hasMore && current.hasMoreMessages,
                     )
                 }
             } catch (cancelled: CancellationException) {
@@ -1379,13 +1386,14 @@ public class RemoteSessionStore internal constructor(
                 metadata = null,
             )
         }
+        val clientTurnId = "mobile-${Clock.System.now().toEpochMilliseconds()}-${kotlin.random.Random.nextLong().toULong().toString(16)}"
         val local = ChatMessage(
-            id = "msg-${Clock.System.now().toEpochMilliseconds()}",
+            id = clientTurnId,
             role = "user",
             text = content,
             status = "sent",
             renderVersion = null,
-            turnId = null,
+            turnId = clientTurnId,
             detail = null,
             timestamp = null,
             thinking = null,
@@ -1395,7 +1403,9 @@ public class RemoteSessionStore internal constructor(
             error = null,
         )
         timelineStore.appendOptimisticMessage(local)
-        setBusy(current, true)
+        val pendingActiveId = timelineStore.setPendingActiveTurn(local.id)
+        controller.nudge()
+        _state.value = current.copy(busy = true, timeline = timelineStore.snapshot())
         val operationToken = beginWork()
         work = scope.launch {
             try {
@@ -1404,7 +1414,7 @@ public class RemoteSessionStore internal constructor(
                 val response = transport.send<SendMessageResponse>(
                     RemoteCommand(
                         cmd = if (plan != null) "build_plan" else if (steering) "steer_turn" else "send_message",
-                        turnId = activeTurnId.takeIf { steering },
+                        turnId = if (steering) activeTurnId else if (plan == null && activeTurnId == null) clientTurnId else null,
                         displayContent = content.takeIf { steering },
                         planFilePath = plan?.path,
                         planName = plan?.name,
@@ -1415,7 +1425,10 @@ public class RemoteSessionStore internal constructor(
                     ),
                 )
                 if (!isCurrentWork(operationToken)) return@launch
-                if (!steering && current.timeline?.activeTurn == null) response.turnId?.let(timelineStore::setLocalActiveTurn)
+                response.turnId?.takeIf(String::isNotBlank)?.let { turnId ->
+                    timelineStore.acknowledgeOptimisticTurn(local.id, turnId)
+                    if (!steering && current.timeline?.activeTurn == null) timelineStore.setLocalActiveTurn(turnId)
+                } ?: timelineStore.clearPendingActiveTurn(pendingActiveId)
                 controller.nudge()
                 val ready = ((_state.value as? RemoteSessionUiState.Ready) ?: current)
                 if (ready.selectedSessionId == sessionId) {
@@ -1425,6 +1438,7 @@ public class RemoteSessionStore internal constructor(
                     val draftUnchanged = plan == null && ready.draft == current.draft && ready.draft.trim() == content.trim()
                     if (draftUnchanged) deletePersistedDraft(sessionId)
                     _state.value = ready.copy(
+                        timeline = timelineStore.snapshot(),
                         draft = if (draftUnchanged) "" else ready.draft,
                         lastSentMessage = SentChatMessage(
                             local.id, sessionId, content, intent.images.orEmpty().map { it.id },
@@ -1433,11 +1447,23 @@ public class RemoteSessionStore internal constructor(
                 }
                 setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
             } catch (cancelled: CancellationException) {
+                // A list refresh or another command may supersede this RPC.
+                // Do not leave an unowned waiting placeholder, or touch a newly opened session.
+                if (timelineStore.snapshot().sessionId == sessionId) {
+                    timelineStore.markOptimisticMessageFailed(local.id)
+                    timelineStore.clearPendingActiveTurn(pendingActiveId)
+                    val ready = _state.value as? RemoteSessionUiState.Ready
+                    if (ready?.selectedSessionId == sessionId) {
+                        _state.value = ready.copy(timeline = timelineStore.snapshot())
+                    }
+                }
                 throw cancelled
             } catch (error: Throwable) {
                 if (isCurrentWork(operationToken)) {
                     timelineStore.markOptimisticMessageFailed(local.id)
-                    handleFailure(error, (_state.value as? RemoteSessionUiState.Ready) ?: current)
+                    timelineStore.clearPendingActiveTurn(pendingActiveId)
+                    handleFailure(error, ((_state.value as? RemoteSessionUiState.Ready) ?: current)
+                        .copy(timeline = timelineStore.snapshot()))
                 }
             }
         }
@@ -1619,7 +1645,8 @@ public class RemoteSessionStore internal constructor(
 
     private fun selectModel(intent: RemoteSessionIntent.SelectModel) {
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
-        if (intent.modelId.trim().isEmpty()) return
+        if (intent.modelId.trim().isEmpty() || current.selectedSessionId != intent.sessionId ||
+            timelineStore.snapshot().sessionId != intent.sessionId) return
         setBusy(current, true)
         val operationToken = beginWork()
         work = scope.launch {
@@ -1629,13 +1656,14 @@ public class RemoteSessionStore internal constructor(
                 )
                 if (!isCurrentWork(operationToken)) return@launch
                 timelineStore.setSelectedModelId(response.modelId ?: intent.modelId)
-                setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
+                val ready = (_state.value as? RemoteSessionUiState.Ready) ?: current
+                _state.value = ready.copy(busy = false, timeline = timelineStore.snapshot())
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
                 if (isCurrentWork(operationToken)) {
                     setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                    handleFailure(error, current)
+                    handleFailure(error, (_state.value as? RemoteSessionUiState.Ready) ?: current)
                 }
             }
         }
@@ -1656,7 +1684,7 @@ public class RemoteSessionStore internal constructor(
             } catch (error: Throwable) {
                 if (isCurrentWork(operationToken)) {
                     setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                    handleFailure(error, current)
+                    handleFailure(error, (_state.value as? RemoteSessionUiState.Ready) ?: current)
                 }
             }
         }

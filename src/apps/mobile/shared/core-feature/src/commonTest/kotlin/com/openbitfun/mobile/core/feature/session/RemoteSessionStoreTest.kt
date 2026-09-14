@@ -252,6 +252,85 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun sendingPublishesPendingAndFailedMessagesWithoutPolling() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = gate
+        transport.sendMessageFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "hello"))
+        runCurrent()
+        val pending = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("hello", pending.timeline?.optimisticMessages?.single()?.text)
+        assertTrue(pending.busy)
+        store.dispatch(RemoteSessionIntent.UpdateDraft("new typing"))
+        gate.complete(Unit)
+        runCurrent()
+        val failed = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("failed", failed.timeline?.optimisticMessages?.single()?.status)
+        assertEquals("new typing", failed.draft)
+        assertFalse(failed.busy)
+        store.stop()
+    }
+
+    @Test
+    fun staleModelSelectionCannotMutateTheNewlyOpenedSession() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        transport.commands.clear()
+        store.dispatch(RemoteSessionIntent.SelectModel("old-session", "model-primary"))
+        runCurrent()
+        assertTrue(transport.commands.none { it.cmd == "set_session_model" })
+        assertFalse(assertIs<RemoteSessionUiState.Ready>(store.state.value).busy)
+        store.stop()
+    }
+
+    @Test
+    fun modelFailurePreservesTypingThatArrivedWhileRequestWasPending() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["set_session_model"] = gate
+        transport.modelSelectionFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SelectModel("s-code", "model-primary"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("new typing"))
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("new typing", assertIs<RemoteSessionUiState.Ready>(store.state.value).draft)
+        store.stop()
+    }
+
+    @Test
+    fun selectingModelPublishesConfirmedSelectionWithoutAnotherPoll() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("keep-draft"))
+        transport.commands.clear()
+        store.dispatch(RemoteSessionIntent.SelectModel("s-code", "requested-model"))
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        // The host's confirmed model wins even if it differs from the request.
+        assertEquals("model-primary", ready.timeline?.selectedModelId)
+        assertEquals("model-primary", ready.createModelOptions("Model").single { it.selected }.id)
+        assertEquals("keep-draft", ready.draft)
+        assertEquals("s-code", ready.selectedSessionId)
+        assertFalse(ready.busy)
+        assertEquals(listOf("set_session_model"), transport.commands.map { it.cmd })
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
     fun modelCatalogContractIsTheStaticSupportedFact() {
         assertEquals("get_model_catalog", ModelCatalogContract.commandName)
         assertEquals(ModelCatalogSupport.SUPPORTED, ModelCatalogContract.support)
@@ -1123,6 +1202,47 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun refreshCancellingSendDoesNotLeavePendingTurnForever() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        transport.commandGates["send_message"] = CompletableDeferred<Unit>()
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "waiting"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.Refresh)
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertFalse(ready.timeline?.activeTurn?.id?.startsWith("active-pending-") == true)
+        assertFalse(ready.busy)
+        store.stop()
+    }
+
+    @Test
+    fun sendPublishesPendingTurnBeforeAckAndClearsItOnFailure() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = gate
+        transport.sendMessageFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "hello"))
+        runCurrent()
+        val pending = assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline!!
+        assertTrue(pending.activeTurn!!.id.startsWith("active-pending-"))
+        val command = transport.commands.last { it.cmd == "send_message" }
+        assertEquals(pending.optimisticMessages.single().turnId, command.turnId)
+        assertTrue(!command.turnId.isNullOrBlank())
+        gate.complete(Unit)
+        runCurrent()
+        val failed = assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline!!
+        assertNull(failed.activeTurn)
+        assertEquals("failed", failed.optimisticMessages.single().status)
+        store.stop()
+    }
+
+    @Test
     fun imageSendFailureDoesNotConsumeAttachmentsAndAckKeepsNewTyping() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
@@ -1371,6 +1491,35 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun turnEndTailRefreshPreservesLoadedOlderMessages() = runTest {
+        val transport = FakeSessionTransport()
+        transport.messages = """[{"id":"m-new","role":"user","content":"question"}]"""
+        transport.olderMessages = """[{"id":"m-old","role":"user","content":"older"}]"""
+        transport.polls = listOf(
+            """{"resp":"ok","version":1,"changed":true,"session_state":"running",
+               "active_turn":{"turn_id":"t-1","status":"active","text":"All "}}""",
+            """{"resp":"ok","version":2,"changed":true,"session_state":"idle",
+               "active_turn":{"turn_id":"t-1","status":"completed","text":"All done"}}""",
+            """{"resp":"ok","version":2,"changed":false,"session_state":"idle"}""",
+        )
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.LoadOlderMessages)
+        runCurrent()
+        transport.messages = """[{"id":"m-new","role":"user","content":"question"},
+            {"id":"t-1_assistant","turn_id":"t-1","role":"assistant","content":"All done","status":"completed"}]"""
+        advanceTimeBy(1_000)
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(listOf("m-old", "m-new", "t-1_assistant"),
+            ready.timeline?.persistedMessages?.map { it.id })
+        assertFalse(ready.hasMoreMessages)
+        assertNull(ready.timeline?.activeTurn)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
     fun aRefusedPermissionChangeLeavesTheSessionStanding() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
@@ -1452,6 +1601,7 @@ private class FakeSessionTransport : RemoteCommandTransport {
 
     /** When set, `send_message` fails below the desktop while the draft is kept. */
     var sendMessageFailure: RelayFailure? = null
+    var modelSelectionFailure: RelayFailure? = null
 
     /** When set, `create_session` fails below the desktop. */
     var createFailure: RelayFailure? = null
@@ -1485,6 +1635,9 @@ private class FakeSessionTransport : RemoteCommandTransport {
             null
         }
         commandGates[command.cmd]?.await()
+        if (command.cmd == "set_session_model") {
+            modelSelectionFailure?.let { throw RelayTransportException(it) }
+        }
         if (nonCancellableCommands.remove(command.cmd)) {
             suspendCoroutine { continuation -> lateCommandContinuations[command.cmd] = continuation }
         }

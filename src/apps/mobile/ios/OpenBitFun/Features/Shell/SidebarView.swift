@@ -148,8 +148,8 @@ struct SidebarView: View {
                    let anchor = anchors[path] {
                     let frame = proxy[anchor]
                     let menuHeight = HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities)
-                        ? 46 * 3 + MobileDesignGeometry.compactPopoverActionHeight + 16
-                        : MobileDesignGeometry.compactPopoverActionHeight * 2 + 16
+                        ? 46 * 3 + 16
+                        : MobileDesignGeometry.compactPopoverActionHeight + 16
                     ZStack(alignment: .topLeading) {
                         OpenBitFunTheme.transparent
                             .contentShape(Rectangle())
@@ -458,7 +458,8 @@ struct SidebarView: View {
                 directoryLoadStatus: workspace.directoryStatus,
                 onRetryDirectoryLoad: {
                     model.retryDirectoryWorkspace(device: device, workspace: scopedWorkspace)
-                }
+                },
+                createMenu: directoryCreateMenu(device: device, workspace: scopedWorkspace)
             )
         }
         if device.workspaces.count > visibleWorkspaceCount {
@@ -568,7 +569,11 @@ struct SidebarView: View {
                     }
                 },
                 onToggleCreate: {
-                    workspaceCreatePath = workspaceCreatePath == workspace.path ? nil : workspace.path
+                    if HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) {
+                        workspaceCreatePath = workspaceCreatePath == workspace.path ? nil : workspace.path
+                    } else {
+                        model.createRemoteSession(in: workspace, agentType: "code")
+                    }
                 },
                 onOpenWorkspace: { model.selectRemoteWorkspace(workspace) },
                 onOpenSession: { model.surface = .remote; model.select($0) },
@@ -769,6 +774,26 @@ struct SidebarView: View {
         .buttonStyle(.plain)
     }
 
+    private func directoryCreateMenu(device: MobileDeviceDirectoryEntry, workspace: MobileWorkspaceGroup) -> AnyView? {
+        // Capabilities belong to the connected target, never another directory device.
+        guard model.remoteExpectedDeviceKey == "account:\(device.id)",
+              HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) else { return nil }
+        return AnyView(Menu {
+            ForEach([HarnessProfile.minimal, .standard, .ultimate], id: \.name) { profile in
+                Button {
+                    model.openDirectoryRemoteDraft(device: device, workspace: workspace, agentType: profile.agentType)
+                } label: {
+                    HarnessProfileLabel(model: model, profile: profile)
+                }
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(OpenBitFunTheme.ink)
+                .frame(width: 30, height: 40)
+        })
+    }
+
     private func workspaceCreateMenu(_ workspace: MobileWorkspaceGroup) -> some View {
         VStack(spacing: 0) {
             if HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) {
@@ -788,10 +813,6 @@ struct SidebarView: View {
                     workspaceCreatePath = nil
                     model.createRemoteSession(in: workspace, agentType: "code")
                 }
-            }
-            workspaceCreateMenuRow("Cowork") {
-                workspaceCreatePath = nil
-                model.createRemoteSession(in: workspace, agentType: "Cowork")
             }
         }
         .openBitFunCompactPopoverSurface()
@@ -962,6 +983,7 @@ private struct SidebarWorkspaceRow: View {
     var selectedWorkspacePath: String? = nil
     var directoryLoadStatus = "READY"
     var onRetryDirectoryLoad: (() -> Void)? = nil
+    var createMenu: AnyView? = nil
     @State private var visibleSessionCount = 3
 
     private func isSelected(_ session: ChatSession) -> Bool {
@@ -1008,11 +1030,16 @@ private struct SidebarWorkspaceRow: View {
                 .accessibilityIdentifier("sidebar.workspace.\(workspace.deviceKey ?? "unknown").\(workspace.path)")
                 .accessibilityValue(Text(workspace.path))
                 Spacer(minLength: 0)
-                Button(action: onToggleCreate) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(OpenBitFunTheme.ink)
-                        .frame(width: 30, height: 40)
+                Group {
+                    if let createMenu { createMenu }
+                    else {
+                        Button(action: onToggleCreate) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .regular))
+                                .foregroundStyle(OpenBitFunTheme.ink)
+                                .frame(width: 30, height: 40)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(MobileLocalization.text("新建远程会话"))

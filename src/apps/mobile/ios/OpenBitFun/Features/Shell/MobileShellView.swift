@@ -336,12 +336,10 @@ struct MobileShellView: View {
             }
             if model.surface == .remote,
                model.remoteExpectedDeviceKey != nil,
-               model.connectionPhase != .connected {
-                ConnectionStatusBar(
-                    phase: model.connectionPhase,
-                    detail: model.coreErrorMessage,
-                    onRetry: model.verifyRemoteConnection
-                )
+               model.connectionPhase != .connected,
+               !model.remoteConversationLoading,
+               model.remoteSessionSelected || model.connectionPhase == .reconnecting || model.coreErrorMessage != nil {
+                RemoteConversationStatusBar(model: model)
             }
             if showsWelcomeHome {
                 WelcomeHomeView(model: model)
