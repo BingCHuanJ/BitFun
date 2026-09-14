@@ -584,7 +584,7 @@ public class RemoteWorkspaceStore internal constructor(
         _state.value = current.copy(download = RemoteFileDownloadUiState.Loading(target, 0, 0))
         val downloadGeneration = loadGeneration
         val downloadStopVersion = _stopVersion.value
-        fun downloadIsCurrent(): Boolean = targetEpoch == downloadEpoch && loadGeneration == downloadGeneration && _stopVersion.value == downloadStopVersion
+        fun downloadIsCurrent(): Boolean = loadGeneration == downloadGeneration && _stopVersion.value == downloadStopVersion
         downloadWork = scope.launch {
             var staging: TemporaryDownload? = null
             try {

@@ -54,7 +54,7 @@ class RemoteSessionStoreTest {
     @Test
     fun listsSessionsForTheWorkspaceTheDesktopHasOpen() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -79,7 +79,7 @@ class RemoteSessionStoreTest {
                 """{"resp":"ok","has_more":false,"sessions":[{"id":"branch","title":"Branch","agent_type":"code"}]}"""
             }
         }
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.LoadWorkspaceSessions("/other/repo/"))
         store.dispatch(RemoteSessionIntent.LoadWorkspaceSessions("/other/repo"))
@@ -104,7 +104,7 @@ class RemoteSessionStoreTest {
         val catalogGate = CompletableDeferred<Unit>()
         transport.commandGates["list_sessions"] = listGate
         transport.commandGates["get_model_catalog"] = catalogGate
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         runCurrent()
@@ -135,7 +135,7 @@ class RemoteSessionStoreTest {
         // Keep the catalog uncached so the replacement load has a real request
         // whose late completion can be exercised.
         transport.modelCatalogFailure = RelayFailure.Timeout
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -167,7 +167,7 @@ class RemoteSessionStoreTest {
     fun modelCatalogRemoteRejectedIsRetryableAndRefreshRecovers() = runTest {
         val transport = FakeSessionTransport()
         transport.modelCatalogFailure = RelayFailure.RemoteRejected("Unknown command")
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -196,7 +196,7 @@ class RemoteSessionStoreTest {
     fun modelCatalogMalformedResponseIsTypedAsRetryableFailure() = runTest {
         val transport = FakeSessionTransport()
         transport.modelCatalogFailure = RelayFailure.MalformedResponse
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -212,7 +212,7 @@ class RemoteSessionStoreTest {
     fun modelCatalogNetworkFailureIsTypedWithoutFailingTheSession() = runTest {
         val transport = FakeSessionTransport()
         transport.modelCatalogFailure = RelayFailure.Timeout
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -227,7 +227,7 @@ class RemoteSessionStoreTest {
     fun refreshModelCatalogRecoversFromATransientFailureAndUpdatesTheTimeline() = runTest {
         val transport = FakeSessionTransport()
         transport.modelCatalogFailure = RelayFailure.Timeout
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -263,7 +263,7 @@ class RemoteSessionStoreTest {
     @Test
     fun sendingPublishesPendingAndFailedMessagesWithoutPolling() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
         val gate = CompletableDeferred<Unit>()
@@ -287,7 +287,7 @@ class RemoteSessionStoreTest {
     @Test
     fun staleModelSelectionCannotMutateTheNewlyOpenedSession() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
         transport.commands.clear()
@@ -301,7 +301,7 @@ class RemoteSessionStoreTest {
     @Test
     fun modelFailurePreservesTypingThatArrivedWhileRequestWasPending() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
         val gate = CompletableDeferred<Unit>()
@@ -319,7 +319,7 @@ class RemoteSessionStoreTest {
     @Test
     fun selectingModelPublishesConfirmedSelectionWithoutAnotherPoll() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         store.dispatch(RemoteSessionIntent.Open("s-code"))
@@ -348,7 +348,7 @@ class RemoteSessionStoreTest {
     @Test
     fun hidesDesktopOnlyAcpSessions() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -361,7 +361,7 @@ class RemoteSessionStoreTest {
     fun reportsNoWorkspaceWithoutAskingForSessions() = runTest {
         val transport = FakeSessionTransport()
         transport.workspacePath = ""
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -374,7 +374,7 @@ class RemoteSessionStoreTest {
     @Test
     fun searchSendsATrimmedQueryAndKeepsTheListOnScreen() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -391,7 +391,7 @@ class RemoteSessionStoreTest {
     @Test
     fun agentFilterKeepsLegacyAgenticSessionsInTheCodeTab() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -408,7 +408,7 @@ class RemoteSessionStoreTest {
     fun initialLoadFollowsServerPagesWithoutRepeatingRows() = runTest {
         val transport = FakeSessionTransport()
         transport.paged = true
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -421,7 +421,7 @@ class RemoteSessionStoreTest {
     @Test
     fun createSessionNamesTheSessionAndOpensIt() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -450,7 +450,7 @@ class RemoteSessionStoreTest {
     @Test
     fun createPreemptsBlockedRefreshAndPublishesRevisionLinkedCommit() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         val beforeRefreshReady = assertIs<RemoteSessionUiState.Ready>(store.state.value)
@@ -486,7 +486,7 @@ class RemoteSessionStoreTest {
     @Test
     fun staleCommittedCreateCancellationDoesNotClearNewerBusyState() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         transport.commandGates["get_permission_mode"] = CompletableDeferred()
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("committed-cancel", "code", "", "", null, "/repo"))
         runCurrent()
@@ -508,7 +508,7 @@ class RemoteSessionStoreTest {
             paged = true
             pagedLimit = 40
         }
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -534,7 +534,7 @@ class RemoteSessionStoreTest {
             paged = true
             pagedLimit = 40
         }
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         store.reconcileConfirmedCreatedSession(RemoteSession(
@@ -566,7 +566,7 @@ class RemoteSessionStoreTest {
     @Test
     fun staleDeleteCannotResetNewlyOpenedTimeline() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         store.dispatch(RemoteSessionIntent.Open("s-code"))
@@ -593,7 +593,7 @@ class RemoteSessionStoreTest {
     @Test
     fun createTransportFailureIsTypedAndRetryable() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         transport.createFailure = RelayFailure.Timeout
@@ -620,7 +620,7 @@ class RemoteSessionStoreTest {
     fun malformedCreateResponseIsUnsupported() = runTest {
         val transport = FakeSessionTransport()
         transport.createFailure = RelayFailure.MalformedResponse
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("malformed-create", "code", "", "", null))
         runCurrent()
         val failed = assertIs<CreateSessionOperationState.Failed>(store.createOperation.value)
@@ -632,7 +632,7 @@ class RemoteSessionStoreTest {
     fun rejectedCreateIsNotUnsupported() = runTest {
         val transport = FakeSessionTransport()
         transport.createFailure = RelayFailure.RemoteRejected("denied")
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("rejected-create", "code", "", "", null))
         runCurrent()
         val failed = assertIs<CreateSessionOperationState.Failed>(store.createOperation.value)
@@ -643,7 +643,7 @@ class RemoteSessionStoreTest {
     @Test
     fun repeatedCreateRequestIdUsesLatestInternalGeneration() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         transport.createFailure = RelayFailure.RemoteRejected("first")
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("reused", "code", "", "", null))
         runCurrent()
@@ -661,7 +661,7 @@ class RemoteSessionStoreTest {
     fun stopWhileModelInitializationIsGatedKeepsCommittedCreateSucceeded() = runTest {
         val transport = FakeSessionTransport()
         transport.commandGates["set_session_model"] = CompletableDeferred()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("model-gate", "code", "", "", "model-primary", "/repo"))
         runCurrent()
 
@@ -679,7 +679,7 @@ class RemoteSessionStoreTest {
     fun stopWhileOpenInitializationIsGatedKeepsCommittedProjection() = runTest {
         val transport = FakeSessionTransport()
         transport.commandGates["get_session_messages"] = CompletableDeferred()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("open-gate", "code", "", "", null, "/repo"))
         runCurrent()
 
@@ -694,7 +694,7 @@ class RemoteSessionStoreTest {
     fun stopWhileInitialMessageIsGatedKeepsCommittedCreateSucceeded() = runTest {
         val transport = FakeSessionTransport()
         transport.commandGates["send_message"] = CompletableDeferred()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("send-gate", "code", "", "hello", null, "/repo"))
         runCurrent()
 
@@ -707,7 +707,7 @@ class RemoteSessionStoreTest {
     @Test
     fun postCreateInitializationFailureDoesNotRollBackSucceededOutcome() = runTest {
         val transport = FakeSessionTransport().apply { sendMessageFailure = RelayFailure.Timeout }
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("send-fails", "code", "", "hello", null, "/repo"))
         runCurrent()
 
@@ -720,7 +720,7 @@ class RemoteSessionStoreTest {
     @Test
     fun sessionStoreStopCancelsCreateOperation() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.CreateSessionOperation("stop-create", "code", "", "", null))
         store.stop()
         assertIs<CreateSessionOperationState.Cancelled>(store.createOperation.value)
@@ -886,7 +886,7 @@ class RemoteSessionStoreTest {
     @Test
     fun createSessionUsesTheWorkspaceTheDesktopIsOnNow() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -911,7 +911,7 @@ class RemoteSessionStoreTest {
                 return if (command.cmd == "create_session") RelayJson.decodeFromString(deserializer, """{"resp":"ok","session_id":"s-new","workspace_path":"/runtime/assistant"}""") else base.send(deserializer, command, timeoutMs)
             }
         }
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.CreateSession("Claw")); runCurrent()
         val create = commands.first { it.cmd == "create_session" }
         assertEquals(null, create.workspacePath)
@@ -924,7 +924,7 @@ class RemoteSessionStoreTest {
     @Test
     fun crossWorkspaceCreateDoesNotSwitchTheDesktopAndStaysProjected() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         transport.commands.clear()
@@ -956,7 +956,7 @@ class RemoteSessionStoreTest {
     @Test
     fun deleteSessionDropsTheRowAndClosesTheOpenConversation() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         store.dispatch(RemoteSessionIntent.Open("s-code"))
@@ -976,7 +976,7 @@ class RemoteSessionStoreTest {
     @Test
     fun renameSessionUpdatesTheRowInPlace() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -991,7 +991,7 @@ class RemoteSessionStoreTest {
     @Test
     fun answerQuestionSendsBothSpellingsTheDesktopForwards() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -1006,7 +1006,7 @@ class RemoteSessionStoreTest {
     @Test
     fun structuredQuestionAnswersUseIndexedTextAndChoiceValues() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
 
@@ -1031,7 +1031,7 @@ class RemoteSessionStoreTest {
     fun theDesktopsOwnRejectionReachesTheScreen() = runTest {
         val transport = FakeSessionTransport()
         transport.rejection = "Session is busy running a turn"
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -1046,7 +1046,7 @@ class RemoteSessionStoreTest {
     fun aTimeoutIsNotReportedAsAGenericTransportFailure() = runTest {
         val transport = FakeSessionTransport()
         transport.failure = RelayFailure.Timeout
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
@@ -1060,7 +1060,7 @@ class RemoteSessionStoreTest {
     fun unknownPermissionModeSurfacesAsUnknownNotAsk() = runTest {
         val transport = FakeSessionTransport()
         transport.permissionModeJson = """{"resp":"ok","mode":"future_mode"}"""
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
@@ -1075,7 +1075,7 @@ class RemoteSessionStoreTest {
     fun missingPermissionModeSurfacesAsUnknown() = runTest {
         val transport = FakeSessionTransport()
         transport.permissionModeJson = """{"resp":"ok"}"""
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
@@ -1089,7 +1089,7 @@ class RemoteSessionStoreTest {
     @Test
     fun editedToolApprovalPreservesTheJsonPatchOnTheWire() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
@@ -1108,7 +1108,7 @@ class RemoteSessionStoreTest {
     @Test
     fun plainToolApprovalStillSendsConfirmTool() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
@@ -1124,7 +1124,7 @@ class RemoteSessionStoreTest {
     fun aSessionStillOpensWhenItsPermissionModeCannotBeRead() = runTest {
         val transport = FakeSessionTransport()
         transport.permissionFailure = RelayFailure.Timeout
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
 
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
@@ -1143,9 +1143,9 @@ class RemoteSessionStoreTest {
         for (supported in listOf(false, true)) {
             val transport = FakeSessionTransport().apply {
                 capabilitiesJson = if (supported) "[\"dialog_steer_v1\"]" else "[]"
-                polls = listOf("""{"resp":"ok","version":1,"changed":true,"session_state":"running","active_turn":{"turn_id":"active-1","status":"active","text":"Working"}}""")
+                initialEvents = listOf(richRecord("s-code", "active-1", 0, 1, "inprogress", "Working"))
             }
-            val store = RemoteSessionStore.create(this, transport)
+            val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
             store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
             store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
             store.dispatch(RemoteSessionIntent.UpdateDraft("steer me"))
@@ -1169,7 +1169,7 @@ class RemoteSessionStoreTest {
             val transport = FakeSessionTransport().apply {
                 capabilitiesJson = if (supported) "[\"plan_build_v1\"]" else "[]"
             }
-            val store = RemoteSessionStore.create(this, transport)
+            val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
             store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
             store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
             store.dispatch(RemoteSessionIntent.UpdateDraft("keep draft"))
@@ -1192,7 +1192,7 @@ class RemoteSessionStoreTest {
     @Test
     fun sendMessageCarriesTheSessionsAgentType() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         store.dispatch(RemoteSessionIntent.Open("s-code"))
@@ -1213,7 +1213,7 @@ class RemoteSessionStoreTest {
     @Test
     fun imageOnlyMessagesAreSentAndAcknowledgedForNativePickers() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
         val images = listOf(ComposerImage("photo-1", "data:image/png;base64,abc", "image/png"))
@@ -1233,7 +1233,7 @@ class RemoteSessionStoreTest {
     @Test
     fun refreshCancellingSendDoesNotLeavePendingTurnForever() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
         transport.commandGates["send_message"] = CompletableDeferred<Unit>()
@@ -1250,7 +1250,7 @@ class RemoteSessionStoreTest {
     @Test
     fun sendPublishesPendingTurnBeforeAckAndClearsItOnFailure() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
         val gate = CompletableDeferred<Unit>()
@@ -1274,7 +1274,7 @@ class RemoteSessionStoreTest {
     @Test
     fun imageSendFailureDoesNotConsumeAttachmentsAndAckKeepsNewTyping() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
         val images = listOf(ComposerImage("photo-1", "data:image/png;base64,abc", "image/png"))
@@ -1310,7 +1310,7 @@ class RemoteSessionStoreTest {
     @Test
     fun acknowledgementDoesNotClearAnIdenticalNewDraft() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
         store.dispatch(RemoteSessionIntent.UpdateDraft("same question"))
@@ -1329,7 +1329,7 @@ class RemoteSessionStoreTest {
     @Test
     fun sendMessageFallsBackToTheLocallyCreatedRecordWhenTheFilterHidesTheSession() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         store.dispatch(RemoteSessionIntent.SetAgentFilter(SessionAgentFilter.CODE))
@@ -1359,7 +1359,7 @@ class RemoteSessionStoreTest {
     @Test
     fun sendFailureKeepsTheDraftTheComposerWasAboutToSend() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
         store.dispatch(RemoteSessionIntent.Open("s-code"))
@@ -1379,7 +1379,7 @@ class RemoteSessionStoreTest {
     @Test
     fun idleHealthRecoversWithoutDiscardingListAndStopsInBackground() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
         val sessions = assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions
         transport.pingFailure = RelayFailure.NetworkUnreachable
@@ -1399,7 +1399,7 @@ class RemoteSessionStoreTest {
     @Test
     fun slowHealthProbesDoNotOverlapAndLateResultsCannotChangeStoppedState() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
         transport.nonCancellableCommands += "ping"
         store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
@@ -1417,7 +1417,7 @@ class RemoteSessionStoreTest {
     @Test
     fun openTranscriptUsesDurableStreamInsteadOfExtraPings() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
         store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
         advanceTimeBy(30_000); runCurrent()
@@ -1464,7 +1464,7 @@ class RemoteSessionStoreTest {
     fun refreshRetriesThePermissionModeAlone() = runTest {
         val transport = FakeSessionTransport()
         transport.permissionFailure = RelayFailure.Timeout
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
 
@@ -1506,38 +1506,28 @@ class RemoteSessionStoreTest {
 
 
     @Test
-    fun turnEndTailRefreshPreservesLoadedOlderMessages() = runTest {
-        val transport = FakeSessionTransport()
-        transport.messages = """[{"id":"m-new","role":"user","content":"question"}]"""
-        transport.olderMessages = """[{"id":"m-old","role":"user","content":"older"}]"""
-        transport.polls = listOf(
-            """{"resp":"ok","version":1,"changed":true,"session_state":"running",
-               "active_turn":{"turn_id":"t-1","status":"active","text":"All "}}""",
-            """{"resp":"ok","version":2,"changed":true,"session_state":"idle",
-               "active_turn":{"turn_id":"t-1","status":"completed","text":"All done"}}""",
-            """{"resp":"ok","version":2,"changed":false,"session_state":"idle"}""",
-        )
-        val store = RemoteSessionStore.create(this, transport)
-        store.dispatch(RemoteSessionIntent.Open("s-code"))
-        runCurrent()
-        store.dispatch(RemoteSessionIntent.LoadOlderMessages)
-        runCurrent()
-        transport.messages = """[{"id":"m-new","role":"user","content":"question"},
-            {"id":"t-1_assistant","turn_id":"t-1","role":"assistant","content":"All done","status":"completed"}]"""
-        advanceTimeBy(1_000)
-        runCurrent()
+    fun durableCompletionPreservesLoadedOlderRecords() = runTest {
+        val transport = FakeSessionTransport().apply {
+            initialEvents = listOf(richRecord("s-code", "new", 1, 1, "completed", "question"), historyReady(true))
+            olderEvents = listOf(richRecord("s-code", "old", 0, 1, "completed", "older"), historyReady(false))
+        }
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
+        store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
+        store.dispatch(RemoteSessionIntent.LoadOlderMessages); runCurrent()
+        transport.streamEvents.emit(richRecord("s-code", "t-1", 2, 1, "inprogress", "All ")); runCurrent()
+        transport.streamEvents.emit(richRecord("s-code", "t-1", 2, 2, "completed", "All done")); runCurrent()
         val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
-        assertEquals(listOf("m-old", "m-new", "t-1_assistant"),
-            ready.timeline?.persistedMessages?.map { it.id })
+        assertEquals(listOf("old_assistant", "new_assistant", "t-1_assistant"),
+            ready.timeline?.persistedMessages?.filter { it.role == "assistant" }?.map { it.id })
         assertFalse(ready.hasMoreMessages)
         assertNull(ready.timeline?.activeTurn)
-        store.dispatch(RemoteSessionIntent.Stop)
+        store.stop()
     }
 
     @Test
     fun aRefusedPermissionChangeLeavesTheSessionStanding() = runTest {
         val transport = FakeSessionTransport()
-        val store = RemoteSessionStore.create(this, transport)
+        val store = RemoteSessionStore(this, transport, relayStreamStore = TestRelayStreamStore())
         store.dispatch(RemoteSessionIntent.Open("s-code"))
         runCurrent()
 
@@ -1741,7 +1731,7 @@ private class FakeSessionTransport : RemoteCommandTransport, RemoteSessionStream
     }
 }
 
-private class TestRelayStreamStore : RelayStreamStore {
+internal class TestRelayStreamStore : RelayStreamStore {
     override fun eventIds(stream: String) = emptyList<String>()
     override fun cursor(stream: String) = 0L
     override fun fragments(stream: String, eventId: String) = emptyList<String>()
@@ -1752,7 +1742,7 @@ private fun streamEvent(name: String, text: String = ""): JsonObject = buildJson
     put("payload", buildJsonObject { put("sessionId", "s-code"); put("turnId", "t-1"); put("text", text) })
 }
 
-private fun richRecord(session: String, turn: String, index: Int, revision: Long, status: String, text: String): JsonObject = buildJsonObject {
+internal fun richRecord(session: String, turn: String, index: Int, revision: Long, status: String, text: String): JsonObject = buildJsonObject {
     put("session_id", session); put("event", "session-record")
     put("payload", buildJsonObject {
         put("sessionId", session); put("id", "item/$turn-text"); put("revision", revision)

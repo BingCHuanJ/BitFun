@@ -883,7 +883,7 @@ public class RemoteSessionStore internal constructor(
                 var caughtUp = false
                 source.subscribe(sessionId, PersistentSessionReplica(store, source.streamIdentity + ":session:" + sessionId),
                     { handleFailure(it, _state.value as? RemoteSessionUiState.Ready) },
-                    { caughtUp = true; publishDurableTimeline(); persistTranscript(sessionId) },
+                    { caughtUp = true; publishDurableTimeline(); persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore) },
                 ).collect { event ->
                     check(event["session_id"]?.jsonPrimitive?.content == sessionId) { "Session binding mismatch" }
                     val payload = event["payload"] as? JsonObject ?: error("Missing session event payload")
@@ -904,7 +904,7 @@ public class RemoteSessionStore internal constructor(
                                 "failed" -> ChatSyncPhase.ERROR
                                 else -> ChatSyncPhase.IDLE
                             })
-                            if (caughtUp) { publishDurableTimeline(); persistTranscript(sessionId) }
+                            if (caughtUp) { publishDurableTimeline(); persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore) }
                         }
                         "relay://session-resumed", "session-interaction-changed" -> permissionMailbox.invalidate()
                         "relay://session-ready" -> {

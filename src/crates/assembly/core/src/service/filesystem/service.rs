@@ -692,7 +692,13 @@ mod tests {
     async fn explicit_local_scope_does_not_follow_a_same_path_remote_workspace() {
         let temp = tempfile::tempdir().expect("tempdir");
         let root = temp.path().to_string_lossy().to_string();
-        std::fs::write(temp.path().join("local.txt"), "local bytes").unwrap();
+        openbitfun_services_core::filesystem::FileSystemService::default()
+            .write_text_file(
+                &temp.path().join("local.txt").to_string_lossy(),
+                "local bytes",
+            )
+            .await
+            .unwrap();
         let manager = init_remote_workspace_manager();
         manager
             .register_remote_workspace(
@@ -786,7 +792,13 @@ mod saved_directory_tests {
     #[tokio::test]
     async fn unknown_saved_profile_cannot_read_a_same_named_local_directory() {
         let temp = tempfile::tempdir().unwrap();
-        std::fs::write(temp.path().join("private-local.txt"), "local").unwrap();
+        openbitfun_services_core::filesystem::FileSystemService::default()
+            .write_text_file(
+                &temp.path().join("private-local.txt").to_string_lossy(),
+                "local",
+            )
+            .await
+            .unwrap();
         let ssh =
             crate::service::remote_ssh::SSHConnectionManager::new(temp.path().join("profiles"));
         let files = crate::service::remote_ssh::RemoteFileService::new(Arc::new(

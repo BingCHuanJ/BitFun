@@ -38,7 +38,7 @@ class AccountDeviceLinkTest {
         for (invalid in listOf(
             link.replace("https:", "http:"), link.replace("remote.openbitfun.com", "evil.example"),
             link.replace("remote.openbitfun.com", "user@remote.openbitfun.com"),
-            link.replace("/v/1.0.0/", "/relay/"), link + "&did=foreign", link + "&pk=untrusted", link + "&relay=evil", link.replace("did=desktop-1", "room=old"),
+            link.replace("/v/1.0.1/", "/relay/"), link + "&did=foreign", link + "&pk=untrusted", link + "&relay=evil", link.replace("did=desktop-1", "room=old"),
             link.replace("did=desktop-1", "did=../bad"),
         )) {
             val result = resolveAccountDeviceLink(invalid, ready)
