@@ -32,7 +32,7 @@ export class SessionEventReducer {
       const kind=payload.contentType==='thinking'?'thinking':'text';
       const text=typeof payload.text==='string'?payload.text:'';
       const round=String(payload.roundId??'');const attempt=String(payload.attemptId??'');
-      const items=this.active.items!;const last=items.at(-1);
+      const items=this.active.items!;const last=items.slice(-1)[0];
       if (last?.type===kind && round===this.positions.get(last)?.round && attempt===this.positions.get(last)?.attempt) last.content=(last.content??'')+text;
       else { const item:ChatMessageItem={type:kind,content:text};items.push(item);this.positions.set(item,{round,attempt}); }
       this.active[kind]+=text;

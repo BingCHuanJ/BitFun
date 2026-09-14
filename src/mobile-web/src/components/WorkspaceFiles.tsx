@@ -13,7 +13,7 @@ interface Entry { path: string; name: string; isDirectory: boolean; lastModified
 interface DirectoryPage { children: Entry[]; hasMore: boolean; offset: number; limit: number }
 type SortOrder = 'name-asc' | 'name-desc' | 'modified-desc' | 'modified-asc';
 type FileAction = { kind: 'file' } | { kind: 'folder' } | { kind: 'rename'; entry: Entry } | { kind: 'delete'; entry: Entry };
-const basename = (path: string) => path.replace(/\/$/, '').split('/').at(-1) || '/';
+const basename = (path: string) => path.replace(/\/$/, '').split('/').slice(-1)[0] || '/';
 const parentPath = (path: string) => path.replace(/\/$/, '').replace(/\/[^/]*$/, '') || '/';
 const joinPath = (directory: string, name: string) => name.startsWith('/') ? name : `${directory.replace(/\/$/, '')}/${name}`;
 

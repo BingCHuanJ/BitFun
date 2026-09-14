@@ -103,13 +103,13 @@ export async function openSessionStream(options: {
       const sorted=[...page.messages].sort((a,b)=>a.seq-b.seq);
       if(!sorted.length){hasMore=false;break;}
       if(sorted.some((message,index)=>message.content.t!=='encrypted'||(index>0&&message.seq!==sorted[index-1].seq+1)))throw new Error('History sequence gap');
-      if(messages.length&&sorted.at(-1)!.seq!==before-1)throw new Error('History page gap');
-      if(sorted.at(-1)!.seq>=before)throw new Error('History pagination did not advance');
+      if(messages.length&&sorted.slice(-1)[0]!.seq!==before-1)throw new Error('History page gap');
+      if(sorted.slice(-1)[0]!.seq>=before)throw new Error('History pagination did not advance');
       messages.unshift(...sorted);before=sorted[0].seq;hasMore=page.hasMore;
       if(parseSessionFragment(messages[0].content.c).index===0)break;
       if(!hasMore)throw new Error('History starts within an incomplete event');
     }while(hasMore);
-    const cursor=Math.max(await replica.cursor(),messages.at(-1)?.seq??0);
+    const cursor=Math.max(await replica.cursor(),messages.slice(-1)[0]?.seq??0);
     history={hasMore,oldestSeq:messages[0]?.seq??history.oldestSeq,cursor};
     await replica.apply(messages,cursor,history);
     if(active)options.onHistoryState?.(history);

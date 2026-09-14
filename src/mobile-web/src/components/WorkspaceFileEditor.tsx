@@ -18,7 +18,7 @@ export function WorkspaceFileEditor({ path, content, dirty, busy, error, onChang
   const back = () => { if (!busy) { if (dirty) setDiscard(true); else onBack(); } };
   return <>
     <MobileSheet className="runtime-file-editor" open showHandle={false} closeOnPointerOutside={false}
-      title={<>{path.split('/').at(-1)}{dirty && <span className="runtime-file-editor__dirty"> •</span>}</>}
+      title={<>{path.split('/').slice(-1)[0]}{dirty && <span className="runtime-file-editor__dirty"> •</span>}</>}
       description={path} onOpenChange={back}
       headerAction={<div className="runtime-file-editor__actions">
         <MobileButton size="sm" appearance="plain" leading={<ArrowLeft size={17} />} disabled={busy} onClick={back}>{t('workspace.files')}</MobileButton>

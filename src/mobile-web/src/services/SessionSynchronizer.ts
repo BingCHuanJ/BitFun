@@ -25,7 +25,7 @@ export class SessionSynchronizer {
   async loadOlder():Promise<void> { await this.unsubscribe?.loadOlder(); }
   private publish():void {
     const messages=[...this.turns.values()].sort((a,b)=>a.index-b.index).flatMap(turn=>turn.messages);
-    const last=messages.at(-1);
+    const last=messages.slice(-1)[0];
     const active=last?.role==='assistant'&&last.status==='streaming'?last:null;
     const controls=[...this.controls.values()].filter(control=>control.turnId===active?.turn_id).map(control=>control.tool);
     const tools=active?.tools?.map(tool=>controls.find(control=>control.id===tool.id)??tool)??[];
