@@ -60,6 +60,7 @@ extension MobileAppModel {
 
     private func clearTargetScopedRemoteProjection(boundTargetKey targetKey: String, epoch: UInt64) {
         resetRemoteConversationOpen()
+        pendingComposerSend = nil
         invalidateTargetScopedFileTransfers()
         remoteOpenedSessionID = nil
         remoteInitialSessionReady = false
@@ -93,6 +94,7 @@ extension MobileAppModel {
            pending.epoch != epoch || directoryTargetKey(forRawDeviceKey: pending.deviceKey) != targetKey {
             pendingDirectorySession = nil
         }
+        routePendingDirectorySession()
         if let pending = pendingDirectoryWorkspace,
            pending.epoch != epoch || directoryTargetKey(forRawDeviceKey: pending.deviceKey) != targetKey {
             pendingDirectoryWorkspace = nil
@@ -208,7 +210,8 @@ extension MobileAppModel {
 
     func openDirectoryRemoteDraft(
         device: MobileDeviceDirectoryEntry,
-        workspace: MobileWorkspaceGroup
+        workspace: MobileWorkspaceGroup,
+        agentType: String = "code"
     ) {
         guard !remoteCreateSubmitting, remoteCreateRequestID == nil else {
             showToast(localized("远程会话当前不可创建，请重试"))
@@ -235,6 +238,7 @@ extension MobileAppModel {
             rawDeviceKey: device.id,
             workspacePath: workspace.path,
             normalizedWorkspacePath: normalizedSessionWorkspacePath(workspace.path),
+            agentType: agentType,
             epoch: epoch,
             selectionRequested: false
         )
@@ -293,11 +297,12 @@ extension MobileAppModel {
             remoteTargetEpoch &+ (targetIsCurrent ? 0 : 1)
         )
         if targetIsCurrent {
-            guard remoteConnected else {
+            guard remoteConnected || accountBusy || connectionPhase == .reconnecting else {
                 pendingDirectorySession = nil
                 showToast(localized("远程会话连接已失效，请重新选择设备后重试"))
                 return
             }
+            routePendingDirectorySession()
             openPendingDirectorySessionIfReady()
             return
         }
@@ -313,6 +318,22 @@ extension MobileAppModel {
             return
         }
         selectRemoteDevice(device)
+        routePendingDirectorySession()
+        openPendingDirectorySessionIfReady()
+    }
+
+    // Navigation is immediate; authority readiness only gates the remote request.
+    // Keep the same deferred skeleton gate as HarmonyOS, starting at the tap.
+    private func routePendingDirectorySession() {
+        guard let pending = pendingDirectorySession,
+              pending.epoch == remoteTargetEpoch,
+              remoteExpectedDeviceKey == directoryTargetKey(forRawDeviceKey: pending.deviceKey) else { return }
+        surface = .remote
+        drawerOpen = false
+        remoteSessionSelected = true
+        if remoteConversationOpeningSessionID != pending.sessionID {
+            beginRemoteConversationOpen(sessionID: pending.sessionID)
+        }
     }
 
     private func openPendingDirectorySessionIfReady() {
@@ -327,11 +348,8 @@ extension MobileAppModel {
               remoteInitialSessionReady,
               remoteInitialWorkspaceReady,
               !workspaceLoadFailed else { return }
+        routePendingDirectorySession()
         pendingDirectorySession = nil
-        surface = .remote
-        drawerOpen = false
-        remoteSessionSelected = true
-        beginRemoteConversationOpen(sessionID: pending.sessionID)
         selectedSessionID = pending.sessionID
         coreAdapter?.openRemoteSession(sessionID: pending.sessionID)
     }
@@ -404,10 +422,19 @@ extension MobileAppModel {
         }
         let selectedPath = workspaceCatalog.first(where: { $0.selected })?.path ?? ""
         if selectedPath == pending.workspacePath {
+            guard remoteCreateInteraction.canSubmit else {
+                mobilePerformanceLog.error("Directory create blocked connected=\(self.remoteConnected) switching=\(self.accountBusy) workspaceReady=\(self.remoteCreateWorkspacePhase == .ready) selecting=\(self.workspaceSelectionBusy) submitting=\(self.remoteCreateSubmitting) activeTurn=\(self.activeTurnID != nil) sending=\(self.isSending)")
+                pendingDirectoryRemoteDraft = nil
+                showToast(localized("远程会话当前不可创建，请重试"))
+                return
+            }
             pendingDirectoryRemoteDraft = nil
             surface = .remote
             drawerOpen = false
-            remoteCreateOpen = true
+            createRemoteSession(
+                agentType: pending.agentType, title: "", instruction: "",
+                workspacePath: pending.workspacePath
+            )
             return
         }
         guard !pending.selectionRequested else { return }
@@ -651,6 +678,9 @@ extension MobileAppModel {
         default:
             break
         }
+        if !remoteCreateOpen, !remoteCreateSubmitting, let error = remoteCreateError {
+            showToast(error)
+        }
     }
 
     func deleteRemoteSession(_ session: ChatSession) {
@@ -727,19 +757,53 @@ extension MobileAppModel {
             openedSessionID: remoteOpenedSessionID,
             connected: remoteConnected && connectionPhase == .connected,
             busy: busy,
-            sending: isSending
+            sending: false // An active remote turn accepts steering or legacy queued messages.
         )
     }
 
-    func sendRemote() {
+    @discardableResult
+    func sendRemote() -> Bool {
         let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty || !composerImages.isEmpty,
               let sessionID = remoteSendSessionID,
-              let coreAdapter else { return }
+              let coreAdapter else { return false }
+        mobilePerformanceLog.info("Composer send accepted characters=\(value.count) rows=\(self.timelineRows.count) user_rows=\(self.timelineRows.filter { $0.kind == "USER" }.count) generation=\(self.composerSendGeneration)")
         let images = composerImages
+        pendingComposerSend = PendingComposerSend(
+            sessionID: sessionID, text: draft, images: images,
+            previousAckID: lastAppliedRemoteSendID
+        )
+        draft = ""
+        composerImages = []
+        composerSendGeneration &+= 1
         isSending = true
         busy = true
         coreAdapter.sendRemote(sessionID: sessionID, content: value, images: images)
+        return true
+    }
+
+    private func settleComposerSend(ack: SentChatMessage? = nil) {
+        guard let pending = pendingComposerSend else { return }
+        let succeeded = ack.map {
+            $0.sessionId == pending.sessionID && $0.id != pending.previousAckID &&
+                $0.content == pending.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        } ?? false
+        pendingComposerSend = nil
+        if ComposerSendSettlementPolicy.shouldRestore(
+            sentSession: pending.sessionID, currentSession: selectedSessionID,
+            acknowledged: succeeded, draftIsEmpty: draft.isEmpty,
+            attachmentsAreEmpty: composerImages.isEmpty
+        ) {
+            draft = pending.text
+            composerImages = pending.images
+        }
+    }
+
+    func buildRemotePlan(path: String, name: String) {
+        guard remoteHostCapabilities.contains("plan_build_v1"), !isSending,
+              let sessionID = remoteSendSessionID, !path.isEmpty else { return }
+        busy = true
+        coreAdapter?.buildRemotePlan(sessionID: sessionID, path: path, name: name)
     }
 
     func approveTool(_ toolID: String, updatedInput: String? = nil) {
@@ -803,6 +867,7 @@ extension MobileAppModel {
             remoteOpenedSessionID = nil
             remoteInitialSessionReady = false
             if let failed = state as? RemoteSessionUiStateFailed {
+                settleComposerSend()
                 resetRemoteConversationOpen()
                 let detail = failed.remoteMessage ?? failed.reason.name
                 remoteConnected = false
@@ -902,14 +967,11 @@ extension MobileAppModel {
             )
         }
         setPublishedIfChanged(\.busy, to: ready.busy)
+        if !ready.busy { settleComposerSend(ack: ready.lastSentMessage) }
         if let sent = ready.lastSentMessage,
            sent.sessionId == selectedSessionID,
            sent.id != lastAppliedRemoteSendID {
             lastAppliedRemoteSendID = sent.id
-            if draft.trimmingCharacters(in: .whitespacesAndNewlines) == sent.content {
-                draft = ""
-            }
-            composerImages.removeAll { sent.imageIds.contains($0.id) }
         }
         setPublishedIfChanged(\.remoteQuery, to: ready.query)
         setPublishedIfChanged(\.remoteAgentFilter, to: ready.agentFilter.name)
@@ -917,8 +979,11 @@ extension MobileAppModel {
         setPublishedIfChanged(\.remoteHasMoreMessages, to: ready.hasMoreMessages)
         setPublishedIfChanged(\.remotePermissionMode, to: ready.permissionMode?.name ?? remotePermissionMode)
         setPublishedIfChanged(\.remotePermissionFailure, to: ready.permissionModeFailure?.name)
-        activeTurnID = ready.timeline?.activeTurn?.turnId
-        setPublishedIfChanged(\.isSending, to: ready.timeline?.activeTurn != nil)
+        let acceptsTimeline = remoteConversationOpeningSessionID.map {
+            ready.timeline?.sessionId == $0
+        } ?? true
+        activeTurnID = acceptsTimeline ? ready.timeline?.activeTurn?.turnId : nil
+        setPublishedIfChanged(\.isSending, to: acceptsTimeline && ready.timeline?.activeTurn != nil)
         let projectedModelOptions = ready.createModelOptions(fallbackLabel: localized("模型")).map { option in
             ComposerModelOption(
                 id: option.id,
@@ -929,9 +994,22 @@ extension MobileAppModel {
             )
         }
         setPublishedIfChanged(\.modelOptions, to: projectedModelOptions)
-        if let timeline = ready.timeline {
-            let projectedRows = timeline.conversationRows().map(Self.mapConversationRow)
+        if acceptsTimeline, let timeline = ready.timeline {
+            let projectedRows = MobileConversationRow.reconcile(
+                timeline.conversationRows().map(Self.mapConversationRow), with: timelineRows)
             if timelineRows != projectedRows {
+                let users = projectedRows.filter { $0.kind == "USER" }
+                let previousUsers = timelineRows.filter { $0.kind == "USER" }
+                let removedUsers = Set(previousUsers.map(\.id)).subtracting(users.map(\.id)).count
+                mobilePerformanceLog.info("Timeline projection rows=\(projectedRows.count) user_rows=\(users.count) previous_user_rows=\(previousUsers.count) removed_user_ids=\(removedUsers) pending_users=\(users.filter(\.pending).count) live_rows=\(projectedRows.filter(\.live).count) blocks=\(projectedRows.reduce(0) { $0 + $1.blocks.count }) busy=\(ready.busy)")
+                #if DEBUG
+                if users.map(\.id) != previousUsers.map(\.id) {
+                    let identities = timeline.persistedMessages.filter { $0.role == "user" }.map {
+                        "id=\($0.id),turn=\($0.turnId ?? "none"),time=\($0.timestamp ?? "none"),chars=\($0.text.count)"
+                    }.joined(separator: ";")
+                    mobilePerformanceLog.info("Timeline user identities session=\(timeline.sessionId, privacy: .public) persisted=\(identities, privacy: .public) optimistic=\(timeline.optimisticMessages.count)")
+                }
+                #endif
                 timelineRows = projectedRows
                 messages = projectedRows.compactMap { row in
                     guard row.kind != "EMPTY" else { return nil }
@@ -1010,6 +1088,13 @@ extension MobileAppModel {
             remoteInitialWorkspaceReady = false
         }
         if state is RemoteWorkspaceUiStateFailed || readyState?.loadFailure == true {
+            if pendingDirectorySession != nil {
+                pendingDirectorySession = nil
+                resetRemoteConversationOpen()
+                remoteSessionSelected = false
+                busy = false
+                showToast(localized("工作区加载失败，点按重试"))
+            }
             pendingRemoteSessionRefreshWorkspacePath = nil
             if pendingRemoteWorkspaceCreate != nil || pendingRemoteAssistantCreate ||
                 pendingDirectoryRemoteDraft != nil {

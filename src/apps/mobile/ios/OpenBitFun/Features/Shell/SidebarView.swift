@@ -72,15 +72,19 @@ struct SidebarView: View {
                 if searchVisible {
                     searchField
                 }
-                ZStack(alignment: .bottom) {
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            workspaceSection
-                        }
-                        .padding(.bottom, showsPrimaryNavigation ? 84 : 142)
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        MiniAppsButton(model: model, sidebar: true)
+                        workspaceSection
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 12)
                     }
-                    footer
                 }
+                .frame(minHeight: 0, maxHeight: .infinity)
+                .layoutPriority(-1)
+                .clipped()
+                .accessibilityIdentifier("sidebar.workspaces")
+                footer.background(OpenBitFunTheme.page)
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
@@ -166,8 +170,9 @@ struct SidebarView: View {
                    let workspace = workspaceCreateTarget ?? model.remoteWorkspaces.first(where: { ($0.path + ":" + ($0.remoteConnectionId ?? "")) == path }),
                    let anchor = anchors[path] {
                     let frame = proxy[anchor]
-                    let menuHeight = 46 * 3 + 16
-
+                    let menuHeight = HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities)
+                        ? 46 * 3 + 16
+                        : MobileDesignGeometry.compactPopoverActionHeight + 16
                     ZStack(alignment: .topLeading) {
                         OpenBitFunTheme.transparent
                             .contentShape(Rectangle())
@@ -478,7 +483,8 @@ struct SidebarView: View {
                 directoryLoadStatus: workspace.directoryStatus,
                 onRetryDirectoryLoad: {
                     model.retryDirectoryWorkspace(device: device, workspace: scopedWorkspace)
-                }
+                },
+                createMenu: directoryCreateMenu(device: device, workspace: scopedWorkspace)
             )
         }
         if device.workspaces.count > visibleWorkspaceCount {
@@ -585,7 +591,11 @@ struct SidebarView: View {
                     }
                 },
                 onToggleCreate: {
-                    workspaceCreatePath = workspaceCreatePath == workspace.path + ":" + (workspace.remoteConnectionId ?? "") ? nil : workspace.path + ":" + (workspace.remoteConnectionId ?? "")
+                    if HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) {
+                        workspaceCreatePath = workspaceCreatePath == workspace.path + ":" + (workspace.remoteConnectionId ?? "") ? nil : workspace.path + ":" + (workspace.remoteConnectionId ?? "")
+                    } else {
+                        model.createRemoteSession(in: workspace, agentType: "code")
+                    }
                 },
                 onOpenWorkspace: { model.selectRemoteWorkspace(workspace) },
                 onOpenSession: { model.surface = .remote; model.select($0) },
@@ -804,6 +814,26 @@ struct SidebarView: View {
         model.createRemoteSession(in: target.workspace, agentType: target.agentType)
     }
 
+    private func directoryCreateMenu(device: MobileDeviceDirectoryEntry, workspace: MobileWorkspaceGroup) -> AnyView? {
+        // Capabilities belong to the connected target, never another directory device.
+        guard model.remoteExpectedDeviceKey == "account:\(device.id)",
+              HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) else { return nil }
+        return AnyView(Menu {
+            ForEach([HarnessProfile.minimal, .standard, .ultimate], id: \.name) { profile in
+                Button {
+                    model.openDirectoryRemoteDraft(device: device, workspace: workspace, agentType: profile.agentType)
+                } label: {
+                    HarnessProfileLabel(model: model, profile: profile)
+                }
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(OpenBitFunTheme.ink)
+                .frame(width: 30, height: 40)
+        })
+    }
+
     private func workspaceCreateMenu(_ workspace: MobileWorkspaceGroup) -> some View {
         VStack(spacing: 0) {
             ForEach([HarnessProfile.minimal, .standard, .ultimate], id: \.name) { profile in
@@ -816,7 +846,8 @@ struct SidebarView: View {
                         .padding(.horizontal, 14)
                 }.buttonStyle(.plain)
             }
-        }.openBitFunCompactPopoverSurface()
+        }
+        .openBitFunCompactPopoverSurface()
     }
 
     private func workspaceCreateMenuRow(_ title: String, action: @escaping () -> Void) -> some View {
@@ -965,6 +996,7 @@ private struct SidebarWorkspaceRow: View {
     var selectedWorkspacePath: String? = nil
     var directoryLoadStatus = "READY"
     var onRetryDirectoryLoad: (() -> Void)? = nil
+    var createMenu: AnyView? = nil
     @State private var visibleSessionCount = 3
 
     private func isSelected(_ session: ChatSession) -> Bool {
@@ -1011,11 +1043,16 @@ private struct SidebarWorkspaceRow: View {
                 .accessibilityIdentifier("sidebar.workspace.\(workspace.deviceKey ?? "unknown").\(workspace.path)")
                 .accessibilityValue(Text(workspace.path))
                 Spacer(minLength: 0)
-                Button(action: onToggleCreate) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(OpenBitFunTheme.ink)
-                        .frame(width: 30, height: 40)
+                Group {
+                    if let createMenu { createMenu }
+                    else {
+                        Button(action: onToggleCreate) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .regular))
+                                .foregroundStyle(OpenBitFunTheme.ink)
+                                .frame(width: 30, height: 40)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(MobileLocalization.text("Workspace actions"))

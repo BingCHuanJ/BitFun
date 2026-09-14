@@ -183,7 +183,7 @@
     <string name="session_view_details">查看详情</string>
     <string name="session_delete_confirm">删除后将无法恢复这条会话。</string>
     <string name="session_details">会话详情</string>
-    <string name="session_agent_type">Agent 类型</string>
+    <string name="session_agent_type">智能体类型</string>
     <string name="session_workspace">工作区</string>
     <string name="session_workspace_path">工作区路径</string>
     <string name="session_created_at">创建时间</string>
@@ -495,4 +495,19 @@
     <string name="workspace_sort_modified_asc">修改时间：最早优先</string>
     <string name="workspace_actions">工作区操作</string>
     <string name="device_tools">设备工具</string>
+
+    <string name="plan_title">计划</string>
+    <string name="plan_view">查看计划</string>
+    <string name="plan_build">执行计划</string>
+    <string name="plan_unsupported">此电脑暂不支持执行计划</string>
+    <string name="plan_wait">请等待当前操作完成</string>
+    <string name="miniapps_title">小应用</string>
+    <string name="miniapps_close">关闭</string>
+    <string name="miniapps_back">返回</string>
+    <string name="chat_attachment_recovery_failed">无法恢复或保存图片草稿，点按重试。</string>
+    <string name="chat_subagent_output">子任务输出</string>
+    <string name="miniapps_all">全部应用</string>
+    <string name="miniapps_offline">离线可用</string>
+    <string name="miniapps_load_failed">无法加载小应用，请重试</string>
+    <string name="account_authorization_open_failed">无法打开授权页面，请重试。</string>
 </resources>

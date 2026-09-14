@@ -30,3 +30,7 @@
   .div-app .lucky__cell:nth-child(3) { grid-column: 1 / -1; }
   .div-app .lucky__value { white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* These radial gradients are already soft. Re-rasterizing three animated
+ * 110px blur layers stalls mobile WebView compositors, including Android. */
+.div-app .aurora { filter: none; animation: none; }

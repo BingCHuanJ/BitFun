@@ -1,6 +1,26 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "查看设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse devices"
+          }
+        }
+      }
+    },
+    "选择设备和工作区，继续你的对话。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a device and workspace to continue your conversations."
+          }
+        }
+      }
+    },
     "无法打开授权页面，请重试。": {
       "localizations": {
         "en": {
@@ -591,7 +611,7 @@
         }
       }
     },
-    "允许 Agent 直接执行操作": {
+    "允许智能体直接执行操作": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -841,7 +861,7 @@
         }
       }
     },
-    "告诉 Agent 要做什么": {
+    "告诉智能体要做什么": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2261,6 +2281,16 @@
         }
       }
     },
+    "子任务输出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtask output"
+          }
+        }
+      }
+    },
     "输出": {
       "localizations": {
         "en": {
@@ -2291,7 +2321,7 @@
         }
       }
     },
-    "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和 Agent 的执行状态。": {
+    "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和智能体的执行状态。": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3221,7 +3251,7 @@
         }
       }
     },
-    "Agent 类型": {
+    "智能体类型": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3231,7 +3261,7 @@
         }
       }
     },
-    "所有 Agent 类型": {
+    "所有智能体类型": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -8199,6 +8229,166 @@
           "stringUnit": {
             "state": "translated",
             "value": "连接电脑后，继续你的对话。"
+          }
+        }
+      }
+    },
+    "计划": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plan"
+          }
+        }
+      }
+    },
+    "查看计划": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View plan"
+          }
+        }
+      }
+    },
+    "执行计划": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Build plan"
+          }
+        }
+      }
+    },
+    "此电脑暂不支持执行计划": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This desktop does not support building plans."
+          }
+        }
+      }
+    },
+    "请等待当前操作完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wait for the current operation to finish."
+          }
+        }
+      }
+    },
+    "小应用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mini Apps"
+          }
+        }
+      }
+    },
+    "无法加载小应用，请重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to load Mini Apps. Try again."
+          }
+        }
+      }
+    },
+    "停止语音输入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop dictation"
+          }
+        }
+      }
+    },
+    "账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account"
+          }
+        }
+      }
+    },
+    "全部应用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All apps"
+          }
+        }
+      }
+    },
+    "离线可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available offline"
+          }
+        }
+      }
+    },
+    "允许 Agent 直接执行操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow the agent to perform operations directly"
+          }
+        }
+      }
+    },
+    "告诉 Agent 要做什么": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tell the agent what to do"
+          }
+        }
+      }
+    },
+    "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和 Agent 的执行状态。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the OpenBitFun mobile conversation UI. Connect to a desktop to view workspaces, sessions, and agent status."
+          }
+        }
+      }
+    },
+    "Agent 类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent type"
+          }
+        }
+      }
+    },
+    "所有 Agent 类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All agent types"
           }
         }
       }

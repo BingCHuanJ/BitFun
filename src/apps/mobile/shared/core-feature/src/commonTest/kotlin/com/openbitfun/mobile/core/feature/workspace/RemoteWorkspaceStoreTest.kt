@@ -185,6 +185,91 @@ class RemoteWorkspaceStoreTest {
     }
 
     @Test
+    fun invalidPreviewRetainsRequestIdentityAndReplacesPreviousRequest() = runTest {
+        val store = RemoteWorkspaceStore.create(this, FakeWorkspaceTransport(), StandardTestDispatcher(testScheduler), "device-a")
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("https://example.com/file", "file", "s1", "invalid-preview"))
+        runCurrent()
+        val failed = assertIs<RemoteFilePreviewUiState.Failed>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview)
+        assertEquals("invalid-preview", failed.identity.requestId)
+        assertEquals("device-a", failed.identity.deviceKey)
+        assertEquals("s1", failed.identity.sessionId)
+        store.stop()
+    }
+
+    @Test
+    fun previewDoesNotCancelWorkspaceRefresh() = runTest {
+        val transport = FakeWorkspaceTransport()
+        val store = RemoteWorkspaceStore.create(this, transport)
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["get_workspace_info"] = gate
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("src/main.rs", "main.rs", "s1", "preview"))
+        runCurrent()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).busy)
+        store.stop()
+    }
+
+    @Test
+    fun workspaceRefreshDoesNotLeaveCancelledDownloadPermanentlyLoading() = runTest {
+        val transport = FakeWorkspaceTransport(downloadChunks = true)
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["get_file_info"] = gate
+        store.dispatch(RemoteWorkspaceIntent.DownloadFile("src/main.rs", "main.rs", "s1"))
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        runCurrent()
+        assertFalse(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).download is RemoteFileDownloadUiState.Loading)
+        gate.complete(Unit)
+        store.dispatch(RemoteWorkspaceIntent.DownloadFile("src/main.rs", "main.rs", "s1"))
+        advanceUntilIdle()
+        assertIs<RemoteFileDownloadUiState.AwaitingSave>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).download)
+        store.stop()
+    }
+
+    @Test
+    fun workspaceSelectionRetainsDownloadCancellationInsteadOfRestoringLoading() = runTest {
+        val transport = FakeWorkspaceTransport(downloadChunks = true)
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        transport.commandGates["get_file_info"] = CompletableDeferred<Unit>()
+        store.dispatch(RemoteWorkspaceIntent.DownloadFile("src/main.rs", "main.rs", "s1"))
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.SelectWorkspace("/repo"))
+        runCurrent()
+        assertIs<RemoteFileDownloadUiState.Failed>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).download)
+        store.stop()
+    }
+
+    @Test
+    fun previewDoesNotCancelAnInFlightDownload() = runTest {
+        val transport = FakeWorkspaceTransport(downloadChunks = true)
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["get_file_info"] = gate
+        store.dispatch(RemoteWorkspaceIntent.DownloadFile("src/main.rs", "main.rs", "s1"))
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("src/main.rs", "main.rs", "s1", "preview"))
+        runCurrent()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertIs<RemoteFileDownloadUiState.AwaitingSave>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).download)
+        store.stop()
+    }
+
+    @Test
     fun loadsBoundedTextPreviewThroughCommandTransport() = runTest {
         val transport = FakeWorkspaceTransport()
         val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
@@ -698,6 +783,8 @@ private class FakeWorkspaceTransport(
 ) : RemoteCommandTransport {
     val commands = mutableListOf<RemoteCommand>()
     var selectionAccepted: Boolean = true
+
+    val commandGates = mutableMapOf<String, CompletableDeferred<Unit>>()
     var fileInfoError: String? = null
     var savedConnection: String? = null
 
@@ -711,6 +798,7 @@ private class FakeWorkspaceTransport(
         timeoutMs: Long,
     ): T {
         commands += command
+        commandGates[command.cmd]?.await()
         val json = when (command.cmd) {
             "host_invoke" -> """{"resp":"host_invoke_result","ok":true,"value":[{"id":"saved-1","name":"Saved host","host":"host"}]}"""
             "list_recent_workspaces" ->

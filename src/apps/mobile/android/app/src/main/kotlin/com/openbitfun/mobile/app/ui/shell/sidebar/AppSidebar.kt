@@ -136,6 +136,8 @@ internal fun AppSidebar(
                 Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
             }
 
+            com.openbitfun.mobile.app.ui.miniapps.MiniAppsButton(sidebar = true)
+
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 142.dp)) {
                     SidebarRemoteWorkspaceSection(
                         connectionPhase = connectionPhase,

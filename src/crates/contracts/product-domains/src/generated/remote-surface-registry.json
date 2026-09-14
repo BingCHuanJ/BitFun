@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:708b24394aee421b",
+  "digest": "fnv1a64:697e78e28549dbf0",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -2366,6 +2366,17 @@
     },
     {
       "id": "get_external_source_control_snapshot",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "proxied"
+      },
+      "cliPeer": {
+        "kind": "handled"
+      }
+    },
+    {
+      "id": "get_external_source_discovery_snapshot",
       "surface": "tauri_command",
       "remoteWorkspace": "RemoteUnsupported",
       "peer": {
@@ -6745,6 +6756,18 @@
       "cliPeer": {
         "kind": "unsupported",
         "reason": "the CLI peer host has no handler for this command"
+      }
+    },
+    {
+      "id": "set_tray_unread_count",
+      "surface": "tauri_command",
+      "remoteWorkspace": "LocalOnly",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
       }
     },
     {

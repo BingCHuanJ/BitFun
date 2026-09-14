@@ -261,6 +261,85 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun sendingPublishesPendingAndFailedMessagesWithoutPolling() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = gate
+        transport.sendMessageFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "hello"))
+        runCurrent()
+        val pending = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("hello", pending.timeline?.optimisticMessages?.single()?.text)
+        assertTrue(pending.busy)
+        store.dispatch(RemoteSessionIntent.UpdateDraft("new typing"))
+        gate.complete(Unit)
+        runCurrent()
+        val failed = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("failed", failed.timeline?.optimisticMessages?.single()?.status)
+        assertEquals("new typing", failed.draft)
+        assertFalse(failed.busy)
+        store.stop()
+    }
+
+    @Test
+    fun staleModelSelectionCannotMutateTheNewlyOpenedSession() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        transport.commands.clear()
+        store.dispatch(RemoteSessionIntent.SelectModel("old-session", "model-primary"))
+        runCurrent()
+        assertTrue(transport.commands.none { it.cmd == "set_session_model" })
+        assertFalse(assertIs<RemoteSessionUiState.Ready>(store.state.value).busy)
+        store.stop()
+    }
+
+    @Test
+    fun modelFailurePreservesTypingThatArrivedWhileRequestWasPending() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["set_session_model"] = gate
+        transport.modelSelectionFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SelectModel("s-code", "model-primary"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("new typing"))
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("new typing", assertIs<RemoteSessionUiState.Ready>(store.state.value).draft)
+        store.stop()
+    }
+
+    @Test
+    fun selectingModelPublishesConfirmedSelectionWithoutAnotherPoll() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("keep-draft"))
+        transport.commands.clear()
+        store.dispatch(RemoteSessionIntent.SelectModel("s-code", "requested-model"))
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        // The host's confirmed model wins even if it differs from the request.
+        assertEquals("model-primary", ready.timeline?.selectedModelId)
+        assertEquals("model-primary", ready.createModelOptions("Model").single { it.selected }.id)
+        assertEquals("keep-draft", ready.draft)
+        assertEquals("s-code", ready.selectedSessionId)
+        assertFalse(ready.busy)
+        assertEquals(listOf("set_session_model"), transport.commands.map { it.cmd })
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
     fun modelCatalogContractIsTheStaticSupportedFact() {
         assertEquals("get_model_catalog", ModelCatalogContract.commandName)
         assertEquals(ModelCatalogSupport.SUPPORTED, ModelCatalogContract.support)
@@ -1060,6 +1139,57 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun runningDraftNegotiatesSteeringAndKeepsLegacyQueue() = runTest {
+        for (supported in listOf(false, true)) {
+            val transport = FakeSessionTransport().apply {
+                capabilitiesJson = if (supported) "[\"dialog_steer_v1\"]" else "[]"
+                polls = listOf("""{"resp":"ok","version":1,"changed":true,"session_state":"running","active_turn":{"turn_id":"active-1","status":"active","text":"Working"}}""")
+            }
+            val store = RemoteSessionStore.create(this, transport)
+            store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
+            store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
+            store.dispatch(RemoteSessionIntent.UpdateDraft("steer me"))
+            val image = ComposerImage("photo", "data:image/png;base64,abc", "image/png")
+            store.dispatch(RemoteSessionIntent.SendMessage("s-code", "steer me", listOf(image))); runCurrent()
+            val sent = transport.commands.last { it.cmd in listOf("send_message", "steer_turn") }
+            assertEquals(if (supported) "steer_turn" else "send_message", sent.cmd)
+            assertEquals(if (supported) "active-1" else null, sent.turnId)
+            assertEquals(if (supported) "steer me" else null, sent.displayContent)
+            assertEquals(image.dataUrl, sent.imageContexts!!.single().dataUrl)
+            val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+            assertEquals("", ready.draft)
+            assertEquals("active-1", ready.timeline?.activeTurn?.turnId)
+            store.stop()
+        }
+    }
+
+    @Test
+    fun buildPlanRequiresCapabilityAndDoesNotConsumeUnsentDraft() = runTest {
+        for (supported in listOf(false, true)) {
+            val transport = FakeSessionTransport().apply {
+                capabilitiesJson = if (supported) "[\"plan_build_v1\"]" else "[]"
+            }
+            val store = RemoteSessionStore.create(this, transport)
+            store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
+            store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
+            store.dispatch(RemoteSessionIntent.UpdateDraft("keep draft"))
+            store.dispatch(RemoteSessionIntent.BuildPlan("s-code", "/repo/design.plan.md", "Design")); runCurrent()
+            val sent = transport.commands.lastOrNull { it.cmd == "build_plan" }
+            assertEquals(supported, sent != null)
+            if (supported) {
+                assertEquals("/repo/design.plan.md", sent?.planFilePath)
+                assertEquals("Design", sent?.planName)
+                assertEquals("code", sent?.agentType)
+            }
+            val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+            assertEquals("keep draft", ready.draft)
+            assertEquals("s-code", ready.selectedSessionId)
+            assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
+            store.stop()
+        }
+    }
+
+    @Test
     fun sendMessageCarriesTheSessionsAgentType() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
@@ -1101,6 +1231,47 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun refreshCancellingSendDoesNotLeavePendingTurnForever() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        transport.commandGates["send_message"] = CompletableDeferred<Unit>()
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "waiting"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.Refresh)
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertFalse(ready.timeline?.activeTurn?.id?.startsWith("active-pending-") == true)
+        assertFalse(ready.busy)
+        store.stop()
+    }
+
+    @Test
+    fun sendPublishesPendingTurnBeforeAckAndClearsItOnFailure() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = gate
+        transport.sendMessageFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "hello"))
+        runCurrent()
+        val pending = assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline!!
+        assertTrue(pending.activeTurn!!.id.startsWith("active-pending-"))
+        val command = transport.commands.last { it.cmd == "send_message" }
+        assertEquals(pending.optimisticMessages.single().turnId, command.turnId)
+        assertTrue(!command.turnId.isNullOrBlank())
+        gate.complete(Unit)
+        runCurrent()
+        val failed = assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline!!
+        assertNull(failed.activeTurn)
+        assertEquals("failed", failed.optimisticMessages.single().status)
+        store.stop()
+    }
+
+    @Test
     fun imageSendFailureDoesNotConsumeAttachmentsAndAckKeepsNewTyping() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
@@ -1133,6 +1304,25 @@ class RemoteSessionStoreTest {
         assertEquals("next question", ready.draft)
         assertEquals(listOf("photo-1"), ready.lastSentMessage?.imageIds)
         assertFalse(ready.busy)
+        store.stop()
+    }
+
+    @Test
+    fun acknowledgementDoesNotClearAnIdenticalNewDraft() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("same question"))
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = gate
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "same question"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft(""))
+        store.dispatch(RemoteSessionIntent.UpdateDraft("same question"))
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("same question", assertIs<RemoteSessionUiState.Ready>(store.state.value).draft)
         store.stop()
     }
 
@@ -1184,6 +1374,56 @@ class RemoteSessionStoreTest {
         assertEquals("keep me", ready.draft)
         assertEquals(false, ready.busy)
         store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun idleHealthRecoversWithoutDiscardingListAndStopsInBackground() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
+        val sessions = assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions
+        transport.pingFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
+        assertEquals(ConnectionPhase.RECONNECTING, store.connectionPhase.value)
+        assertEquals(sessions, assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions)
+        transport.pingFailure = null
+        advanceTimeBy(15_000); runCurrent()
+        assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
+        store.dispatch(RemoteSessionIntent.SetForeground(false))
+        val count = transport.commands.count { it.cmd == "ping" }
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(count, transport.commands.count { it.cmd == "ping" })
+        store.stop()
+    }
+
+    @Test
+    fun slowHealthProbesDoNotOverlapAndLateResultsCannotChangeStoppedState() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
+        transport.nonCancellableCommands += "ping"
+        store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(1, transport.commands.count { it.cmd == "ping" })
+        store.stop()
+        val stoppedPhase = store.connectionPhase.value
+        val stoppedState = store.state.value
+        transport.lateCommandContinuations.getValue("ping").resume(Unit)
+        runCurrent()
+        assertEquals(stoppedPhase, store.connectionPhase.value)
+        assertEquals(stoppedState, store.state.value)
+    }
+
+    @Test
+    fun openTranscriptUsesDurableStreamInsteadOfExtraPings() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
+        store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
+        advanceTimeBy(30_000); runCurrent()
+        assertTrue(transport.commands.none { it.cmd == "poll_session" })
+        assertTrue(transport.commands.none { it.cmd == "ping" })
+        store.stop()
     }
 
     @Test
@@ -1266,6 +1506,35 @@ class RemoteSessionStoreTest {
 
 
     @Test
+    fun turnEndTailRefreshPreservesLoadedOlderMessages() = runTest {
+        val transport = FakeSessionTransport()
+        transport.messages = """[{"id":"m-new","role":"user","content":"question"}]"""
+        transport.olderMessages = """[{"id":"m-old","role":"user","content":"older"}]"""
+        transport.polls = listOf(
+            """{"resp":"ok","version":1,"changed":true,"session_state":"running",
+               "active_turn":{"turn_id":"t-1","status":"active","text":"All "}}""",
+            """{"resp":"ok","version":2,"changed":true,"session_state":"idle",
+               "active_turn":{"turn_id":"t-1","status":"completed","text":"All done"}}""",
+            """{"resp":"ok","version":2,"changed":false,"session_state":"idle"}""",
+        )
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.LoadOlderMessages)
+        runCurrent()
+        transport.messages = """[{"id":"m-new","role":"user","content":"question"},
+            {"id":"t-1_assistant","turn_id":"t-1","role":"assistant","content":"All done","status":"completed"}]"""
+        advanceTimeBy(1_000)
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(listOf("m-old", "m-new", "t-1_assistant"),
+            ready.timeline?.persistedMessages?.map { it.id })
+        assertFalse(ready.hasMoreMessages)
+        assertNull(ready.timeline?.activeTurn)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
     fun aRefusedPermissionChangeLeavesTheSessionStanding() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
@@ -1336,6 +1605,7 @@ private class FakeSessionTransport : RemoteCommandTransport, RemoteSessionStream
 
     val commands = mutableListOf<RemoteCommand>()
     var workspacePath: String = "/repo"
+    var capabilitiesJson: String = "[]"
 
     /** When set, the permission commands fail while everything else works. */
     var permissionFailure: RelayFailure? = null
@@ -1358,9 +1628,11 @@ private class FakeSessionTransport : RemoteCommandTransport, RemoteSessionStream
 
     /** When set, the open conversation's health poll fails below the desktop. */
     var pollFailure: RelayFailure? = null
+    var pingFailure: RelayFailure? = null
 
     /** When set, `send_message` fails below the desktop while the draft is kept. */
     var sendMessageFailure: RelayFailure? = null
+    var modelSelectionFailure: RelayFailure? = null
 
     /** When set, `create_session` fails below the desktop. */
     var createFailure: RelayFailure? = null
@@ -1394,6 +1666,9 @@ private class FakeSessionTransport : RemoteCommandTransport, RemoteSessionStream
             null
         }
         commandGates[command.cmd]?.await()
+        if (command.cmd == "set_session_model") {
+            modelSelectionFailure?.let { throw RelayTransportException(it) }
+        }
         if (nonCancellableCommands.remove(command.cmd)) {
             suspendCoroutine { continuation -> lateCommandContinuations[command.cmd] = continuation }
         }
@@ -1401,10 +1676,11 @@ private class FakeSessionTransport : RemoteCommandTransport, RemoteSessionStream
             rejection?.let { throw RelayTransportException(RelayFailure.RemoteRejected(it)) }
             failure?.let { throw RelayTransportException(it) }
         }
+        if (command.cmd == "ping") pingFailure?.let { throw RelayTransportException(it) }
         if (command.cmd == "poll_session") {
             pollFailure?.let { throw RelayTransportException(it) }
         }
-        if (command.cmd == "send_message") {
+        if (command.cmd == "send_message" || command.cmd == "steer_turn") {
             sendMessageFailure?.let { throw RelayTransportException(it) }
         }
         if (command.cmd == "create_session") {
@@ -1418,7 +1694,7 @@ private class FakeSessionTransport : RemoteCommandTransport, RemoteSessionStream
         }
         val json = when (command.cmd) {
             "get_workspace_info" ->
-                """{"resp":"ok","has_workspace":${workspacePath.isNotEmpty()},"path":"$workspacePath"}"""
+                """{"resp":"ok","has_workspace":${workspacePath.isNotEmpty()},"path":"$workspacePath","capabilities":$capabilitiesJson}"""
             "get_model_catalog" -> """{
                 "resp":"ok",
                 "catalog":{
@@ -1440,8 +1716,8 @@ private class FakeSessionTransport : RemoteCommandTransport, RemoteSessionStream
             "poll_session" -> polls[minOf(pollIndex++, polls.lastIndex)]
             "create_session" -> """{"resp":"ok","session_id":"s-new"}"""
             "set_session_model" -> """{"resp":"ok","model_id":"model-primary"}"""
-            "send_message" -> """{"resp":"ok","turn_id":"t-1"}"""
-            "delete_session", "update_session_title", "answer_question", "set_permission_mode", "confirm_tool" ->
+            "send_message", "steer_turn", "build_plan" -> """{"resp":"ok","turn_id":"t-1"}"""
+            "ping", "delete_session", "update_session_title", "answer_question", "set_permission_mode", "confirm_tool" ->
                 """{"resp":"ok"}"""
             else -> error("Unexpected command ${command.cmd}")
         }

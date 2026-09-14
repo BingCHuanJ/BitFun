@@ -16,14 +16,7 @@ export type CompatibilityCapabilityId =
   | 'mcp'
   | 'runtime';
 
-export type EcosystemProductStatus =
-  | 'connected'
-  | 'detected'
-  | 'configured'
-  | 'available'
-  | 'development';
-
-export type EcosystemProductGroup = 'connected' | 'available' | 'other';
+export type EcosystemProductGroup = 'identified' | 'more' | 'other';
 
 export interface EcosystemProductSpec {
   id: EcosystemProductId;
@@ -44,7 +37,6 @@ export interface CompatibilityCapabilityCounts {
 
 export interface EcosystemProductRuntime {
   spec: EcosystemProductSpec;
-  status: EcosystemProductStatus;
   group: EcosystemProductGroup;
   sources: ExternalSourceCatalogSnapshot['sources'];
   acpClients: AcpClientInfo[];
@@ -218,8 +210,23 @@ export function catalogDiscoveryState(
   snapshot: ExternalSourceCatalogSnapshot | null,
   ecosystemId: string | undefined,
   capabilityId: string,
-): 'checking' | 'discoveryDisabled' | 'discoveryUnavailable' | 'notDetected' {
+): 'checking' | 'notScanned' | 'discoveryDisabled' | 'discoveryUnavailable' | 'notDetected' {
   if (!snapshot) return 'checking';
+  if (snapshot.discovery) {
+    if (snapshot.discovery.retainedKinds?.includes(capabilityId)) return 'discoveryUnavailable';
+    if (snapshot.discovery.discoverableCapabilities
+      && !snapshot.discovery.discoverableCapabilities[ecosystemId ?? '']?.includes(capabilityId)) return 'notScanned';
+    if (!snapshot.discovery.hasScanned) return snapshot.discovery.enabled ? 'checking' : 'notScanned';
+    if (snapshot.discoveryPending) return 'checking';
+    const failed = productSources(snapshot, ecosystemId).some((source) => (
+      ['unavailable', 'degraded'].includes(source.record.health)
+      && (!source.record.diagnostics?.length || source.record.diagnostics.some((diagnostic) =>
+        !diagnostic.assetKind || diagnostic.assetKind === 'source' || diagnostic.assetKind === capabilityId))
+    ));
+    const failedScan = snapshot.diagnostics?.some((diagnostic) =>
+      !diagnostic.assetKind || diagnostic.assetKind === 'source' || diagnostic.assetKind === capabilityId);
+    return failed || failedScan ? 'discoveryUnavailable' : 'notDetected';
+  }
   const policy = snapshot.integrationPolicy;
   if (policy?.status !== 'compatible') return 'discoveryUnavailable';
   if (policy.effective?.enabled === false) return 'discoveryDisabled';
@@ -277,24 +284,13 @@ function capabilityCounts(
   };
 }
 
-function runtimeStatus(
-  spec: EcosystemProductSpec,
-  sources: ExternalSourceCatalogSnapshot['sources'],
-  acpClients: AcpClientInfo[],
-): EcosystemProductStatus {
-  if (spec.development) return 'development';
-  if (acpClients.some((client) => client.status === 'running')) return 'connected';
-  if (sources.length > 0) return 'detected';
-  if (acpClients.some((client) => client.enabled)) return 'configured';
-  return 'available';
-}
-
-function runtimeGroup(status: EcosystemProductStatus): EcosystemProductGroup {
-  if (status === 'connected' || status === 'detected' || status === 'configured') {
-    return 'connected';
-  }
-  if (status === 'development') return 'other';
-  return 'available';
+function runtimeGroup(spec: EcosystemProductSpec, sources: EcosystemProductRuntime['sources'], clients: AcpClientInfo[]): EcosystemProductGroup {
+  if (spec.development) return 'other';
+  const identifiedSource = sources.some((source) => source.lifecycle !== 'removed'
+    && ['available', 'partial'].includes(source.record.health));
+  const configuredByUser = clients.some((client) => client.readonly === false
+    || client.status === 'running' || client.status === 'starting');
+  return identifiedSource || configuredByUser ? 'identified' : 'more';
 }
 
 function knownCapabilityId(value: string): value is Exclude<CompatibilityCapabilityId, 'runtime'> {
@@ -327,17 +323,17 @@ export function buildEcosystemProductRuntimes(
     if (spec.acpClientId && !capabilityIds.includes('runtime')) {
       capabilityIds.push('runtime');
     }
-    const status = runtimeStatus(spec, sources, acpClients);
+    const counts = capabilityCounts(snapshot, sources, acpClients);
 
     return {
       spec,
-      status,
-      group: runtimeGroup(status),
+      group: totalDiscoveredAssets(counts) > 0
+        ? 'identified' : runtimeGroup(spec, sources, acpClients),
       sources,
       acpClients,
       acpClient,
       capabilityIds,
-      capabilityCounts: capabilityCounts(snapshot, sources, acpClients),
+      capabilityCounts: counts,
       adapterRevision: descriptor?.adapterRevision,
       sourceLocation: sources[0]?.record.location ?? acpClients[0]?.command,
       executionDomainId: sources[0]?.record.executionDomainId,
@@ -361,6 +357,8 @@ export function buildEcosystemImportItems(
   };
   // Only a host that explicitly advertises execution can attest to direct usability.
   const usage = (source: { providerId: string; sourceId: string }, kind: string, state?: string): ContentUsageState => {
+    // The static discovery endpoint does not attest to runtime activation.
+    if (snapshot?.discovery) return 'unknown';
     if (snapshot?.hostCapabilities?.canExecuteExternalAssets !== true) {
       return snapshot?.hostCapabilities?.canExecuteExternalAssets === false ? 'runtimeUnavailable' : 'unknown';
     }
@@ -473,7 +471,8 @@ export function buildEcosystemImportItems(
     pet: 11,
   };
   return items.sort((left, right) => (
-    kindOrder[left.kind] - kindOrder[right.kind]
+    Number(right.discoverySupport === 'supported') - Number(left.discoverySupport === 'supported')
+    || kindOrder[left.kind] - kindOrder[right.kind]
     || left.name.localeCompare(right.name)
   ));
 }

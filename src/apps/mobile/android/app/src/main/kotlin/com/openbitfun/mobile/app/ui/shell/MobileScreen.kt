@@ -319,9 +319,9 @@ internal fun MobileScreen() {
                 shell.closeRemoteSession()
             },
             onOpenRemoteSession = { sessionId ->
-                dispatchActiveSession(RemoteSessionIntent.Open(sessionId))
                 shell.openRemoteSession(sessionId)
                 closeDrawer()
+                dispatchActiveSession(RemoteSessionIntent.Open(sessionId))
             },
             onCreateRemoteInWorkspace = { path, connectionId, agentType ->
                 dispatchActiveSession(
@@ -396,6 +396,7 @@ internal fun MobileScreen() {
                                 )
                             },
                             accountUsername = readyAccount?.username.orEmpty(),
+                            attachmentOwner = org.json.JSONArray(listOf(readyAccount?.relayUrl, readyAccount?.username, readyAccount?.selectedDeviceId)).toString(),
                             phase = accountPhase,
                             settingsPlacement = settingsPlacement,
                             sessionDetailsPlacement = sessionDetailsPlacement,

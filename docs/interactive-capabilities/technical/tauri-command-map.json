@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "124222af073f8c5164b15b625723c0e3b81f0b200e41855cd343ef1f07d5f39b",
-  "commandCount": 654,
+  "catalogDigest": "5473331e06ecd4bfafbf9b547d48b4fe1561ccf69d86fdfde51ea10dc919531c",
+  "commandCount": 656,
   "coverage": {
-    "commandCount": 654,
-    "documentedCommandCount": 611,
-    "implementationCommandCount": 43,
-    "implementationDigest": "df3e33bfde51134717334587b62fe6c202c5ea56f2b63e990432de70fd19e0cd"
+    "commandCount": 656,
+    "documentedCommandCount": 612,
+    "implementationCommandCount": 44,
+    "implementationDigest": "012cebbd8d7c908d8e4c0787f73a2fa5f43184c240e7fde68cb941667574ba8f"
   },
   "commands": [
     {
@@ -2936,6 +2936,22 @@
       "rustPath": "get_external_source_control_snapshot",
       "sourceFile": "src/apps/desktop/src/api/external_sources_api.rs",
       "signature": "fn get_external_source_control_snapshot( request: ExternalSourceSnapshotRequest, ) -> ExternalSourceOperationResult<ExternalSourceControlResponse>",
+      "remoteWorkspacePolicy": "RemoteUnsupported"
+    },
+    {
+      "id": "get_external_source_discovery_snapshot",
+      "moduleId": "external_sources",
+      "capabilityId": "feature.ecosystem-compatibility",
+      "capabilityIds": [
+        "feature.ecosystem-compatibility"
+      ],
+      "documentedItemIds": [
+        "feature.ecosystem-compatibility:source-discovery"
+      ],
+      "visibility": "documented",
+      "rustPath": "get_external_source_discovery_snapshot",
+      "sourceFile": "src/apps/desktop/src/api/external_sources_api.rs",
+      "signature": "fn get_external_source_discovery_snapshot( request: ExternalSourceSnapshotRequest, ) -> ExternalSourceOperationResult<ExternalSourceDiscoverySnapshotV1>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -8774,6 +8790,20 @@
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn set_subagent_timeout( coordinator: State<'_, Arc<ConversationCoordinator>>, request: SetSubagentTimeoutRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "set_tray_unread_count",
+      "moduleId": "system",
+      "capabilityId": "setting.application.general",
+      "capabilityIds": [
+        "setting.application.general"
+      ],
+      "documentedItemIds": [],
+      "visibility": "implementation",
+      "rustPath": "api::system_api::set_tray_unread_count",
+      "sourceFile": "src/apps/desktop/src/api/system_api.rs",
+      "signature": "fn set_tray_unread_count(request: SetTrayUnreadCountRequest) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "show_agent_companion_desktop_pet",

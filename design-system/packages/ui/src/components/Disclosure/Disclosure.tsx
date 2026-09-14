@@ -2,6 +2,7 @@ import {
   forwardRef,
   useId,
   useState,
+  type DetailsHTMLAttributes,
   type HTMLAttributes,
   type ReactNode,
 } from "react";
@@ -10,8 +11,9 @@ import { OverflowText } from "../../primitives/OverflowText";
 import { Icon } from "../Icon";
 import styles from "./Disclosure.module.css";
 
-export interface DisclosureProps
+interface CustomDisclosureProps
   extends Omit<HTMLAttributes<HTMLElement>, "children" | "onToggle" | "title"> {
+  presentation?: "custom";
   actions?: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
@@ -23,9 +25,19 @@ export interface DisclosureProps
   summary: ReactNode;
 }
 
+interface NativeDisclosureProps
+  extends Omit<DetailsHTMLAttributes<HTMLDetailsElement>, "children" | "title"> {
+  /** Preserve browser details/summary semantics, including native toggle events. */
+  presentation: "native";
+  children: ReactNode;
+  summary: ReactNode;
+}
+
+export type DisclosureProps = CustomDisclosureProps | NativeDisclosureProps;
+
 type InertContentAttributes = HTMLAttributes<HTMLDivElement> & { inert?: "" };
 
-export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
+const CustomDisclosure = forwardRef<HTMLElement, CustomDisclosureProps>(
   function Disclosure({
     actions,
     children,
@@ -36,6 +48,7 @@ export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
     leading,
     onOpenChange,
     open,
+    presentation: _presentation,
     summary,
     ...props
   }, ref) {
@@ -108,5 +121,30 @@ export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
         </div>
       </section>
     );
+  },
+);
+
+export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
+  function Disclosure(props, ref) {
+    if (props.presentation === "native") {
+      const { children, className, presentation, summary, ...detailsProps } = props;
+      return (
+        <details
+          {...detailsProps}
+          className={classNames(styles.native, className)}
+          data-openbitfun-component="disclosure"
+          data-presentation={presentation}
+          ref={(element) => {
+            if (typeof ref === "function") ref(element);
+            else if (ref) ref.current = element;
+          }}
+        >
+          <summary data-openbitfun-part="summary">{summary}</summary>
+          {children}
+        </details>
+      );
+    }
+
+    return <CustomDisclosure {...props} ref={ref} />;
   },
 );

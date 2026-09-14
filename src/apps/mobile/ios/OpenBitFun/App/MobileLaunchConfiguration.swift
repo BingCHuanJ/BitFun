@@ -2,6 +2,14 @@ import Foundation
 
 @MainActor
 enum MobileLaunchConfiguration {
+    static var streamingRegressionPreview: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--streaming-regression")
+        #else
+        false
+        #endif
+    }
+
     static var pairingAccountPreview: Bool { ProcessInfo.processInfo.arguments.contains("--pairing-account") }
     static var pairingManualPreview: Bool { ProcessInfo.processInfo.arguments.contains("--pairing-manual") }
     static func makeModel() -> MobileAppModel {
@@ -11,9 +19,9 @@ enum MobileLaunchConfiguration {
             selectedSessionID: first.id,
             messages: [
                 ChatMessage(id: UUID(), role: .user, text: "你好"),
-                ChatMessage(id: UUID(), role: .assistant, text: "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和 Agent 的执行状态。")
+                ChatMessage(id: UUID(), role: .assistant, text: "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和智能体的执行状态。")
             ],
-            connectCore: !ProcessInfo.processInfo.arguments.contains("--harness-preview") && designPreviewScenario() == nil
+            connectCore: !streamingRegressionPreview && !ProcessInfo.processInfo.arguments.contains("--harness-preview") && designPreviewScenario() == nil
         )
         return configure(model)
     }
@@ -69,6 +77,20 @@ enum MobileLaunchConfiguration {
         if arguments.contains("--timeline-preview") {
             model.configureTimelinePreview()
         }
+        if arguments.contains("--plan-preview") {
+            model.configureConnectedPreview()
+            let plan = MobileTimelineTool(
+                id: "preview-plan", name: "CreatePlan", phase: "COMPLETED", kind: "DOCUMENT",
+                operation: "WRITE_FILE", target: "parity.plan.md", filePath: "/workspace/parity.plan.md",
+                fileLabel: "parity.plan.md", input: "", output: "", question: nil, questions: [], actions: [],
+                planPath: "/workspace/parity.plan.md", planName: "Mobile parity", planOverview: "Review the three native clients."
+            )
+            model.timelineRows = [MobileConversationRow(
+                id: "preview-plan-row", kind: "ASSISTANT", text: "", thinking: nil, images: [], tools: [plan],
+                blocks: [.tools(id: "preview-plan-tools", tools: [plan])], streaming: false, typing: false,
+                pending: false, showRetry: false, error: nil
+            )]
+        }
         if arguments.contains("--file-preview") {
             model.filePreview = MobileFilePreview(
                 id: "src/main.rs",
@@ -77,6 +99,8 @@ enum MobileLaunchConfiguration {
                 mimeType: "text/x-rust",
                 imageData: nil,
                 truncated: false,
+                lineStart: 2,
+                lineEnd: 3,
                 failure: nil
             )
         }

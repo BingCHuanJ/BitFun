@@ -328,6 +328,10 @@ public sealed interface RemoteSessionIntent {
     public data class StartQuestionInteraction(public val toolId: String) : RemoteSessionIntent
     public data class RespondPermission(public val requestId: String, public val approve: Boolean, public val updatedInput: String?) : RemoteSessionIntent
     public data object RefreshPermissionMailbox : RemoteSessionIntent
+
+    /** Native lifecycle controls the idle connection health probe. */
+    public data class SetForeground(public val active: Boolean) : RemoteSessionIntent
+
     public data object Load : RemoteSessionIntent
 
     public data object Refresh : RemoteSessionIntent
@@ -438,6 +442,12 @@ public sealed interface RemoteSessionIntent {
     ) : RemoteSessionIntent {
         public constructor(sessionId: String, content: String) : this(sessionId, content, null)
     }
+
+    public data class BuildPlan public constructor(
+        public val sessionId: String,
+        public val path: String,
+        public val name: String,
+    ) : RemoteSessionIntent
 
     public data class CancelTurn public constructor(
         public val sessionId: String,

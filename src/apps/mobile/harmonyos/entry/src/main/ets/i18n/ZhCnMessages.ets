@@ -226,7 +226,7 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['session.actions', '会话操作'],
   ['session.details', '会话详情'],
   ['session.viewDetails', '查看详情'],
-  ['session.agentType', 'Agent 类型'],
+  ['session.agentType', '智能体类型'],
   ['session.workspace', '工作区'],
   ['session.workspacePath', '工作区路径'],
   ['session.createdAt', '创建时间'],

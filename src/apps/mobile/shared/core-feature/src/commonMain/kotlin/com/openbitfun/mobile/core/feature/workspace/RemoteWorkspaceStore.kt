@@ -99,6 +99,8 @@ public class RemoteWorkspaceStore internal constructor(
     public val stopVersion: StateFlow<Long> = _stopVersion.asStateFlow()
     private var downloadStaging: TemporaryDownload? = null
     private var work: Job? = null
+    private var previewWork: Job? = null
+    private var downloadWork: Job? = null
     private var loadGeneration: Long = 0
     private var targetEpoch: Int = 0
     private var previewGeneration: Long = 0
@@ -122,7 +124,20 @@ public class RemoteWorkspaceStore internal constructor(
         return PreviewRequestIdentity(requestId, deviceKey, target.sessionId, target.remotePath)
     }
 
+    private fun cancelDownload() {
+        downloadWork?.cancel()
+        downloadWork = null
+        updateReady { ready ->
+            val loading = ready.download as? RemoteFileDownloadUiState.Loading
+            if (loading == null) ready else ready.copy(download = RemoteFileDownloadUiState.Failed(
+                loading.target, FilePreviewFailureKind.UNAVAILABLE, true,
+            ))
+        }
+    }
+
     private fun invalidatePreview() {
+        previewWork?.cancel()
+        previewWork = null
         previewGeneration += 1
         activePreviewRequestId = null
     }
@@ -195,6 +210,7 @@ public class RemoteWorkspaceStore internal constructor(
         _stopVersion.value += 1
         loadGeneration += 1
         invalidatePreview()
+        cancelDownload()
         work?.cancel()
         work = null
     }
@@ -247,6 +263,7 @@ public class RemoteWorkspaceStore internal constructor(
     private fun load() {
         val generation = ++loadGeneration
         invalidatePreview()
+        cancelDownload()
         work?.cancel()
         if (_state.value !is RemoteWorkspaceUiState.Ready && persistenceEnabled) {
             val cached = try {
@@ -373,8 +390,9 @@ public class RemoteWorkspaceStore internal constructor(
         val current = _state.value as? RemoteWorkspaceUiState.Ready ?: return
         val generation = ++loadGeneration
         invalidatePreview()
+        cancelDownload()
         work?.cancel()
-        _state.value = current.copy(busy = true)
+        _state.value = ((_state.value as? RemoteWorkspaceUiState.Ready) ?: current).copy(busy = true)
         work = scope.launch {
             try {
                 if (assistant) {
@@ -399,9 +417,9 @@ public class RemoteWorkspaceStore internal constructor(
         val connectionId = current.selected?.remoteConnectionId.takeIf { target.sessionId.isEmpty() }
         val identity = nextPreviewIdentity(target, requestedId)
         val generation = previewGeneration
-        work?.cancel()
+        previewWork?.cancel()
         _state.value = current.copy(preview = RemoteFilePreviewUiState.Loading(target, identity))
-        work = scope.launch {
+        previewWork = scope.launch {
             try {
                 val info = transport.send<FileInfoResponse>(
                     RemoteCommand(cmd = "get_file_info", path = target.remotePath, sessionId = target.sessionId.ifEmpty { null }, workspacePath = target.workspacePath.takeIf { target.sessionId.isEmpty() }, remoteConnectionId = connectionId),
@@ -466,6 +484,7 @@ public class RemoteWorkspaceStore internal constructor(
                         true,
                         "",
                         0,
+                        nextPreviewIdentity(placeholder, intent.requestId),
                     ),
                 )
             }
@@ -561,13 +580,12 @@ public class RemoteWorkspaceStore internal constructor(
         }
         val workspacePath = (fileWorkspace?.first ?: current.selected?.path).takeIf { target.sessionId.isEmpty() }
         val connectionId = (fileWorkspace?.let { it.second } ?: current.selected?.remoteConnectionId.takeIf { fileWorkspace == null }).takeIf { target.sessionId.isEmpty() }
-        work?.cancel()
+        downloadWork?.cancel()
         _state.value = current.copy(download = RemoteFileDownloadUiState.Loading(target, 0, 0))
-        val downloadEpoch = targetEpoch
         val downloadGeneration = loadGeneration
         val downloadStopVersion = _stopVersion.value
         fun downloadIsCurrent(): Boolean = targetEpoch == downloadEpoch && loadGeneration == downloadGeneration && _stopVersion.value == downloadStopVersion
-        work = scope.launch {
+        downloadWork = scope.launch {
             var staging: TemporaryDownload? = null
             try {
                 val info = transport.send<FileInfoResponse>(
