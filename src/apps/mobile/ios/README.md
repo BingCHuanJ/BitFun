@@ -102,3 +102,8 @@ For offline parity regression, use `-only-testing:OpenBitFunUITests/MobileParity
 It exercises language switching, numbered file previews, plan capability gating,
 and all three bundled Mini Apps using isolated preview data. No host command is sent.
 The Mini App resource build phase requires Node.js on PATH.
+
+The MiniApp build phase generates resources directly into the app bundle, so
+incremental builds include CSS and script edits without relying on a folder
+reference's timestamp. `miniapps.css` owns iOS font-family adaptations; the iframe
+sandbox and network restrictions remain in the shared document wrapper.

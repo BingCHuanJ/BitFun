@@ -22,7 +22,11 @@ All three apps can send images with or without text. Camera photos are decoded
 on the phone and converted to a supported format before upload. Failed sends
 retain the draft and images; acknowledgement removes only the submitted content.
 Android supports selecting several photos at once and retains prepared attachments
-across Activity recreation. Unsent image bytes are not persisted across process death.
+across Activity recreation and process restarts. Android stores prepared image drafts
+in app-private files excluded from backups, scoped by account endpoint, account,
+device and session. Failed saves and unreadable records offer retry without erasing
+the stored draft. An in-progress photo conversion still needs to be retried if the
+process stops before preparation and saving finish.
 
 Model selection belongs to the connected host. A primary model that supports
 images receives their pixels directly. For a text-only primary model, select an
@@ -87,3 +91,10 @@ or opens system notification settings for an existing decision.
 Camera and microphone access stays contextual to scanning and voice input.
 Notification authorization does not extend the platform background-execution
 limits described above.
+
+## Connection recovery
+
+Native iOS and Android controllers probe idle session lists while the app is in the
+foreground. An open transcript uses its existing session poll for recovery instead
+of duplicating the health request. Temporary transport failures keep the displayed
+list or transcript; a successful response restores the connected state.

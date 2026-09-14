@@ -467,4 +467,5 @@
     <string name="miniapps_title">小应用</string>
     <string name="miniapps_close">关闭</string>
     <string name="miniapps_back">返回</string>
+    <string name="chat_attachment_recovery_failed">无法恢复或保存图片草稿，点按重试。</string>
 </resources>

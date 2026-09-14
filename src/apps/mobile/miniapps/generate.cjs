@@ -5,7 +5,7 @@ const root = path.resolve(__dirname, '../../../..');
 const source = path.join(root, 'src/crates/contracts/product-domains/src/miniapp');
 
 const apps = ['gomoku', 'regex-playground', 'divination'];
-function generate(output, nativeWrappers = true) {
+function generate(output, nativeWrappers = true, platformCss = '') {
   fs.mkdirSync(output, { recursive: true });
   const appearance = fs.readFileSync(path.join(source, 'generated/default_appearance_style.html'), 'utf8');
   const bridge = fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8');
@@ -22,7 +22,7 @@ function generate(output, nativeWrappers = true) {
     const script = text => `<script>${text.replace(/<\/script/gi, '<\\/script')}</script>`;
     const html = read('index.html')
       .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">`)
-      .replace('</head>', () => `${appearance}<style>${css}\n${mobileCss}</style>${script(bridge)}</head>`)
+      .replace('</head>', () => `${appearance}<style>${css}\n${mobileCss}\n${platformCss}</style>${script(bridge)}</head>`)
       .replace('</body>', () => `${script(js)}</body>`);
     const file = path.join(output, `${meta.id}.html`);
     if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== html) fs.writeFileSync(file, html);
@@ -41,5 +41,7 @@ module.exports = { generate };
 if (require.main === module) {
   const target = process.argv[2];
   if (!['android', 'ios'].includes(target)) throw new Error('Expected android or ios');
-  generate(path.resolve(__dirname, target === 'android' ? '../android/app/src/main/assets/miniapps' : '../ios/OpenBitFun/Resources/MiniApps'));
+  const platformCss = target === 'ios' ? fs.readFileSync(path.resolve(__dirname, '../ios/miniapps.css'), 'utf8') : '';
+  const output = process.argv[3] || path.resolve(__dirname, target === 'android' ? '../android/app/src/main/assets/miniapps' : '../ios/OpenBitFun/Resources/MiniApps');
+  generate(output, true, platformCss);
 }

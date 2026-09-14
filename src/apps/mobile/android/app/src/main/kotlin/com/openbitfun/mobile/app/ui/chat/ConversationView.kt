@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -108,6 +109,7 @@ internal fun ConversationView(
     onDownloadFile: (String, String) -> Unit,
     modifier: Modifier,
     hostCapabilities: List<String> = emptyList(),
+    attachmentOwner: String = "",
 ) {
     val timeline = state.timeline
     val activeTurn = timeline?.activeTurn
@@ -129,37 +131,43 @@ internal fun ConversationView(
     val draft = state.draft
     val attachments: com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel =
         androidx.lifecycle.viewmodel.compose.viewModel()
-    val attachmentState = remember(sessionId, attachments) { attachments.forSession(sessionId) }
-    var images by attachmentState
-    LaunchedEffect(sessionId, state.lastSentMessage) {
+    val context = LocalContext.current
+    val attachmentKey = org.json.JSONArray(listOf(attachmentOwner, sessionId)).toString()
+    val attachmentDraft = remember(attachmentKey, attachments) {
+        attachments.forSession(attachmentKey, java.io.File(context.noBackupFilesDir, "composer-attachments"))
+    }
+    var images by attachmentDraft.images
+    val attachmentsBlocked = attachmentDraft.loading.value || attachmentDraft.saving.value || attachmentDraft.failed.value
+    LaunchedEffect(attachmentKey, state.lastSentMessage, attachmentDraft.loading.value) {
         state.lastSentMessage?.takeIf { it.sessionId == sessionId }?.let { sent ->
             images = images.filterNot { it.id in sent.imageIds }
         }
     }
     var showSettings by rememberSaveable(sessionId) { mutableStateOf(false) }
-    val context = LocalContext.current
-
     val pickerScope = rememberCoroutineScope()
-    val currentSessionId by rememberUpdatedState(sessionId)
-    var preparingImage by remember(sessionId) { mutableStateOf(false) }
+    val currentAttachmentKey by rememberUpdatedState(attachmentKey)
+    var preparingImage by remember(attachmentKey) { mutableStateOf(false) }
+    var pickerOwner by rememberSaveable { mutableStateOf<String?>(null) }
     val importPhotos: (List<android.net.Uri>) -> Unit = { uris ->
-        if (uris.isNotEmpty() && images.size < MAX_COMPOSER_IMAGES) {
-            val targetSession = sessionId
+        val belongsToCurrentTarget = pickerOwner == attachmentKey
+        pickerOwner = null
+        if (belongsToCurrentTarget && uris.isNotEmpty() && images.size < MAX_COMPOSER_IMAGES) {
+            val targetSession = attachmentKey
             preparingImage = true
             pickerScope.launch {
                 try {
                     for (uri in uris.take(MAX_COMPOSER_IMAGES - images.size)) {
                         val prepared = prepareComposerImage(context.contentResolver, uri)
-                        if (currentSessionId == targetSession && images.size < MAX_COMPOSER_IMAGES) {
+                        if (currentAttachmentKey == targetSession && images.size < MAX_COMPOSER_IMAGES) {
                             images = images + prepared
                         }
                     }
                 } catch (_: Exception) {
-                    if (currentSessionId == targetSession) {
+                    if (currentAttachmentKey == targetSession) {
                         Toast.makeText(context, R.string.chat_image_prepare_failed, Toast.LENGTH_LONG).show()
                     }
                 } finally {
-                    if (currentSessionId == targetSession) preparingImage = false
+                    if (currentAttachmentKey == targetSession) preparingImage = false
                 }
             }
         }
@@ -261,11 +269,16 @@ internal fun ConversationView(
                 )
             }
 
+            if (attachmentDraft.failed.value) {
+                TextButton(onClick = { attachmentDraft.retry() }) {
+                    Text(stringResource(R.string.chat_attachment_recovery_failed))
+                }
+            }
             ComposerBar(
                 draft = draft,
                 images = images,
                 // An empty session id would send nowhere, so it reads as busy.
-                busy = state.busy || preparingImage || sessionId.isEmpty(),
+                busy = state.busy || preparingImage || attachmentsBlocked || sessionId.isEmpty(),
                 streaming = activeTurn != null,
                 phase = phase,
                 model = timeline?.selectedModelOption(stringResource(R.string.models_unnamed)),
@@ -281,6 +294,7 @@ internal fun ConversationView(
                 },
                 modifier = Modifier,
                 onAttach = {
+                    pickerOwner = attachmentKey
                     val remaining = MAX_COMPOSER_IMAGES - images.size
                     if (remaining == 1) singlePhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     else if (remaining > 1) photoPicker.launch(

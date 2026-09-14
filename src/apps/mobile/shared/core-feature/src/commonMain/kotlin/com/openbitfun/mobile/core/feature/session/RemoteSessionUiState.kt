@@ -314,6 +314,9 @@ public sealed interface RemoteSessionUiState {
 }
 
 public sealed interface RemoteSessionIntent {
+    /** Native lifecycle controls the idle connection health probe. */
+    public data class SetForeground(public val active: Boolean) : RemoteSessionIntent
+
     public data object Load : RemoteSessionIntent
 
     public data object Refresh : RemoteSessionIntent

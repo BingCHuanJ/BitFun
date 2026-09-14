@@ -58,6 +58,7 @@ internal fun AccountRemoteScreen(
     deviceName: String,
     createDevices: List<CreateDeviceChoice>,
     accountUsername: String,
+    attachmentOwner: String = deviceId,
     phase: ConnectionPhase,
     settingsPlacement: SettingsPlacement,
     sessionDetailsPlacement: SettingsPlacement,
@@ -84,6 +85,7 @@ internal fun AccountRemoteScreen(
         viewSettingsPlacement = viewSettingsPlacement,
         onOpenRemoteSettings = onOpenRemoteSettings,
         deviceId = deviceId,
+        attachmentOwner = attachmentOwner,
         createDevices = createDevices,
         desktopName = deviceName,
         onCreateDevicePick = onCreateDevicePick,
@@ -113,6 +115,7 @@ private fun RemoteConnectedScreen(
     viewSettingsPlacement: SettingsPlacement,
     onOpenRemoteSettings: () -> Unit,
     deviceId: String,
+    attachmentOwner: String,
     createDevices: List<CreateDeviceChoice>,
     desktopName: String,
     onCreateDevicePick: (String) -> Unit,
@@ -135,6 +138,7 @@ private fun RemoteConnectedScreen(
     if (conversation != null) {
         ConversationView(
             state = conversation,
+            attachmentOwner = attachmentOwner,
             hostCapabilities = (workspaceState as? RemoteWorkspaceUiState.Ready)?.hostCapabilities.orEmpty(),
             phase = phase,
             settingsPlacement = settingsPlacement,

@@ -88,16 +88,44 @@ class MobileParityTest {
         preferences.edit().clear().commit()
     }
 
-    @Test fun preparedAttachmentsSurviveRecreatedOwnersAndStaySessionScoped() {
-        val store = androidx.lifecycle.ViewModelStore()
-        fun owner() = object : androidx.lifecycle.ViewModelStoreOwner { override val viewModelStore = store }
-        val first = androidx.lifecycle.ViewModelProvider(owner())[com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel::class.java]
+    @Test fun preparedAttachmentsSurviveNewStoresAndStayDeviceScoped() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = java.io.File(context.cacheDir, "attachment-test-${java.util.UUID.randomUUID()}")
+        val first = com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel()
+        lateinit var draft: com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel.AttachmentDraft
+        rule.runOnIdle { draft = first.forSession("device-a/session", directory) }
+        rule.waitUntil(5_000) { !draft.loading.value }
         val image = ComposerImage("one", "data:image/png;base64,AAAA", "image/png")
-        first.forSession("session-a").value = listOf(image)
-        val recreated = androidx.lifecycle.ViewModelProvider(owner())[com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel::class.java]
-        assertEquals(listOf(image), recreated.forSession("session-a").value)
-        assertTrue(recreated.forSession("session-b").value.isEmpty())
-        store.clear()
+        rule.runOnIdle { draft.images.value = listOf(image) }
+        rule.waitUntil(5_000) { !draft.saving.value }
+        assertFalse(draft.failed.value)
+        // No shared ViewModelStore or in-memory state: this reads the durable record.
+        val restored = com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel()
+        lateinit var reloaded: com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel.AttachmentDraft
+        lateinit var other: com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel.AttachmentDraft
+        rule.runOnIdle {
+            reloaded = restored.forSession("device-a/session", directory)
+            other = restored.forSession("device-b/session", directory)
+        }
+        rule.waitUntil(5_000) { !reloaded.loading.value && !other.loading.value }
+        assertEquals(listOf(image), reloaded.images.value)
+        assertTrue(other.images.value.isEmpty())
+        // Forward-compatible unknown fields and the original shape without a version.
+        val file = directory.listFiles()!!.single()
+        file.writeText(JSONObject(file.readText()).apply { remove("version"); put("future", true) }.toString())
+        val legacy = com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel()
+        rule.runOnIdle { reloaded = legacy.forSession("device-a/session", directory) }
+        rule.waitUntil(5_000) { !reloaded.loading.value }
+        assertEquals(listOf(image), reloaded.images.value)
+        // Unreadable records remain on disk and must not be overwritten by an empty draft.
+        file.writeText("unparseable")
+        val corrupt = com.openbitfun.mobile.app.viewmodel.ComposerAttachmentsViewModel()
+        rule.runOnIdle { reloaded = corrupt.forSession("device-a/session", directory) }
+        rule.waitUntil(5_000) { !reloaded.loading.value }
+        assertTrue(reloaded.failed.value)
+        rule.runOnIdle { reloaded.images.value = emptyList() }
+        assertEquals("unparseable", file.readText())
+        directory.deleteRecursively()
     }
 
     @Test fun gomokuAllocatesVisibleViewport() = captureOfflineMiniApp(0)

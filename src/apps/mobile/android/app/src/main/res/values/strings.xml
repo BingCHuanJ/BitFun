@@ -482,4 +482,5 @@
     <string name="miniapps_title">Mini Apps</string>
     <string name="miniapps_close">Close</string>
     <string name="miniapps_back">Back</string>
+    <string name="chat_attachment_recovery_failed">Unable to restore or save image drafts. Tap to retry.</string>
 </resources>

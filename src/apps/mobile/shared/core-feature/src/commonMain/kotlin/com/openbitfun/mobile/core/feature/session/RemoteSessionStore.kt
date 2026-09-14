@@ -88,6 +88,8 @@ public class RemoteSessionStore internal constructor(
     private val timelineStore = ChatTimelineStore()
     private val controller = ChatSessionController.create(scope, RoomPoller(transport), ControllerCallbacks())
     private var work: Job? = null
+    private var healthWork: Job? = null
+    private var healthGeneration: Long = 0
     private var modelCatalog: RemoteModelCatalog? = null
     private var modelCatalogFailure: ModelCatalogFailure? = null
     private val locallyCreatedSessions: MutableMap<String, RemoteSession> = mutableMapOf()
@@ -118,6 +120,7 @@ public class RemoteSessionStore internal constructor(
     public fun dispatch(intent: RemoteSessionIntent) {
         val current = _state.value as? RemoteSessionUiState.Ready
         when (intent) {
+            is RemoteSessionIntent.SetForeground -> setForeground(intent.active)
             RemoteSessionIntent.Load, RemoteSessionIntent.Refresh ->
                 load(current?.query.orEmpty(), current?.agentFilter ?: SessionAgentFilter.ALL)
             RemoteSessionIntent.LoadMore -> loadMore()
@@ -171,9 +174,9 @@ public class RemoteSessionStore internal constructor(
             is RemoteSessionIntent.UpdateDraft -> updateDraft(intent.text)
             is RemoteSessionIntent.SendMessage -> sendMessage(intent)
             is RemoteSessionIntent.BuildPlan -> {
-                if ("plan_build_v1" !in hostCapabilities) {
-                    _state.value = RemoteSessionUiState.Failed(RemoteSessionFailureReason.PROTOCOL_MISMATCH)
-                } else if (current?.timeline?.activeTurn == null && intent.path.isNotBlank()) {
+                // Native plan cards expose the unsupported state. A stale or direct
+                // intent must not discard the live transcript or its draft.
+                if ("plan_build_v1" in hostCapabilities && current?.timeline?.activeTurn == null && intent.path.isNotBlank()) {
                     sendMessage(RemoteSessionIntent.SendMessage(intent.sessionId, "Build Plan: ${intent.name}"), intent)
                 }
             }
@@ -499,6 +502,7 @@ public class RemoteSessionStore internal constructor(
     private fun isCurrentWork(token: Long): Boolean = token == workGeneration
 
     public fun stop() {
+        setForeground(false)
         activeCreateGeneration?.let { generation ->
             val requestId = (_createOperation.value as? CreateSessionOperationState.InFlight)?.requestId
             if (requestId != null) {
@@ -1771,6 +1775,33 @@ public class RemoteSessionStore internal constructor(
             _state.value = current.copy(busy = false)
         }
         _connectionPhase.value = ConnectionPhase.FAILED
+    }
+
+    /** Open transcripts already probe via poll_session; idle lists need their own health check. */
+    private fun setForeground(active: Boolean) {
+        if (active && healthWork?.isActive == true) return
+        val generation = ++healthGeneration
+        healthWork?.cancel()
+        healthWork = null
+        if (!active) return
+        healthWork = scope.launch {
+            while (generation == healthGeneration) {
+                val ready = _state.value as? RemoteSessionUiState.Ready
+                if (ready != null && !ready.busy && ready.timeline == null) {
+                    try {
+                        transport.send<com.openbitfun.mobile.core.protocol.CommandStatusResponse>(RemoteCommand(cmd = "ping"))
+                        // A probe cannot overwrite a newer mutation's connection outcome.
+                        if (generation == healthGeneration && _state.value === ready) markConnected()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Throwable) {
+                        if (generation == healthGeneration && _state.value === ready) handleFailure(error, ready)
+                    }
+                }
+                // Match the native HarmonyOS idle health cadence, with no overlapping probes.
+                kotlinx.coroutines.delay(15_000)
+            }
+        }
     }
 
     private fun markConnected() {

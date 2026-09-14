@@ -1073,8 +1073,10 @@ class RemoteSessionStoreTest {
                 assertEquals("Design", sent?.planName)
                 assertEquals("code", sent?.agentType)
             }
-            if (supported) assertEquals("keep draft", assertIs<RemoteSessionUiState.Ready>(store.state.value).draft)
-            else assertEquals(RemoteSessionFailureReason.PROTOCOL_MISMATCH, assertIs<RemoteSessionUiState.Failed>(store.state.value).reason)
+            val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+            assertEquals("keep draft", ready.draft)
+            assertEquals("s-code", ready.selectedSessionId)
+            assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
             store.stop()
         }
     }
@@ -1204,6 +1206,56 @@ class RemoteSessionStoreTest {
         assertEquals("keep me", ready.draft)
         assertEquals(false, ready.busy)
         store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun idleHealthRecoversWithoutDiscardingListAndStopsInBackground() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
+        val sessions = assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions
+        transport.pingFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
+        assertEquals(ConnectionPhase.RECONNECTING, store.connectionPhase.value)
+        assertEquals(sessions, assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions)
+        transport.pingFailure = null
+        advanceTimeBy(15_000); runCurrent()
+        assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
+        store.dispatch(RemoteSessionIntent.SetForeground(false))
+        val count = transport.commands.count { it.cmd == "ping" }
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(count, transport.commands.count { it.cmd == "ping" })
+        store.stop()
+    }
+
+    @Test
+    fun slowHealthProbesDoNotOverlapAndLateResultsCannotChangeStoppedState() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
+        transport.nonCancellableCommands += "ping"
+        store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(1, transport.commands.count { it.cmd == "ping" })
+        store.stop()
+        val stoppedPhase = store.connectionPhase.value
+        val stoppedState = store.state.value
+        transport.lateCommandContinuations.getValue("ping").resume(Unit)
+        runCurrent()
+        assertEquals(stoppedPhase, store.connectionPhase.value)
+        assertEquals(stoppedState, store.state.value)
+    }
+
+    @Test
+    fun openTranscriptUsesExistingPollForHealthInsteadOfExtraPings() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
+        store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
+        advanceTimeBy(30_000); runCurrent()
+        assertTrue(transport.commands.any { it.cmd == "poll_session" })
+        assertTrue(transport.commands.none { it.cmd == "ping" })
+        store.stop()
     }
 
     @Test
@@ -1396,6 +1448,7 @@ private class FakeSessionTransport : RemoteCommandTransport {
 
     /** When set, the open conversation's health poll fails below the desktop. */
     var pollFailure: RelayFailure? = null
+    var pingFailure: RelayFailure? = null
 
     /** When set, `send_message` fails below the desktop while the draft is kept. */
     var sendMessageFailure: RelayFailure? = null
@@ -1439,6 +1492,7 @@ private class FakeSessionTransport : RemoteCommandTransport {
             rejection?.let { throw RelayTransportException(RelayFailure.RemoteRejected(it)) }
             failure?.let { throw RelayTransportException(it) }
         }
+        if (command.cmd == "ping") pingFailure?.let { throw RelayTransportException(it) }
         if (command.cmd == "poll_session") {
             pollFailure?.let { throw RelayTransportException(it) }
         }
@@ -1479,7 +1533,7 @@ private class FakeSessionTransport : RemoteCommandTransport {
             "create_session" -> """{"resp":"ok","session_id":"s-new"}"""
             "set_session_model" -> """{"resp":"ok","model_id":"model-primary"}"""
             "send_message", "steer_turn", "build_plan" -> """{"resp":"ok","turn_id":"t-1"}"""
-            "delete_session", "update_session_title", "answer_question", "set_permission_mode", "confirm_tool" ->
+            "ping", "delete_session", "update_session_title", "answer_question", "set_permission_mode", "confirm_tool" ->
                 """{"resp":"ok"}"""
             else -> error("Unexpected command ${command.cmd}")
         }
