@@ -80,6 +80,7 @@ describe('DetailPage moderation', () => {
     expect(unpublishButton).toBeDefined();
 
     const reason = container.querySelector<HTMLTextAreaElement>('#moderation-reason');
+    expect(reason?.closest('[data-openbitfun-component="textarea"]')).not.toBeNull();
     await act(async () => {
       if (!reason) throw new Error('moderation reason missing');
       const valueSetter = Object.getOwnPropertyDescriptor(

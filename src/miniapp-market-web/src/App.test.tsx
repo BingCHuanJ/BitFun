@@ -47,6 +47,11 @@ it('preserves native submission fields and update constraints on the actual subm
   expect(form!.querySelectorAll('input[type="file"]')).toHaveLength(2);
   expect((form!.elements.namedItem('screenshots') as HTMLInputElement).multiple).toBe(true);
   expect(form!.querySelector<HTMLButtonElement>('.submit-button')!.type).toBe('submit');
+  const description = form!.elements.namedItem('description') as HTMLTextAreaElement;
+  expect(description.rows).toBe(3);
+  expect(description.maxLength).toBe(500);
+  expect(description.required).toBe(true);
+  expect(description.closest('[data-openbitfun-component="textarea"]')).not.toBeNull();
   expect(form!.checkValidity()).toBe(false);
 });
 

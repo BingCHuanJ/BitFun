@@ -1,3 +1,4 @@
+import { Textarea } from '@openbitfun/ui';
 import {
   ArrowLeft,
   ExternalLink as ArrowSquareOut,
@@ -226,7 +227,7 @@ export function DetailPage({ catalogSearch, isAdmin, locale, onNavigate, slug, t
                 </div>
                 <label className="moderation-panel__reason" htmlFor="moderation-reason">
                   <span>{t('moderationReason')}</span>
-                  <textarea
+                  <Textarea className="market-textarea"
                     id="moderation-reason"
                     value={moderationReason}
                     maxLength={1000}

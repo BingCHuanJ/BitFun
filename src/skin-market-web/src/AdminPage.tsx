@@ -1,3 +1,4 @@
+import { Textarea } from '@openbitfun/ui';
 import { GithubLogo } from '@phosphor-icons/react';
 import { RefreshCw as ArrowClockwise, ShieldCheck, CircleAlert as WarningCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -205,7 +206,7 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
                   {detail.manifest !== undefined && <details className="manifest-panel"><summary>{t('reviewManifest')}</summary><pre>{JSON.stringify(detail.manifest, null, 2)}</pre></details>}
                   <div className="review-actions">
                     <label htmlFor="review-reason">{t('reviewReason')}</label>
-                    <textarea id="review-reason" rows={4} maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} placeholder={t('reviewReasonPlaceholder')} />
+                    <Textarea className="market-textarea" id="review-reason" rows={4} maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} placeholder={t('reviewReasonPlaceholder')} />
                     <div>
                       <button type="button" className="secondary-button danger-button" disabled={acting || !reason.trim()} onClick={() => void decide('reject')}>{t('reviewReject')}</button>
                       <button type="button" className="primary-button" disabled={acting} onClick={() => void decide('approve')}>{acting ? t('reviewActing') : t('reviewApprove')}</button>

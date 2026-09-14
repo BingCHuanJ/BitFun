@@ -2293,3 +2293,14 @@ img {
   letter-spacing: inherit;
   height: auto;
 }
+
+/* Textarea owns a wrapper; keep the native editor filling its form column. */
+.market-textarea[data-openbitfun-component="textarea"] {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+.market-textarea > textarea {
+  min-block-size: 0;
+  letter-spacing: inherit;
+}

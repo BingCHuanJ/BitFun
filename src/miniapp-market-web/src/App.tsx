@@ -1,4 +1,4 @@
-import { Input } from '@openbitfun/ui';
+import { Input, Textarea } from '@openbitfun/ui';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CubeFocus as MarketLogo, GithubLogo, IconContext } from '@phosphor-icons/react';
 import {
@@ -1077,7 +1077,7 @@ function SubmitPage({
             </Field>
           </div>
           <Field label={t('descriptionLabel')}>
-            <textarea name="description" required maxLength={500} rows={3} />
+            <Textarea className="market-textarea" name="description" required maxLength={500} rows={3} />
           </Field>
         </fieldset>
 
@@ -1101,7 +1101,7 @@ function SubmitPage({
             </Field>
           </div>
           <Field label={t('changelog')}>
-            <textarea name="changelog" required rows={4} />
+            <Textarea className="market-textarea" name="changelog" required rows={4} />
           </Field>
         </fieldset>
 
