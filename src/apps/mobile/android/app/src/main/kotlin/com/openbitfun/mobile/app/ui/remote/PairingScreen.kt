@@ -132,8 +132,16 @@ private fun RemoteConnectedScreen(
     modifier: Modifier,
 ) {
     RemoteDownloadSaver(workspaceState, onWorkspaceIntent)
-    val conversation = (remoteState as? RemoteSessionUiState.Ready)?.takeIf {
-        requestedSessionId != null && it.selectedSessionId == requestedSessionId && it.timeline != null
+    val ready = remoteState as? RemoteSessionUiState.Ready
+    // Route immediately. A previous session snapshot must never stand in for the requested one.
+    val conversation = requestedSessionId?.takeIf { remoteState !is RemoteSessionUiState.Failed }?.let { requested ->
+        val matches = ready?.selectedSessionId == requested && ready.timeline?.sessionId == requested
+        if (matches) ready else RemoteSessionUiState.Ready(
+            sessions = ready?.sessions.orEmpty(), selectedSessionId = requested,
+            timeline = null, busy = true, permissionMode = null, permissionModeFailure = null,
+            query = "", agentFilter = com.openbitfun.mobile.core.feature.session.SessionAgentFilter.ALL,
+            hasMore = false, hasMoreMessages = false, modelCatalog = null,
+        )
     }
     if (conversation != null) {
         ConversationView(
@@ -174,6 +182,19 @@ private fun RemoteConnectedScreen(
             },
             modifier = modifier,
         )
+    } else if (requestedSessionId != null && remoteState is RemoteSessionUiState.Failed) {
+        Column(modifier.fillMaxSize()) {
+            RemoteShellHeader(onOpenSidebar, desktopName, onOpenRemoteSettings)
+            Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(stringResource(R.string.sessions_failed), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = {
+                    onSessionIntent(com.openbitfun.mobile.core.feature.session.RemoteSessionIntent.Open(requestedSessionId))
+                }) { Text(stringResource(R.string.sessions_retry)) }
+                TextButton(onClick = onRemoteHome) { Text(stringResource(R.string.conversation_back)) }
+            }
+        }
     } else if (creatingSession) {
         CreateSessionRoute(
             sessionState = remoteState,
@@ -196,8 +217,8 @@ private fun RemoteConnectedScreen(
             onOpenSidebar = onOpenSidebar,
             onBrowse = onOpenSidebar,
             onOpen = { id ->
-                onSessionIntent(com.openbitfun.mobile.core.feature.session.RemoteSessionIntent.Open(id))
                 onOpenSession(id)
+                onSessionIntent(com.openbitfun.mobile.core.feature.session.RemoteSessionIntent.Open(id))
             },
             onOpenRemoteSettings = onOpenRemoteSettings,
             modifier = modifier,

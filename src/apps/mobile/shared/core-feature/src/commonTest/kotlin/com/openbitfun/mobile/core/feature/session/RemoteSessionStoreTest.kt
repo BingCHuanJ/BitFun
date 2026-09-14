@@ -1279,6 +1279,25 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun acknowledgementDoesNotClearAnIdenticalNewDraft() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("same question"))
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = gate
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "same question"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft(""))
+        store.dispatch(RemoteSessionIntent.UpdateDraft("same question"))
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("same question", assertIs<RemoteSessionUiState.Ready>(store.state.value).draft)
+        store.stop()
+    }
+
+    @Test
     fun sendMessageFallsBackToTheLocallyCreatedRecordWhenTheFilterHidesTheSession() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)

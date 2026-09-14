@@ -468,4 +468,9 @@
     <string name="miniapps_close">关闭</string>
     <string name="miniapps_back">返回</string>
     <string name="chat_attachment_recovery_failed">无法恢复或保存图片草稿，点按重试。</string>
+    <string name="chat_subagent_output">子任务输出</string>
+    <string name="miniapps_all">全部应用</string>
+    <string name="miniapps_offline">离线可用</string>
+    <string name="miniapps_load_failed">无法加载小应用，请重试</string>
+    <string name="account_authorization_open_failed">无法打开授权页面，请重试。</string>
 </resources>

@@ -313,9 +313,9 @@ internal fun MobileScreen() {
                 shell.closeRemoteSession()
             },
             onOpenRemoteSession = { sessionId ->
-                dispatchActiveSession(RemoteSessionIntent.Open(sessionId))
                 shell.openRemoteSession(sessionId)
                 closeDrawer()
+                dispatchActiveSession(RemoteSessionIntent.Open(sessionId))
             },
             onCreateRemoteInWorkspace = { path, agentType ->
                 dispatchActiveSession(
