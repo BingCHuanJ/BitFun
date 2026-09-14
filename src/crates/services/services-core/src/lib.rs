@@ -39,6 +39,8 @@ pub mod memory_store;
 pub mod permission_store;
 #[cfg(feature = "local-storage")]
 pub mod persistence;
+#[cfg(feature = "pet-packages")]
+pub mod pet_packages;
 #[cfg(feature = "process-runtime")]
 pub mod process_manager;
 #[cfg(feature = "process-runtime")]

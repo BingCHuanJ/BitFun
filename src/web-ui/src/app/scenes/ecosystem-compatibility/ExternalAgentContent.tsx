@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, us
 import { Alert, Button, Checkbox, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeaderActions, DialogHeading, DialogTitle, Icon, IconButton, Input, LoadingState, OverflowText, ScrollArea, SearchField, Select, StatusPill, type IconSource } from '@openbitfun/ui';
 import { EcosystemDialog as Dialog } from './EcosystemDialog';
 import { EcosystemBatchLayout } from './EcosystemBatchLayout';
+import EcosystemPets from './EcosystemPets';
 import EcosystemAccounts, { ecosystemAccountProvider } from './EcosystemAccounts';
 import { presentEcosystemContent } from './ecosystemContentPresentation';
 import { ecosystemDiscoveryCache, rememberEcosystemHooks, rememberEcosystemSkills } from './ecosystemDiscoveryCache';
@@ -92,8 +93,9 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
     ? instructionSnapshot?.catalog ?? null : null;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [accountRefreshVersion, setAccountRefreshVersion] = useState(0);
+  const [contentRefreshVersion, setContentRefreshVersion] = useState(0);
   const [accountExpanded, setAccountExpanded] = useState(false);
+  const [petExpanded, setPetExpanded] = useState(false);
   const [loadFailures, setLoadFailures] = useState<string[]>([]);
   const [plan, setPlan] = useState<ExternalMcpImportPlanV1 | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -596,7 +598,7 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
   const refreshContent = async () => {
     if (busy || refreshing) return;
     setRefreshing(true);
-    setAccountRefreshVersion((value) => value + 1);
+    setContentRefreshVersion((value) => value + 1);
     setNotice(null);
     void refreshMcpPlan(true);
     const results = await Promise.allSettled([loadSupplemental(true), onRefresh()]);
@@ -630,8 +632,9 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
           <span role="columnheader">{t('import.columns.state')}</span>
         </div>
       {Array.from(new Set(items.map((item) => item.kind))).map((group) => {
+        if (group === 'pet' && runtime.spec.id === 'codex') return <EcosystemPets key="pet" supported={localImportSupported} refreshVersion={contentRefreshVersion} expanded={petExpanded} onToggle={() => { setPetExpanded((expanded) => !expanded); setAccountExpanded(false); setSearch(''); setSelected(new Set()); }} />;
         const accountProvider = ecosystemAccountProvider(runtime.spec.id);
-        if (group === 'account' && accountProvider) return <EcosystemAccounts key={`${group}:${accountProvider}`} provider={accountProvider} supported={localImportSupported} refreshVersion={accountRefreshVersion} expanded={accountExpanded} onToggle={() => { setAccountExpanded((expanded) => !expanded); setSearch(''); setSelected(new Set()); }} />;
+        if (group === 'account' && accountProvider) return <EcosystemAccounts key={`${group}:${accountProvider}`} provider={accountProvider} supported={localImportSupported} refreshVersion={contentRefreshVersion} expanded={accountExpanded} onToggle={() => { setAccountExpanded((expanded) => !expanded); setPetExpanded(false); setSearch(''); setSelected(new Set()); }} />;
         const groupItems = items.filter((item) => item.kind === group);
         const representative = groupItems[0];
         const count = groupItems.filter((item) => item.discovered).length;
@@ -663,7 +666,7 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
                 icon={<Icon name="chevron-right" size="sm" />}
                 aria-label={t('content.viewCategory', { type: t(`capabilities.${group}`) })}
                 aria-haspopup="dialog" aria-controls={categoryDialogId}
-                onClick={() => { setAccountExpanded(false); setKind(group); setSearch(''); setSelected(new Set()); setNotice(null); }} /> : null}
+                onClick={() => { setAccountExpanded(false); setPetExpanded(false); setKind(group); setSearch(''); setSelected(new Set()); setNotice(null); }} /> : null}
             </span>
           </div>
         </div>;

@@ -8,7 +8,7 @@ import type { ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service
 import { buildEcosystemProductRuntimes, type EcosystemProductId } from './ecosystemCompatibilityModel';
 
 const mocks = vi.hoisted(() => ({
-  getAccounts: vi.fn(), getInstructions: vi.fn(), openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
+  getAccounts: vi.fn(), getPets: vi.fn(), importPet: vi.fn(), getPetSettings: vi.fn(), savePetSettings: vi.fn(), getInstructions: vi.fn(), openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
   deleteSkill: vi.fn(), loadMcp: vi.fn(), saveMcp: vi.fn(), mutateHook: vi.fn(), getSkills: vi.fn(), validateSkill: vi.fn(), addSkill: vi.fn(), getHooks: vi.fn(), getHookCatalog: vi.fn(),
   planHook: vi.fn(), applyHook: vi.fn(), planMcp: vi.fn(), applyMcp: vi.fn(), refresh: vi.fn(),
   workspacePath: '/project', remote: false, peer: false, skillImportVersion: 0,
@@ -23,6 +23,7 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({ useCurrentWorkspa
 vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({ usePeerDeviceModeOptional: () => ({ peerMode: { active: mocks.peer } }) }));
 vi.mock('@/infrastructure/runtime', () => ({ isTauriRuntime: () => true }));
 vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({ configAPI: {
+  getConfig: mocks.getPetSettings,
   getSkillScanReport: async (...args: unknown[]) => ({ skills: await mocks.getSkills(...args), diagnostics: [], importOperationsVersion: mocks.skillImportVersion }), validateSkillPath: mocks.validateSkill, addSkill: mocks.addSkill, deleteSkill: mocks.deleteSkill,
 } }));
 vi.mock('@/infrastructure/api/service-api/ExternalHooksAPI', () => ({ externalHooksAPI: {
@@ -30,6 +31,13 @@ vi.mock('@/infrastructure/api/service-api/ExternalHooksAPI', () => ({ externalHo
 } }));
 vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({ externalSourcesAPI: {
   planMcpImport: mocks.planMcp, applyMcpImport: mocks.applyMcp,
+} }));
+vi.mock('@/infrastructure/config/services/AgentCompanionPetService', () => ({
+  listExternalAgentCompanionPets: mocks.getPets, importReviewedAgentCompanionPet: mocks.importPet,
+  AGENT_COMPANION_PETS_CHANGED: 'agent-companion-pets-changed',
+}));
+vi.mock('@/infrastructure/config/services/AIExperienceConfigService', () => ({ aiExperienceConfigService: {
+  saveSettings: mocks.savePetSettings, addChangeListener: () => () => {},
 } }));
 vi.mock('@/infrastructure/api/service-api/AIApi', () => ({ aiApi: { listSubscriptionAccounts: mocks.getAccounts } }));
 vi.mock('@/infrastructure/api/service-api/InstructionSourcesAPI', () => ({ instructionSourcesAPI: { getCatalog: mocks.getInstructions } }));
@@ -47,12 +55,12 @@ vi.mock('@openbitfun/ui', async (importOriginal) => {
     DialogClose: () => null, DialogDescription: Wrapper, DialogHeaderActions: Wrapper, DialogFooter: Wrapper, DialogHeader: Wrapper, DialogHeading: Wrapper, DialogTitle: Wrapper, DialogBody: Wrapper,
     Icon: () => <span data-icon="true" />,
     IconButton: ({ icon, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon: React.ReactNode }) => <button {...props}>{icon}</button>,
-    Card: Wrapper,
+    Card: Wrapper, CardBody: Wrapper,
     CardHeader: ({ title, description }: { title?: React.ReactNode; description?: React.ReactNode }) => <div>{title}{description}</div>,
     ScrollArea: Wrapper, LoadingState: Wrapper, OverflowText: Wrapper, StatusPill: Wrapper,
   };
 });
-import ExternalAgentContent from './ExternalAgentContent';
+import ExternalAgentContent, { type ExternalAgentContentHandle } from './ExternalAgentContent';
 import { clearEcosystemDiscoveryCache } from './ecosystemDiscoveryCache';
 
 function fixture() {
@@ -102,6 +110,9 @@ describe('external agent content and explicit import boundary', () => {
     mocks.remote = false; mocks.peer = false; mocks.workspacePath = '/project'; mocks.skillImportVersion = 0;
     data = fixture();
     mocks.getAccounts.mockResolvedValue([]);
+    mocks.getPets.mockResolvedValue({ candidates: [], diagnostics: [] });
+    mocks.getPetSettings.mockResolvedValue({ enable_agent_companion: false });
+    mocks.savePetSettings.mockResolvedValue(undefined);
     mocks.getInstructions.mockResolvedValue({ schemaVersion: 1, entries: [], failedEcosystems: [] });
     mocks.getSkills.mockImplementation(async () => [...data.skills]);
     mocks.getHooks.mockResolvedValue(data.hooks);
@@ -234,6 +245,80 @@ describe('external agent content and explicit import boundary', () => {
     await render('claude-code');
     expect(mocks.getAccounts).not.toHaveBeenCalled();
     expect(container.querySelector('[data-content-group="account"] button')).toBeNull();
+  });
+
+  function petFixture() {
+    const pet = { id: 'cat', displayName: 'Codex Cat', source: 'codex', packagePath: '/codex/pets/cat', spritesheetPath: '/codex/pets/cat/sprite.png', spritesheetMimeType: 'image/png', spriteVersionNumber: 2 };
+    const candidate = { sourceKey: 'cat-key', fingerprint: 'reviewed-v1', pet, previewDataUrl: 'data:image/png;base64,AA==', imported: null as null | typeof pet, copyModified: false, sourceChanged: false };
+    return { candidates: [candidate], diagnostics: [] as string[] };
+  }
+
+  it('keeps pet expansion separate from category dialogs and refreshes it from the scene control', async () => {
+    mocks.getPets.mockResolvedValue(petFixture());
+    const refreshControlRef = React.createRef<ExternalAgentContentHandle>();
+    const runtime = buildEcosystemProductRuntimes(data.snapshot, []).find((entry) => entry.spec.id === 'codex')!;
+    await act(async () => root.render(<ExternalAgentContent runtime={runtime} snapshot={data.snapshot} catalogFailed={false} onRefresh={mocks.refresh} refreshControlRef={refreshControlRef} />));
+    await expand('pet');
+    expect(container.textContent).toContain('Codex Cat');
+    expect(container.querySelector('[data-ecosystem-category="pet"]')).toBeNull();
+    mocks.getPets.mockClear(); mocks.getAccounts.mockClear();
+    await act(async () => refreshControlRef.current!.refresh());
+    expect(mocks.getPets).toHaveBeenCalledTimes(1);
+    expect(mocks.getAccounts).toHaveBeenCalledTimes(1);
+    await expand('skill');
+    expect(container.querySelector('[data-content-group="pet"] button[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector('[data-ecosystem-category="skill"]')).not.toBeNull();
+  });
+
+  it('reviews a pet before copying, then offers explicit use without selecting it during import', async () => {
+    const catalog = petFixture();
+    mocks.getPets.mockResolvedValue(catalog);
+    mocks.importPet.mockImplementation(async () => { catalog.candidates[0].imported = { ...catalog.candidates[0].pet, source: 'user', packagePath: '/native/cat' }; return catalog.candidates[0].imported; });
+    await render(); await expand('pet');
+    expect(container.textContent).toContain('Codex Cat');
+    expect(mocks.importPet).not.toHaveBeenCalled();
+    await click('content.prepareImport');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('content.pets.reviewDescription');
+    await click('content.confirm');
+    expect(mocks.importPet.mock.calls[0][0].fingerprint).toBe('reviewed-v1');
+    expect(mocks.savePetSettings).not.toHaveBeenCalled();
+    await click('content.pets.use');
+    expect(mocks.savePetSettings).toHaveBeenCalledWith({ agent_companion_pet: expect.objectContaining({ packagePath: '/native/cat' }), enable_agent_companion: true });
+  });
+
+  it('refreshes pet import state after native deletion and retains edited copies', async () => {
+    const catalog = petFixture();
+    catalog.candidates[0].imported = { ...catalog.candidates[0].pet, source: 'user', packagePath: '/native/cat' };
+    catalog.candidates[0].copyModified = true;
+    mocks.getPets.mockResolvedValue(catalog);
+    await render(); await expand('pet');
+    expect(container.textContent).toContain('content.pets.states.copyModified');
+    expect(container.textContent).not.toContain('content.prepareImport');
+    catalog.candidates[0].imported = null; catalog.candidates[0].copyModified = false;
+    await act(async () => globalEventBus.emit('agent-companion-pets-changed', {}));
+    expect(container.textContent).toContain('content.pets.states.ready');
+    expect(container.textContent).toContain('content.prepareImport');
+  });
+
+  it('shows a failed pet confirmation and never selects a disappeared native copy', async () => {
+    const catalog = petFixture(); mocks.getPets.mockResolvedValue(catalog);
+    mocks.importPet.mockRejectedValue(new Error('Source changed'));
+    await render(); await expand('pet'); await click('content.prepareImport'); await click('content.confirm');
+    expect(container.textContent).toContain('content.pets.operationFailed');
+    expect(mocks.savePetSettings).not.toHaveBeenCalled();
+    catalog.candidates[0].imported = { ...catalog.candidates[0].pet, source: 'user', packagePath: '/native/cat' };
+    await act(async () => globalEventBus.emit('agent-companion-pets-changed', {}));
+    mocks.getPets.mockResolvedValue(petFixture());
+    await click('content.pets.use');
+    expect(mocks.savePetSettings).not.toHaveBeenCalled();
+  });
+
+  it('does not load local pets in an unsupported context or another ecosystem', async () => {
+    mocks.peer = true; await render(); await expand('pet');
+    expect(mocks.getPets).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('content.pets.states.unsupported');
+    mocks.peer = false; await render('claude-code');
+    expect(mocks.getPets).not.toHaveBeenCalled();
   });
 
   it('keeps copy management on imported rows without category management links', async () => {

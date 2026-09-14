@@ -10,6 +10,7 @@ export const publicApiContractSlices = [
   'external-source-tool-contract',
   'external-source-subagent-contract',
   'external-source-mcp-contract',
+  'external-source-pet-contract',
   'external-source-hook-contract',
   'external-source-reference-contract',
   'user-instruction-source-boundary',
@@ -67,6 +68,7 @@ const contractSlices = {
   externalSourceToolContract: 'external-source-tool-contract',
   externalSourceSubagentContract: 'external-source-subagent-contract',
   externalSourceMcpContract: 'external-source-mcp-contract',
+  externalSourcePetContract: 'external-source-pet-contract',
   externalSourceHookContract: 'external-source-hook-contract',
   externalSourceReferenceContract: 'external-source-reference-contract',
   userInstructionSourceBoundary: 'user-instruction-source-boundary',
@@ -539,7 +541,17 @@ export const codexAdapterPublicApiEntries = [
 ))).concat([
   'load_codex_user_instructions',
   'CodexInstructionSourceOptions',
-].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Codex')));
+].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Codex'))).concat([{
+  symbol: 'pet_source_root',
+  owner: 'Codex adapter static pet source owner',
+  consumer: 'openbitfun-core external source composition facade',
+  verification: 'Codex configured root test and services-core pet package fixtures',
+  p0: 'local custom pet source root discovery without execution or installation',
+  contractSlice: contractSlices.externalSourcePetContract,
+  wireImpact: false,
+  rationale: 'the adapter resolves CODEX_HOME; the host supplies the native destination to the portable pet package service',
+  exit: 'remove only when an equivalent typed pet source provider owns this root',
+}]);
 
 export const staticHookSupportPublicApiEntries = [
   // Shared by DSH/PI only for validated, redacted source/event construction.
@@ -1211,6 +1223,7 @@ export const externalSourceCorePublicApiEntries = [
     'NativePromptCommandConflictSnapshot',
     'native_prompt_command_conflicts',
     'instruction_source_catalog',
+    'external_pet_source_root',
     'InstructionSourceCatalog',
     'set_native_prompt_command_conflict_choice',
     'external_source_conflict_choices',

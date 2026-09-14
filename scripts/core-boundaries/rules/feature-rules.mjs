@@ -43,10 +43,13 @@ export const optionalDependencyFeatureOwnerRules = [
     reason:
       'services-core optional implementation dependencies must stay behind their exact owner capability',
     dependencies: [
+      { depName: 'image', ownerFeatures: ['pet-packages'] },
+      { depName: 'zip', ownerFeatures: ['pet-packages'] },
+      { depName: 'uuid', ownerFeatures: ['pet-packages'] },
       { depName: 'aes-gcm', ownerFeatures: ['credential-vault'] },
       { depName: 'anyhow', ownerFeatures: ['credential-vault', 'dispatch-workspace', 'workspace-runtime', 'workspace-transfer'] },
       { depName: 'async-trait', ownerFeatures: ['permission', 'workspace-runtime'] },
-      { depName: 'base64', ownerFeatures: ['credential-vault', 'filesystem'] },
+      { depName: 'base64', ownerFeatures: ['pet-packages', 'credential-vault', 'filesystem'] },
       {
         depName: 'openbitfun-core-types',
         ownerFeatures: ['filesystem', 'local-storage', 'product-identity', 'workspace-persistence'],
@@ -55,8 +58,8 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'openbitfun-runtime-ports', ownerFeatures: ['permission', 'workspace-runtime', 'workspace-persistence', 'workspace-transfer'] },
       { depName: 'chrono', ownerFeatures: ['filesystem', 'local-storage', 'workspace-persistence'] },
       { depName: 'chrono-tz', ownerFeatures: ['token-usage-statistics'] },
-      { depName: 'dunce', ownerFeatures: ['runtime-ownership', 'workspace-identity', 'workspace-runtime'] },
-      { depName: 'fs2', ownerFeatures: ['credential-vault', 'json-io', 'local-storage', 'runtime-ownership'] },
+      { depName: 'dunce', ownerFeatures: ['pet-packages', 'runtime-ownership', 'workspace-identity', 'workspace-runtime'] },
+      { depName: 'fs2', ownerFeatures: ['pet-packages', 'credential-vault', 'json-io', 'local-storage', 'runtime-ownership'] },
       { depName: 'git2', ownerFeatures: ['session-git'] },
       { depName: 'globset', ownerFeatures: ['workspace-instructions'] },
       { depName: 'ignore', ownerFeatures: ['filesystem'] },
@@ -79,6 +82,7 @@ export const optionalDependencyFeatureOwnerRules = [
       {
         depName: 'sha2',
         ownerFeatures: [
+          'pet-packages',
           'dispatch-workspace',
           'filesystem',
           'local-storage',

@@ -343,6 +343,26 @@
         "notConnected": "未接入"
       },
       "refresh": "重新整理帳號狀態"
+    },
+    "pets": {
+      "description": "查看 Codex 自訂寵物，匯入後可在 OpenBitFun 中使用。",
+      "partial": "部分寵物無法讀取，請檢查下方來源診斷。",
+      "reviewTitle": "匯入寵物",
+      "reviewDescription": "將已預覽的寵物套件複製到 OpenBitFun。匯入後可單獨選擇使用，目前寵物保持不變。",
+      "operationFailed": "操作未完成，來源或副本可能已變更。請重新整理後再次確認。",
+      "use": "使用此寵物",
+      "states": {
+        "unsupported": "暫不支援",
+        "failed": "讀取失敗",
+        "partial": "部分可用",
+        "available": "支援探索",
+        "empty": "未發現寵物",
+        "copyModified": "副本已修改",
+        "sourceChanged": "來源已變更",
+        "using": "正在使用",
+        "imported": "已匯入",
+        "ready": "可匯入"
+      }
     }
   },
   "sourceSettings": {

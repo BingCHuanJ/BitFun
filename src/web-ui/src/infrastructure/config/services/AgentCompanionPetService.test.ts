@@ -68,3 +68,42 @@ describe('AgentCompanionPetService built-in presets', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
+
+
+describe('reviewed external pet protocol', () => {
+  beforeEach(() => invoke.mockReset());
+
+  it('rejects hosts without reviewed import capability and unsafe previews', async () => {
+    const { listExternalAgentCompanionPets } = await import('./AgentCompanionPetService');
+    invoke.mockResolvedValueOnce({ pets: [] });
+    await expect(listExternalAgentCompanionPets()).rejects.toThrow('unavailable');
+    invoke.mockResolvedValueOnce({ importOperationsVersion: 1, external: {
+      candidates: [{ sourceKey: 'cat', fingerprint: 'hash', pet: { packagePath: '/source/cat' }, previewDataUrl: 'file:///private/image' }], diagnostics: [],
+    } });
+    await expect(listExternalAgentCompanionPets()).rejects.toThrow('unavailable');
+    expect(invoke).toHaveBeenCalledWith('list_agent_companion_pets', { request: { includeExternal: true } });
+  });
+
+  it('sends the reviewed fingerprint and emits changes only after a successful copy', async () => {
+    const { importReviewedAgentCompanionPet, AGENT_COMPANION_PETS_CHANGED } = await import('./AgentCompanionPetService');
+    const { globalEventBus } = await import('@/infrastructure/event-bus');
+    const changed = vi.fn();
+    const off = globalEventBus.on(AGENT_COMPANION_PETS_CHANGED, changed);
+    const candidate = {
+      sourceKey: 'cat', fingerprint: 'reviewed-hash', previewDataUrl: 'data:image/png;base64,AA==',
+      pet: { id: 'cat', displayName: 'Cat', source: 'codex' as const, packagePath: '/source/cat', spritesheetPath: '/source/cat/sprite.png', spritesheetMimeType: 'image/png' },
+      imported: null, copyModified: false, sourceChanged: false,
+    };
+    try {
+      invoke.mockRejectedValueOnce(new Error('Source changed'));
+      await expect(importReviewedAgentCompanionPet(candidate)).rejects.toThrow('Source changed');
+      expect(changed).not.toHaveBeenCalled();
+      invoke.mockResolvedValueOnce({ ...candidate.pet, source: 'user', packagePath: '/native/cat' });
+      await expect(importReviewedAgentCompanionPet(candidate)).resolves.toMatchObject({ packagePath: '/native/cat' });
+      expect(invoke).toHaveBeenLastCalledWith('import_agent_companion_pet_package', {
+        request: { path: '/source/cat', expectedFingerprint: 'reviewed-hash' },
+      });
+      expect(changed).toHaveBeenCalledTimes(1);
+    } finally { off(); }
+  });
+});
