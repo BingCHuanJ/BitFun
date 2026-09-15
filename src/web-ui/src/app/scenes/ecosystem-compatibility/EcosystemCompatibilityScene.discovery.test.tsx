@@ -59,7 +59,7 @@ vi.mock('@/infrastructure/config/services/AIExperienceConfigService', () => ({ a
   addChangeListener: () => () => {},
 } }));
 vi.mock('@/infrastructure/runtime', () => ({ isTauriRuntime: () => true }));
-vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({ configAPI: { getConfig: async () => ({ enable_agent_companion: false }), getSkillScanReport: async () => ({ skills: mocks.skills, diagnostics: [] }) } }));
+vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({ configAPI: { getGlobalSkillSettings: async () => ({ directSkillManagementVersion: 1, globallyDisabledUserSkillKeys: [], globallyDisabledProjectSkillKeys: [] }), getConfig: async () => ({ enable_agent_companion: false }), getSkillScanReport: async () => ({ skills: mocks.skills, diagnostics: [] }) } }));
 vi.mock('@/infrastructure/api/service-api/ExternalHooksAPI', () => ({ externalHooksAPI: {
   getCatalog: async () => ({ sources: [], entries: [], providers: [], failedProviderIds: [], discoveryPending: false }),
   getImportSnapshot: async () => ({ catalog: { sources: [], entries: [], providers: [], failedProviderIds: [], discoveryPending: false }, imports: [] }),
@@ -120,6 +120,16 @@ describe('compatibility discovery lifecycle', () => {
     const trigger = container.querySelector<HTMLButtonElement>('[data-content-group="mcp"] button[aria-haspopup="dialog"]');
     if (trigger && !container.querySelector('[data-ecosystem-category="mcp"]')) await act(async () => trigger.click());
   }
+
+  it('uses the Cursor brand mark and does not present shared directories as agents', async () => {
+    mocks.selectedProductId = 'cursor';
+    mocks.getDiscoverySnapshot.mockResolvedValue(snapshot(true));
+    mocks.skills = [{ key: 'user::home.agents::review', name: 'review', sourceId: 'agent-skills', level: 'user', path: '/home/.agents/skills/review' }];
+    await act(async () => root.render(<EcosystemCompatibilityScene />));
+    expect(container.querySelector<HTMLElement>('[data-product-logo="cursor"]')?.style.maskImage).toContain('/assets/ecosystem-compatibility/cursor.svg');
+    expect(container.querySelector('[data-product-id="agent-skills"]')).toBeNull();
+    expect(container.textContent).not.toContain('Agent Skills');
+  });
 
   function discoverySwitch(): HTMLInputElement {
     const input = container.querySelector<HTMLInputElement>('[data-external-discovery-control] input[role="switch"]');

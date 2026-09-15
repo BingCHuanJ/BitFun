@@ -234,7 +234,7 @@ const SkillsScene: React.FC = () => {
       skill.name,
       source,
       scope,
-      skill.level === 'user'
+      installed.canToggleSkill(skill)
         ? installed.globallyDisabledSkillKeys.has(skill.key)
           ? t('list.item.globalDisabled')
           : t('list.item.globalEnabled')
@@ -245,7 +245,7 @@ const SkillsScene: React.FC = () => {
           })
         : null,
     ].filter(Boolean).join('. ');
-  }, [coverageSourceBySkillKey, installed.globallyDisabledSkillKeys, market.isRemoteWorkspace, t]);
+  }, [coverageSourceBySkillKey, installed, market.isRemoteWorkspace, t]);
 
   const refetchSkillsScene = useCallback(async () => {
     await Promise.all([installed.loadSkills(true), market.refresh(), skillGroups.reload()]);
@@ -611,8 +611,7 @@ const SkillsScene: React.FC = () => {
                               className={[
                                 'skills-card',
                                 skill.isShadowed && 'is-shadowed',
-                                skill.level === 'user'
-                                  && installed.globallyDisabledSkillKeys.has(skill.key)
+                                installed.globallyDisabledSkillKeys.has(skill.key)
                                   && 'is-globally-disabled',
                               ].filter(Boolean).join(' ')}
                               role="row"
@@ -701,7 +700,7 @@ const SkillsScene: React.FC = () => {
                                 data-openbitfun-scene="skills"
                                 data-openbitfun-part="installedCardStatus"
                               >
-                                {skill.level === 'user' ? (
+                                {installed.canToggleSkill(skill) ? (
                                   <div className="skills-card__availability" title={t(installed.globallyDisabledSkillKeys.has(skill.key) ? 'list.item.globalDisabled' : 'list.item.globalEnabled')}>
                                     <Switch
                                       checked={!installed.globallyDisabledSkillKeys.has(skill.key)}

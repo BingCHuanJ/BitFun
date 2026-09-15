@@ -189,7 +189,7 @@
     "batchPending": "等待处理",
     "batchResultSummary": "成功 {{imported}} 项 · 待确认 {{unresolved}} 项 · 跳过 {{skipped}} 项",
     "title": "{{name}} 的外部内容",
-    "description": "查看外部内容，按需导入 OpenBitFun。",
+    "description": "查看外部内容，管理可用性与导入。",
     "search": "搜索该智能体的内容",
     "all": "全部内容 · 已发现 {{count}} 项",
     "importStatus": "当前状态",
@@ -365,6 +365,14 @@
         "imported": "已导入",
         "ready": "可导入"
       }
+    },
+    "skills": {
+      "directUse": "直接使用来源目录中的 Skill，无需导入或复制。默认开启，关闭后所有模式均不可使用；项目级开关仅影响当前项目。",
+      "unsupported": "当前宿主不支持直接管理 Skill 可用性，请升级宿主或在本地工作区管理。",
+      "availability": "可用性",
+      "toggle": "启用 {{name}}",
+      "updateFailed": "更新 Skill 开关失败，请重试。",
+      "sameName": "存在同名 Skill，按来源优先级选择；可通过完整标识指定此项。"
     }
   },
   "sourceSettings": {

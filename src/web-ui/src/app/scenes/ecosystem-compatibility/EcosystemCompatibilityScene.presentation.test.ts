@@ -326,6 +326,7 @@ describe('ecosystem compatibility scene presentation contract', () => {
       'pi',
       'dsh',
       'opencode',
+      'cursor',
     ]);
     expect(runtimes.flatMap((runtime) => runtime.acpClients)).toEqual([]);
   });

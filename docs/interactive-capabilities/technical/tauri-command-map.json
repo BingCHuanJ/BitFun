@@ -3111,7 +3111,7 @@
       "visibility": "documented",
       "rustPath": "get_global_skill_settings",
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
-      "signature": "fn get_global_skill_settings() -> Result<GlobalSkillSettingsResponse, String>",
+      "signature": "fn get_global_skill_settings( request: Option<GetGlobalSkillSettingsRequest>, ) -> Result<GlobalSkillSettingsResponse, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {

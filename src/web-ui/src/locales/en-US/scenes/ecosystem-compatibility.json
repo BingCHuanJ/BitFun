@@ -189,7 +189,7 @@
     "batchPending": "Pending",
     "batchResultSummary": "Imported {{imported}} · Needs review {{unresolved}} · Skipped {{skipped}}",
     "title": "{{name}} content",
-    "description": "Browse external content and import what you need into OpenBitFun.",
+    "description": "Browse external content and manage availability or imports.",
     "search": "Search this agent’s content",
     "all": "All content · {{count}} found",
     "importStatus": "Current status",
@@ -365,6 +365,14 @@
         "imported": "Imported",
         "ready": "Ready to import"
       }
+    },
+    "skills": {
+      "directUse": "Use Skills directly from their source directories, without importing or copying. Enabled by default; disabling blocks use in every mode. Project switches affect only this workspace.",
+      "unsupported": "This host does not support direct Skill availability management. Update the host or manage Skills in a local workspace.",
+      "availability": "Availability",
+      "toggle": "Enable {{name}}",
+      "updateFailed": "Could not update Skill availability. Try again.",
+      "sameName": "Another Skill has the same name. Source priority selects the default; use the full key to select this entry."
     }
   },
   "sourceSettings": {

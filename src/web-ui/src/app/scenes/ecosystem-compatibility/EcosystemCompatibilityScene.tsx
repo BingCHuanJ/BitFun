@@ -62,6 +62,7 @@ const PRODUCT_ICON_SOURCES: Record<EcosystemProductId, string> = {
   pi: '/assets/ecosystem-compatibility/pi.svg',
   dsh: '/assets/ecosystem-compatibility/deepseek-harness.svg',
   opencode: '/assets/ecosystem-compatibility/opencode.svg',
+  cursor: '/assets/ecosystem-compatibility/cursor.svg',
 };
 
 function EcosystemProductIcon({ productId, size }: {
@@ -69,6 +70,14 @@ function EcosystemProductIcon({ productId, size }: {
   size: number;
 }) {
   const source = PRODUCT_ICON_SOURCES[productId];
+  if (productId === 'cursor') return (
+    <span
+      className="ecosystem-compatibility__brand-image ecosystem-compatibility__brand-image--monochrome"
+      data-product-logo={productId}
+      aria-hidden="true"
+      style={{ width: size, height: size, maskImage: `url("${source}")` }}
+    />
+  );
   return (
     <img
       className="ecosystem-compatibility__brand-image"
