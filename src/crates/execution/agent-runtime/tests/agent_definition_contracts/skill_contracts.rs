@@ -1371,3 +1371,29 @@ fn skill_scan_reports_tolerate_older_shapes_and_escape_diagnostics() {
     assert!(diagnostic.to_xml().contains("&lt;path&gt;"));
     assert!(diagnostic.to_xml().contains("read &amp; parse failed"));
 }
+
+#[test]
+fn workspace_skill_disable_blocks_all_modes_without_reclassifying_the_source() {
+    let mut skill = custom_user_skill("shared-review");
+    skill.level = SkillLocation::Project;
+    skill.key = "project::agents::shared-review".into();
+    skill.source_id = "agent-skills".into();
+    let disabled = HashSet::from([skill.key.clone()]);
+    for mode in ["Standard", "Cowork", "Ultimate"] {
+        assert!(!is_skill_globally_enabled(&skill, &disabled));
+        let info = build_mode_skill_infos(
+            vec![skill.clone()],
+            Vec::new(),
+            mode,
+            &UserModeSkillOverrides::default(),
+            &HashSet::new(),
+            &disabled,
+        )
+        .remove(0);
+        assert!(info.default_enabled);
+        assert!(!info.globally_enabled);
+        assert!(!info.selected_for_runtime);
+        assert_eq!(info.skill.source_id, "agent-skills");
+    }
+    assert!(is_skill_globally_enabled(&skill, &HashSet::new()));
+}

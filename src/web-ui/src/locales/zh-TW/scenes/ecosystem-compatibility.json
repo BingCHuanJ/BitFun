@@ -189,7 +189,7 @@
     "batchPending": "等待處理",
     "batchResultSummary": "成功 {{imported}} 項 · 待確認 {{unresolved}} 項 · 跳過 {{skipped}} 項",
     "title": "{{name}} 的外部內容",
-    "description": "查看外部內容，按需匯入 OpenBitFun。",
+    "description": "查看外部內容，管理可用性與匯入。",
     "search": "搜尋該智能體的內容",
     "all": "全部內容 · 已找到 {{count}} 項",
     "importStatus": "目前狀態",
@@ -365,6 +365,14 @@
         "imported": "已匯入",
         "ready": "可匯入"
       }
+    },
+    "skills": {
+      "directUse": "直接使用來源目錄中的 Skill，無需匯入或複製。預設開啟，關閉後所有模式均不可使用；專案級開關僅影響目前專案。",
+      "unsupported": "目前主機不支援直接管理 Skill 可用性，請升級主機或在本機工作區管理。",
+      "availability": "可用性",
+      "toggle": "啟用 {{name}}",
+      "updateFailed": "更新 Skill 開關失敗，請重試。",
+      "sameName": "存在同名 Skill，依來源優先順序選擇；可透過完整識別碼指定此項。"
     }
   },
   "sourceSettings": {

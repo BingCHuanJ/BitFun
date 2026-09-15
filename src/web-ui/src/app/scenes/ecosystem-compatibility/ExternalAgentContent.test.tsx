@@ -8,7 +8,7 @@ import type { ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service
 import { buildEcosystemProductRuntimes, type EcosystemProductId } from './ecosystemCompatibilityModel';
 
 const mocks = vi.hoisted(() => ({
-  petSettingsListener: vi.fn(), getAccounts: vi.fn(), getPets: vi.fn(), importPet: vi.fn(), getPetSettings: vi.fn(), savePetSettings: vi.fn(), getInstructions: vi.fn(), openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
+  getSkillSettings: vi.fn(), setSkillDisabled: vi.fn(), petSettingsListener: vi.fn(), getAccounts: vi.fn(), getPets: vi.fn(), importPet: vi.fn(), getPetSettings: vi.fn(), savePetSettings: vi.fn(), getInstructions: vi.fn(), openScene: vi.fn(), openDestination: vi.fn(), openNativeSkills: vi.fn(),
   deleteSkill: vi.fn(), loadMcp: vi.fn(), saveMcp: vi.fn(), mutateHook: vi.fn(), getSkills: vi.fn(), validateSkill: vi.fn(), addSkill: vi.fn(), getHooks: vi.fn(), getHookCatalog: vi.fn(),
   planHook: vi.fn(), applyHook: vi.fn(), planMcp: vi.fn(), applyMcp: vi.fn(), refresh: vi.fn(),
   workspacePath: '/project', remote: false, peer: false, skillImportVersion: 0,
@@ -23,6 +23,7 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({ useCurrentWorkspa
 vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({ usePeerDeviceModeOptional: () => ({ peerMode: { active: mocks.peer } }) }));
 vi.mock('@/infrastructure/runtime', () => ({ isTauriRuntime: () => true }));
 vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({ configAPI: {
+  getGlobalSkillSettings: mocks.getSkillSettings, setGlobalSkillDisabled: mocks.setSkillDisabled,
   getConfig: mocks.getPetSettings,
   getSkillScanReport: async (...args: unknown[]) => ({ skills: await mocks.getSkills(...args), diagnostics: [], importOperationsVersion: mocks.skillImportVersion }), validateSkillPath: mocks.validateSkill, addSkill: mocks.addSkill, deleteSkill: mocks.deleteSkill,
 } }));
@@ -47,6 +48,7 @@ vi.mock('@openbitfun/ui', async (importOriginal) => {
   return {
     Alert: (await importOriginal<typeof import('@openbitfun/ui')>()).Alert,
     Input: ({ size: _size, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+    Switch: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input type="checkbox" role="switch" {...props} />,
     Checkbox: ({ size: _size, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => <input type="checkbox" {...props} />,
     Button: ({ children, disabled, onClick, 'aria-label': label }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button disabled={disabled} onClick={onClick} aria-label={label}>{children}</button>,
     Select: ({ value, options, onValueChange, disabled }: { value: string; options: Array<{ value: string; label: string }>; onValueChange: (value: string) => void; disabled?: boolean }) => <select value={value} disabled={disabled} onChange={(event) => onValueChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>,
@@ -109,6 +111,8 @@ describe('external agent content and explicit import boundary', () => {
     localStorage.clear();
     mocks.remote = false; mocks.peer = false; mocks.workspacePath = '/project'; mocks.skillImportVersion = 0;
     data = fixture();
+    mocks.getSkillSettings.mockResolvedValue({ directSkillManagementVersion: 1, globallyDisabledUserSkillKeys: [], globallyDisabledProjectSkillKeys: [] });
+    mocks.setSkillDisabled.mockResolvedValue({ directSkillManagementVersion: 1, globallyDisabledUserSkillKeys: [], globallyDisabledProjectSkillKeys: [] });
     mocks.getAccounts.mockResolvedValue([]);
     mocks.getPets.mockResolvedValue({ candidates: [], diagnostics: [] });
     mocks.getPetSettings.mockResolvedValue({ enable_agent_companion: false });
@@ -531,33 +535,95 @@ describe('external agent content and explicit import boundary', () => {
     expect(mocks.getInstructions).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['single', 'batch'])('binds the %s Skill import to its reviewed package and reports stale content', async (mode) => {
-    mocks.skillImportVersion = 3;
-    mocks.validateSkill.mockResolvedValue({ valid: true, importPreview: {
-      fingerprint: 'reviewed-package', fileCount: 2, name: 'fresh-name', description: 'Fresh description',
-    } });
-    mocks.addSkill.mockRejectedValue(new Error('skill_import_stale: package changed'));
-    await render();
-    if (mode === 'single') await click('content.prepareImport', 'skill');
-    else await click('content.importAll');
-    expect(mocks.validateSkill).toHaveBeenCalledWith(data.skills[0].path, { sourceKey: data.skills[0].key, workspacePath: '/project' });
-    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain('content.reviewedPackage');
-    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain('fresh-name');
+  it.each(['cursor'] as const)('exposes %s Skills with default enabled switches and no copy actions', async (sourceId) => {
+    data.skills.push({ ...data.skills[0], key: `project::${sourceId}::shared`, sourceId, path: `/${sourceId}/shared` });
+    await render(sourceId); await expand('skill');
+    const row = container.querySelector('[data-import-kind="skill"]')!;
+    expect(row.textContent).toContain(`/${sourceId}/shared`);
+    expect(row.querySelector<HTMLInputElement>('[role="switch"]')?.checked).toBe(true);
+    expect(row.querySelector<HTMLInputElement>('[role="switch"]')?.disabled).toBe(false);
+    expect(row.textContent).not.toContain('content.prepareImport');
+    expect(row.textContent).not.toContain('content.undo');
     expect(mocks.addSkill).not.toHaveBeenCalled();
-    await click('content.confirm');
-    expect(mocks.addSkill).toHaveBeenCalledWith(expect.objectContaining({ expectedSourceFingerprint: 'reviewed-package', sourceKey: data.skills[0].key }));
-    expect(mocks.validateSkill).toHaveBeenCalledTimes(1);
-    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain(mode === 'single' ? 'content.skillStale' : 'content.batchState.stale');
+    expect(container.textContent).not.toContain('content.skills.directUse');
   });
 
-  it('does not silently downgrade when a host advertising reviewed imports omits the preview', async () => {
-    mocks.skillImportVersion = 3;
-    await render(); await click('content.prepareImport', 'skill');
-    expect(container.textContent).toContain('content.previewFailed');
+  it('persists a project switch and reads it back after returning to the ecosystem', async () => {
+    data.skills[0].level = 'project';
+    const disabled = { directSkillManagementVersion: 1, globallyDisabledUserSkillKeys: [], globallyDisabledProjectSkillKeys: [data.skills[0].key] };
+    mocks.setSkillDisabled.mockResolvedValue(disabled);
+    await render(); await expand('skill');
+    await act(async () => container.querySelector<HTMLInputElement>('[role="switch"]')!.click());
+    expect(mocks.setSkillDisabled).toHaveBeenCalledWith({ skillKey: data.skills[0].key, disabled: true, workspacePath: '/project' });
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(false);
+    expect(container.querySelector('[data-import-kind="skill"]')?.getAttribute('data-import-state')).toBe('disabled');
+    mocks.getSkillSettings.mockResolvedValue(disabled);
+    await render('claude-code'); await render(); await expand('skill');
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(false);
+    expect(mocks.deleteSkill).not.toHaveBeenCalled();
+  });
+
+  it('updates availability changed in the Skill library without rescanning content', async () => {
+    await render(); await expand('skill');
+    const scanCount = mocks.getSkills.mock.calls.length;
+    mocks.getSkillSettings.mockResolvedValue({ directSkillManagementVersion: 1, globallyDisabledUserSkillKeys: [data.skills[0].key], globallyDisabledProjectSkillKeys: [] });
+    await act(async () => globalEventBus.emit('mode:config:updated'));
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(false);
+    expect(mocks.getSkills).toHaveBeenCalledTimes(scanCount);
+  });
+
+  it('keeps a failed switch change retryable without displaying false success', async () => {
+    mocks.setSkillDisabled.mockRejectedValue(new Error('Write failed'));
+    await render(); await expand('skill');
+    await act(async () => container.querySelector<HTMLInputElement>('[role="switch"]')!.click());
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(true);
+    expect(container.textContent).toContain('content.skills.updateFailed');
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.disabled).toBe(false);
+  });
+
+  it('does not let an older discovery response overwrite a completed switch change', async () => {
+    await render(); await expand('skill');
+    let finish!: (value: unknown) => void;
+    mocks.getSkillSettings.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="content.refresh"]')!.click());
+    mocks.setSkillDisabled.mockResolvedValue({ directSkillManagementVersion: 1, globallyDisabledUserSkillKeys: [data.skills[0].key], globallyDisabledProjectSkillKeys: [] });
+    await act(async () => container.querySelector<HTMLInputElement>('[role="switch"]')!.click());
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(false);
+    await act(async () => finish({ directSkillManagementVersion: 1, globallyDisabledUserSkillKeys: [], globallyDisabledProjectSkillKeys: [] }));
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(false);
+  });
+
+  it.each(['legacy', 'peer', 'remote'] as const)('keeps Skills visible but gates switches for a %s host', async (host) => {
+    mocks.peer = host === 'peer'; mocks.remote = host === 'remote';
+    if (host === 'legacy') mocks.getSkillSettings.mockResolvedValue({ globallyDisabledUserSkillKeys: [] });
+    await render(); await expand('skill');
+    expect(container.textContent).toContain('codex-Skill');
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.disabled).toBe(true);
+    expect(container.textContent).toContain('content.skills.unsupported');
+    expect(mocks.setSkillDisabled).not.toHaveBeenCalled();
     expect(mocks.addSkill).not.toHaveBeenCalled();
   });
 
-  it('reviews a full agent batch once and copies only that agent after confirmation', async () => {
+  it('preserves existing native copies while managing their source independently', async () => {
+    data.skills.push({ ...data.skills[0], key: 'native-copy', sourceId: 'openbitfun', path: '/native/copy' });
+    await render(); await expand('skill');
+    expect(container.querySelectorAll('[data-import-kind="skill"]')).toHaveLength(1);
+    expect(container.querySelector('[data-import-kind="skill"]')?.getAttribute('data-import-state')).toBe('available');
+    expect(mocks.deleteSkill).not.toHaveBeenCalled();
+  });
+
+  it('ignores a switch response after changing workspaces', async () => {
+    let finish!: (value: unknown) => void;
+    mocks.setSkillDisabled.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    await render(); await expand('skill');
+    await act(async () => container.querySelector<HTMLInputElement>('[role="switch"]')!.click());
+    mocks.workspacePath = '/other-project';
+    await render(); await expand('skill');
+    await act(async () => finish({ directSkillManagementVersion: 1, globallyDisabledUserSkillKeys: [], globallyDisabledProjectSkillKeys: [data.skills[0].key] }));
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(true);
+  });
+
+  it('reviews MCP and Hooks without copying Skills in a full agent batch', async () => {
     mocks.skillImportVersion = 1;
     await render();
     await click('content.importAll');
@@ -566,8 +632,7 @@ describe('external agent content and explicit import boundary', () => {
     expect(mocks.applyHook).not.toHaveBeenCalled();
     expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent).toContain('echo reviewed-command');
     await click('content.confirm');
-    expect(mocks.addSkill).toHaveBeenCalledTimes(1);
-    expect(mocks.addSkill.mock.calls[0][0].sourceKey).toBe(data.skills[0].key);
+    expect(mocks.addSkill).not.toHaveBeenCalled();
     expect(mocks.applyMcp.mock.calls[0][2]).toEqual([{ candidateId: 'codex' }]);
     expect(mocks.applyHook).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain('content.batchResults');
@@ -576,21 +641,21 @@ describe('external agent content and explicit import boundary', () => {
   it('groups the review by type and advances progress only when an operation settles', async () => {
     mocks.skillImportVersion = 1;
     let finishMcp!: (value: unknown) => void;
-    let failSkill!: (error: Error) => void;
+    let failHook!: (error: Error) => void;
     mocks.applyMcp.mockImplementation(() => new Promise((resolve) => { finishMcp = resolve; }));
-    mocks.addSkill.mockImplementation(() => new Promise((_resolve, reject) => { failSkill = reject; }));
+    mocks.applyHook.mockImplementation(() => new Promise((_resolve, reject) => { failHook = reject; }));
     await render(); await click('content.importAll');
     const dialog = container.querySelector('[role="dialog"]:not([data-ecosystem-category])')!;
-    expect([...dialog.querySelectorAll('.ecosystem-compatibility__batch-group')].map((group) => group.getAttribute('aria-label'))).toEqual(['capabilities.skill', 'capabilities.mcp', 'capabilities.hook']);
+    expect([...dialog.querySelectorAll('.ecosystem-compatibility__batch-group')].map((group) => group.getAttribute('aria-label'))).toEqual(['capabilities.mcp', 'capabilities.hook']);
     expect(dialog.querySelector('progress')).toBeNull();
     await click('content.confirm');
     const progress = dialog.querySelector('progress')!;
-    expect(progress.max).toBe(3); expect(progress.value).toBe(0);
+    expect(progress.max).toBe(2); expect(progress.value).toBe(0);
     await act(async () => finishMcp({ outcome: { status: 'applied' } }));
     expect(progress.value).toBe(1);
     expect(dialog.textContent).toContain('content.batchPending');
-    await act(async () => failSkill(new Error('Copy permission denied')));
-    expect(progress.value).toBe(3);
+    await act(async () => failHook(new Error('Copy permission denied')));
+    expect(progress.value).toBe(2);
     expect(dialog.textContent).toContain('Copy permission denied');
     expect(dialog.textContent).toContain('content.batchState.failed');
     expect(dialog.textContent).not.toContain('content.batchPending');
@@ -718,21 +783,6 @@ describe('external agent content and explicit import boundary', () => {
     expect(row.textContent).not.toContain('content.undo');
   });
 
-  it('copies a selected Skill only after validation, target review and confirmation', async () => {
-    await render(); await click('content.prepareImport', 'skill');
-    expect(mocks.validateSkill).toHaveBeenCalledWith('/codex/skills/demo'); expect(mocks.addSkill).not.toHaveBeenCalled();
-    await click('content.confirm');
-    expect(mocks.addSkill).toHaveBeenCalledWith({ sourcePath: '/codex/skills/demo', level: 'user', workspacePath: '/project' });
-  });
-
-  it('locks the reviewed Skill target while a confirmed copy is running', async () => {
-    let finish: (value: string) => void = () => {};
-    mocks.addSkill.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
-    await render(); await click('content.prepareImport', 'skill'); await click('content.confirm');
-    expect(container.querySelector<HTMLSelectElement>('[role="dialog"]:not([data-ecosystem-category]) select')?.disabled).toBe(true);
-    await act(async () => finish('ok'));
-  });
-
   it('withdraws import actions when the latest external catalog read failed', async () => {
     await render();
     await render('codex', true); await expand('mcp');
@@ -740,61 +790,6 @@ describe('external agent content and explicit import boundary', () => {
     expect(row?.getAttribute('data-import-state')).toBe('discovered');
     expect(row?.textContent).not.toContain('content.prepareImport');
     expect(mocks.applyMcp).not.toHaveBeenCalled();
-  });
-
-  it('blocks same-directory Skill collisions without claiming the native item was imported', async () => {
-    data.skills[2].dirName = 'demo';
-    await render(); await click('content.prepareImport', 'skill');
-    expect(container.textContent).toContain('content.targetExists');
-    await click('content.confirm'); expect(mocks.addSkill).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-import-kind="skill"]')?.getAttribute('data-import-state')).not.toBe('imported');
-  });
-
-  it('reviews a unique invocation name for a same-name Skill and displays actual import errors', async () => {
-    mocks.skillImportVersion = 2;
-    data.skills[2].dirName = 'demo';
-    mocks.addSkill.mockRejectedValueOnce(new Error('Skill target already exists with different content'));
-    await render(); await click('content.prepareImport', 'skill');
-    expect(container.querySelector<HTMLInputElement>('[role="dialog"]:not([data-ecosystem-category]) input')?.value).toBe('demo-codex');
-    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')?.textContent?.match(/Skill description/g)).toHaveLength(1);
-    await click('content.confirm');
-    expect(mocks.addSkill.mock.calls[0][0].targetName).toBe('demo-codex');
-    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category]) [role="alert"]')?.textContent).toContain('content.skillNameConflict');
-    const alert = container.querySelector('[role="dialog"]:not([data-ecosystem-category]) [role="alert"]');
-    expect(alert?.getAttribute('data-openbitfun-component')).toBe('alert');
-    expect(alert?.getAttribute('aria-live')).toBe('assertive');
-    expect(alert?.querySelector('[data-openbitfun-part="icon"]')).toBeNull();
-    expect(mocks.addSkill).toHaveBeenCalledTimes(1);
-    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).not.toBeNull();
-  });
-
-  it('imports only checked rows and can undo the selected committed copy as a batch', async () => {
-    mocks.skillImportVersion = 1;
-    mocks.addSkill.mockImplementation(async () => {
-      data.skills.push(Object.assign({ ...data.skills[0], key: 'imported-copy', sourceId: 'openbitfun', sourceSlot: 'openbitfun', path: '/native/skills/demo' }, {
-        importOrigin: { schemaVersion: 1, importId: 'selected-copy', sourceKey: 'codex', sourcePath: '/codex/skills/demo', sourceId: 'codex', sourceLabel: 'Codex', sourceSlot: 'codex', fingerprint: 'copy' },
-      }));
-      return 'ok';
-    });
-    data.skills.push({ ...data.skills[0], key: 'second-skill', name: 'second-skill', dirName: 'second', path: '/codex/skills/second' });
-    await render(); await expand('skill');
-    const check = container.querySelector<HTMLInputElement>('[data-import-kind="skill"] input[type="checkbox"]')!;
-    await act(async () => check.click());
-    await click('content.importSelected'); await click('content.confirm');
-    expect(mocks.addSkill).toHaveBeenCalledTimes(1);
-    expect(mocks.addSkill.mock.calls[0][0].sourceKey).toBe('codex');
-    await click('content.close');
-    await click('content.undoSelected');
-    expect(mocks.deleteSkill).not.toHaveBeenCalled();
-    let finishUndo!: (value: string) => void;
-    mocks.deleteSkill.mockImplementation(() => new Promise((resolve) => { finishUndo = resolve; }));
-    await click('content.confirmUndo');
-    expect(container.querySelector('progress')?.value).toBe(0);
-    await act(async () => finishUndo('ok'));
-    expect(container.querySelector('progress')?.value).toBe(1);
-    expect(mocks.deleteSkill).toHaveBeenCalledTimes(1);
-    expect(mocks.deleteSkill.mock.calls[0][0].expectedImportId).toBe('selected-copy');
-    expect(container.textContent).toContain('content.batchUndoState.removed');
   });
 
   it('shows the exact Hook commands and applies only the reviewed external source', async () => {
@@ -822,15 +817,6 @@ describe('external agent content and explicit import boundary', () => {
     expect(row.textContent).not.toContain('content.prepareImport');
     expect(container.querySelector('[data-content-group="hook"]')?.textContent).not.toContain('content.importCategory');
     expect(mocks.planHook).not.toHaveBeenCalled();
-  });
-
-  it('retains discovery but gates flat-file skill import on legacy hosts', async () => {
-    Object.assign(data.skills[0], { entryFile: 'demo.md' });
-    await render(); await expand('skill');
-    const row = container.querySelector('[data-import-kind="skill"]')!;
-    expect(row.getAttribute('data-import-state')).toBe('importUnsupported');
-    expect(row.textContent).toContain('content.skillImportUnsupported');
-    expect(row.textContent).not.toContain('content.prepareImport');
   });
 
   it('distinguishes a disabled scan from a legacy snapshot without policy facts', async () => {
@@ -881,10 +867,10 @@ describe('external agent content and explicit import boundary', () => {
     expect(container.querySelector('[data-import-kind="mcp"]')?.textContent).not.toContain('content.prepareImport');
   });
 
-  it('does not scan Skills, Hooks or MCP import plans while paused, but permits explicit import review', async () => {
+  it('keeps directly usable Skills visible while external Hook and MCP discovery is paused', async () => {
     data.snapshot.discovery = { enabled: false, canChange: true, hasScanned: true, preferenceRevision: 1 };
     await render();
-    expect(mocks.getSkills).not.toHaveBeenCalled();
+    expect(mocks.getSkills).toHaveBeenCalledOnce();
     expect(mocks.getHooks).not.toHaveBeenCalled();
     expect(mocks.planMcp).not.toHaveBeenCalled();
     await expand('mcp');
@@ -976,17 +962,6 @@ describe('external agent content and explicit import boundary', () => {
     expect(mocks.saveMcp).toHaveBeenCalledTimes(1);
   });
 
-  it('remembers the exact imported Skill across agent switches and allows reimport after undo', async () => {
-    await render(); await click('content.prepareImport', 'skill'); await click('content.confirm');
-    await render('claude-code'); await render();
-    await click('content.undo', 'skill');
-    expect(container.textContent).toContain('content.nativeCopy');
-    expect(mocks.deleteSkill).not.toHaveBeenCalled();
-    await click('content.confirmUndo');
-    expect(mocks.deleteSkill).toHaveBeenCalledWith({ skillKey: 'imported-copy', workspacePath: '/project' });
-    expect(container.querySelector('[data-import-kind="skill"]')?.getAttribute('data-import-state')).toBe('ready');
-  });
-
   it('removes only the selected Hook import using its reviewed revision', async () => {
     const imported = { ...data.hooks, imports: [{ importId: 'codex-hook-copy', source: data.hookPlan.source, enabled: true, behaviorVersion: 'v1', state: 'current' }] };
     mocks.getHooks.mockResolvedValue(imported);
@@ -996,11 +971,4 @@ describe('external agent content and explicit import boundary', () => {
     expect(mocks.mutateHook).toHaveBeenCalledWith('/project', 'r1', { kind: 'remove', importId: 'codex-hook-copy' });
   });
 
-  it('ignores a pending preview when the user switches to another agent', async () => {
-    let resolve: (value: { valid: boolean }) => void = () => {};
-    mocks.validateSkill.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
-    await render(); await click('content.prepareImport', 'skill'); await render('claude-code');
-    await act(async () => resolve({ valid: true }));
-    expect(container.querySelector('[role="dialog"]:not([data-ecosystem-category])')).toBeNull(); expect(container.textContent).not.toContain('/codex/skills/demo'); expect(mocks.addSkill).not.toHaveBeenCalled();
-  });
 });

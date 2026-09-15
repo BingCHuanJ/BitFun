@@ -3,6 +3,7 @@ import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAP
 import type { ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 
 export type EcosystemProductId =
+  | 'cursor'
   | 'claude-code'
   | 'codex'
   | 'pi'
@@ -112,6 +113,7 @@ export const ECOSYSTEM_IMPORT_ITEM_KINDS: readonly EcosystemImportItemKind[] = [
  * and Hook discovery stays with their existing capability owners.
  */
 const PRODUCT_DISCOVERY_KINDS = {
+  cursor: ['skill'],
   'claude-code': ['command', 'subagent', 'skill', 'mcp', 'hook'],
   codex: ['subagent', 'skill', 'mcp', 'hook', 'pet'],
   pi: ['skill', 'hook'],
@@ -120,6 +122,7 @@ const PRODUCT_DISCOVERY_KINDS = {
 } as const satisfies Record<EcosystemProductId, readonly EcosystemImportItemKind[]>;
 
 const PRODUCT_NOT_APPLICABLE_KINDS = {
+  cursor: ECOSYSTEM_IMPORT_ITEM_KINDS.filter((kind) => kind !== 'skill'),
   'claude-code': ['tool', 'pet'],
   codex: ['command', 'tool'],
   pi: ['pet'],
@@ -134,7 +137,7 @@ export function ecosystemDiscoverySupport(
   kind: EcosystemImportItemKind,
 ): EcosystemDiscoverySupport {
   // The instruction owner also reports shared workspace AGENTS documents.
-  if (kind === 'instruction') return 'supported';
+  if (kind === 'instruction' && productId !== 'cursor') return 'supported';
   const discoveryKinds = PRODUCT_DISCOVERY_KINDS[productId] as readonly EcosystemImportItemKind[];
   if (discoveryKinds.includes(kind)) return 'supported';
 
@@ -181,6 +184,7 @@ export const ECOSYSTEM_PRODUCT_SPECS: readonly EcosystemProductSpec[] = [
     acpClientId: 'opencode',
     searchTerms: ['open code', 'agent', 'command', 'tool', 'mcp', 'acp'],
   },
+  { id: 'cursor', name: 'Cursor', ecosystemId: 'cursor', searchTerms: ['.cursor', 'skills'] },
 ] as const;
 
 function sourcePairKey(providerId: string, sourceId: string): string {

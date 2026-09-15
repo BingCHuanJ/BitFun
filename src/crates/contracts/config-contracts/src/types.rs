@@ -1362,13 +1362,17 @@ pub struct AgentProfileConfig {
     pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
-/// User-level Skill configuration shared by every agent profile.
+/// Skill availability configuration shared by every agent profile.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct SkillSettingsConfig {
     /// User-level Skill keys disabled for every agent profile.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub globally_disabled_user_skills: Vec<String>,
+    /// Project-level Skill keys, scoped to canonical local workspace roots.
+    /// Remote workspace policy must be owned by its serving filesystem, not this local map.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub globally_disabled_project_skills: HashMap<String, Vec<String>>,
 }
 
 /// API view of a mode configuration.
@@ -2097,6 +2101,34 @@ impl AIModelConfig {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn global_skill_settings_keep_legacy_values_and_project_scope_on_round_trip() {
+        let legacy = r#"{"globally_disabled_user_skills":["user::home.agents::review"]}"#;
+        let mut settings: super::SkillSettingsConfig = serde_json::from_str(legacy).unwrap();
+        assert!(settings.globally_disabled_project_skills.is_empty());
+        assert_eq!(
+            serde_json::to_value(&settings).unwrap(),
+            serde_json::from_str::<serde_json::Value>(legacy).unwrap()
+        );
+        settings.globally_disabled_project_skills.insert(
+            "/workspace/a".into(),
+            vec!["project::agents::review".into()],
+        );
+        let restored: super::SkillSettingsConfig =
+            serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
+        assert_eq!(
+            restored.globally_disabled_user_skills,
+            ["user::home.agents::review"]
+        );
+        assert_eq!(
+            restored.globally_disabled_project_skills["/workspace/a"],
+            ["project::agents::review"]
+        );
+        assert!(!restored
+            .globally_disabled_project_skills
+            .contains_key("/workspace/b"));
+    }
+
     #[test]
     fn companion_pet_legacy_selection_round_trip_preserves_missing_version() {
         let legacy = serde_json::json!({
