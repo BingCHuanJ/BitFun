@@ -83,6 +83,7 @@ fn verification_message(from: Mailbox, email: &str, code: &str) -> MarketResult<
         .from(from)
         .to(email.parse().map_err(|_| invalid_email())?)
         .subject("OpenBitFun 登录验证码 / Sign-in code")
+        .header(lettre::message::header::MIME_VERSION_1_0)
         .header(ContentType::TEXT_PLAIN)
         .body(format!("你的 OpenBitFun 登录验证码是：{code}\n\n验证码 10 分钟内有效，仅可使用一次。请勿向他人透露。\n如非本人操作，请忽略此邮件。\n\nYour OpenBitFun verification code is: {code}\nIt expires in 10 minutes and can only be used once. Do not share this code.\nIf you did not request it, ignore this email.\n\nOpenBitFun"))
         .map_err(|_| MarketError::internal("Could not compose verification email"))
@@ -693,6 +694,7 @@ mod tests {
         )
         .unwrap();
         let raw = String::from_utf8(message.formatted()).unwrap();
+        assert!(raw.contains("MIME-Version: 1.0\r\n"));
         assert!(raw.contains("Content-Type: text/plain; charset=utf-8\r\n"));
         assert!(!raw.contains("application/octet-stream"));
         assert!(!raw.contains("Content-Disposition: attachment"));
