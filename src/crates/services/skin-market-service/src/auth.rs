@@ -81,7 +81,7 @@ impl IdentityVerifier {
             request = request.header(reqwest::header::AUTHORIZATION, authorization);
         } else {
             let session = cookie_value(headers, SKIN_SESSION_COOKIE)
-                .ok_or_else(|| SkinMarketError::unauthorized("Sign in with GitHub to continue."))?;
+                .ok_or_else(|| SkinMarketError::unauthorized("Sign in to continue."))?;
             let mut cookies = format!("{SKIN_SESSION_COOKIE}={session}");
             if write {
                 let csrf_cookie = cookie_value(headers, SKIN_CSRF_COOKIE).ok_or_else(|| {
@@ -104,7 +104,7 @@ impl IdentityVerifier {
         })?;
         if response.status() == reqwest::StatusCode::UNAUTHORIZED {
             return Err(SkinMarketError::unauthorized(
-                "The GitHub marketplace session is invalid or expired.",
+                "The marketplace session is invalid or expired.",
             ));
         }
         if response.status() == reqwest::StatusCode::FORBIDDEN {
@@ -122,7 +122,7 @@ impl IdentityVerifier {
         })?;
         if identity.user.identity_id().is_none()
             || identity.user.login.trim().is_empty()
-            || identity.user.login.len() > 100
+            || identity.user.login.len() > 254
             || identity.user.avatar_url.len() > 2_048
         {
             return Err(SkinMarketError::unavailable(

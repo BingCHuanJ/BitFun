@@ -65,6 +65,52 @@ afterEach(() => {
 });
 
 describe('AccountIdentityService', () => {
+  it('reopens a closed external page without duplicating the pending authorization', async () => {
+    const { api, dependencies, service } = setup();
+    activeServices.push(service);
+    await service.initialize();
+    api.authStart.mockResolvedValue({
+      transactionId: 'transaction-1', authorizationUrl: 'https://auth.openbitfun.com/sign-in#ticket=test-ticket',
+      expiresAt: 100, pollIntervalSeconds: 1,
+    });
+    let resume!: () => void;
+    dependencies.sleep = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { resume = resolve; }));
+    const login = service.signIn();
+    await vi.waitFor(() => expect(dependencies.sleep).toHaveBeenCalledOnce());
+    await service.reopenSignIn();
+    expect(dependencies.openExternal).toHaveBeenCalledTimes(2);
+    const [first, reopened] = vi.mocked(dependencies.openExternal).mock.calls.map(([url]) => new URL(url));
+    expect(first.searchParams.get('_auth')).not.toBe(reopened.searchParams.get('_auth'));
+    expect(reopened.hash).toBe(first.hash);
+    expect(reopened.searchParams.get('locale')).toBe(first.searchParams.get('locale'));
+    expect(api.authStart).toHaveBeenCalledOnce();
+    expect(service.getSnapshot().status).toBe('authorizing');
+    api.me.mockResolvedValue(profile);
+    resume();
+    await expect(login).resolves.toEqual(profile);
+    await service.reopenSignIn();
+    expect(dependencies.openExternal).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows a fresh login immediately after cancellation while the old poll is sleeping', async () => {
+    const { api, dependencies, service } = setup();
+    activeServices.push(service);
+    await service.initialize();
+    let resumeOld!: () => void;
+    dependencies.sleep = vi.fn().mockResolvedValue(undefined)
+      .mockImplementationOnce(() => new Promise<void>(resolve => { resumeOld = resolve; }));
+    const first = service.signIn();
+    const cancelled = expect(first).rejects.toMatchObject({ code: 'cancelled' });
+    await vi.waitFor(() => expect(dependencies.sleep).toHaveBeenCalledOnce());
+    service.cancelSignIn();
+    api.me.mockResolvedValue(profile);
+    await expect(service.signIn()).resolves.toEqual(profile);
+    expect(api.authStart).toHaveBeenCalledTimes(2);
+    resumeOld();
+    await cancelled;
+    expect(service.getSnapshot().me).toEqual(profile);
+  });
+
   it('carries the selected app language into auth without changing the ticket fragment', async () => {
     const { api, dependencies, service } = setup();
     activeServices.push(service);
@@ -76,7 +122,11 @@ describe('AccountIdentityService', () => {
     await service.initialize();
     api.me.mockResolvedValue(profile);
     await service.signIn();
-    expect(dependencies.openExternal).toHaveBeenCalledWith('https://auth.openbitfun.com/sign-in?locale=en-US#ticket=test-ticket');
+    const opened = new URL(vi.mocked(dependencies.openExternal).mock.calls[0][0]);
+    expect(opened.origin).toBe('https://auth.openbitfun.com');
+    expect(opened.searchParams.get('locale')).toBe('en-US');
+    expect(opened.searchParams.get('_auth')).toBeTruthy();
+    expect(opened.hash).toBe('#ticket=test-ticket');
   });
 
   it('uses the MiniApp desktop OAuth flow, keeps tokens out of the renderer, and shares identity', async () => {

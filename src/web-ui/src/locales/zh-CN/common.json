@@ -892,6 +892,7 @@
     "syncPhaseExportingSessions": "正在备份会话 {{current}}/{{total}}",
     "copyServerUrl": "复制服务器地址",
     "copyServerFailed": "无法复制服务器地址，请检查剪贴板权限后重试。",
+    "reopen": "重新打开登录页",
     "loginValueProp": "登录以关联你的多台设备，并互相远程控制。",
     "linkedDevices": "已关联设备"
   },

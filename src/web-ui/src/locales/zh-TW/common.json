@@ -892,6 +892,7 @@
     "syncPhaseExportingSessions": "正在備份工作階段 {{current}}/{{total}}",
     "copyServerUrl": "複製伺服器位址",
     "copyServerFailed": "無法複製伺服器位址，請檢查剪貼簿權限後重試。",
+    "reopen": "重新開啟登入頁面",
     "loginValueProp": "登入以連結你的多台裝置，並互相遠端控制。",
     "linkedDevices": "已關聯裝置"
   },
