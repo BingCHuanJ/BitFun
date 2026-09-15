@@ -1,6 +1,6 @@
 /** Account login and authenticated device connections. */
 
-import { OverflowText, Alert, Button, Icon, IconButton, ScrollArea, StatusPill } from '@openbitfun/ui';
+import { OverflowText, Alert, Avatar, Button, Icon, IconButton, ScrollArea, StatusPill } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import {
@@ -599,7 +599,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         {view === 'devices' && (
           <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
             <div className="account-panel__identity-line">
-              <Icon name="user" size="lg" aria-hidden="true" />
+              <Avatar size="md" src={identity.me?.user.avatarUrl} alt={username} />
               <span className="account-panel__identity-copy">
                 <span className="account-panel__identity-label">{t('accountLogin.signedInAccount')}</span>
                 <OverflowText className="account-panel__identity-name" title={username}>{username.trim()}</OverflowText>

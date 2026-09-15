@@ -1739,6 +1739,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
           isDark={isDark}
           onClose={() => setCompactSettingsOpen(false)}
           onDisconnectRequest={() => { setCompactSettingsOpen(false); setShowDisconnectConfirm(true); }}
+          onOpenDevices={onOpenDevices ? () => { setCompactSettingsOpen(false); onOpenDevices(); } : undefined}
           onSelectDevice={(device) => void handleSelectCompactDevice(device)}
           onToggleTheme={toggleTheme}
           open={compactSettingsOpen}

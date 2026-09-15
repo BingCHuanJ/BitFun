@@ -738,6 +738,10 @@
     "select": "Select this folder"
   },
   "deviceOverview": {
+    "devicesAndConnections": "Devices & Connections",
+    "connectDevice": "Connect to this device",
+    "previousDevice": "Previous device",
+    "nextDevice": "Next device",
     "title": "Device status",
     "thisDevice": "This device",
     "thisWindows": "This Windows PC",
