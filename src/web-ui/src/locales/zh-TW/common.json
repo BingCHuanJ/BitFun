@@ -738,6 +738,10 @@
     "select": "選擇此目錄"
   },
   "deviceOverview": {
+    "devicesAndConnections": "裝置與連線",
+    "connectDevice": "連線至此裝置",
+    "previousDevice": "上一台裝置",
+    "nextDevice": "下一台裝置",
     "title": "裝置狀態",
     "thisDevice": "這台裝置",
     "thisWindows": "這台 Windows",

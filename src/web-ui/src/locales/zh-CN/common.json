@@ -738,6 +738,10 @@
     "select": "选择此目录"
   },
   "deviceOverview": {
+    "devicesAndConnections": "设备与连接",
+    "connectDevice": "连接该设备",
+    "previousDevice": "上一台设备",
+    "nextDevice": "下一台设备",
     "title": "设备状态",
     "thisDevice": "这台设备",
     "thisWindows": "这台 Windows",
