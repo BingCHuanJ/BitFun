@@ -568,7 +568,13 @@ mod tests {
         assert_eq!(user.profile.github_id, 0);
         assert_eq!(user.email.as_deref(), Some("alice@example.com"));
         assert_eq!(github.email, None);
-        assert_eq!(user.profile.login, "alice@example.com");
+        // Keep the legacy relay profile contract while exposing email separately.
+        assert!(user.profile.login.len() <= 100);
+        assert!(user
+            .profile
+            .login
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-'));
         assert!(user.profile.identity_id().unwrap().starts_with("email-"));
         assert!(!service.is_admin(&user));
         let poll = service
@@ -1009,7 +1015,7 @@ mod tests {
             serde_json::from_slice(&to_bytes(response.into_body(), 16384).await.unwrap()).unwrap();
         assert_eq!(profile["email"], "alice@example.com");
         assert!(profile["user"].get("email").is_none());
-        assert_eq!(profile["user"]["login"], "alice@example.com");
+        assert!(!profile["user"]["login"].as_str().unwrap().contains('@'));
     }
 
     #[test]

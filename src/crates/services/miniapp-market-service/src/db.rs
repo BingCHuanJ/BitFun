@@ -312,9 +312,9 @@ fn user_from_row(row: sqlx::sqlite::SqliteRow) -> AuthenticatedUser {
                 None => format!("email-{}", row.get::<i64, _>("id")),
             }),
             github_id: row.get::<Option<i64>, _>("github_id").unwrap_or_default(),
-            login: row
-                .get::<Option<String>, _>("email")
-                .unwrap_or_else(|| row.get("login")),
+            // Existing relay versions validate this protocol handle as a GitHub-style
+            // username. The verified email is carried separately for display.
+            login: row.get("login"),
             avatar_url: row.get("avatar_url"),
         },
     }
