@@ -170,3 +170,21 @@ SMTP 错误不得包含地址、凭据或验证码。认证接口保留 body、�
 `/config` 和 `/health` 的 `emailAuthConfigured` 明确报告能力。
 
 重点回归：`cargo test -p openbitfun-miniapp-market-service --lib email_`。
+
+The verification email uses `src/email/sign-in.html` as a multipart/alternative
+HTML body with a complete UTF-8 plain-text fallback. Layout uses presentation
+tables, inline styles and system fonts; the six digits stay selectable text.
+Media queries add compact spacing and dark-mode colors without being required
+for readability. There are no scripts, forms, tracking pixels or recipient data
+in image URLs. The optional static brand image is published by the market web
+build at `/miniapp/assets/openbitfun-email-mark.png`; the brand asset generator
+owns it, using the current fine-line mark rather than the application icon.
+
+Email clients cannot consume CSS variables or theme packages. The template's
+small inline palette is an email-specific snapshot of the existing OpenBitFun
+reference scales: neutral 0/70/75/200/350/650/800/850/900/950 and cyan 500 from
+`design-system/packages/theme-openbitfun/src/reference.tokens.json`. Preserve
+those source mappings when updating the template; do not add a separate brand
+palette. Check the HTML at 390px and desktop widths in light and dark mode,
+then run `cargo test -p openbitfun-miniapp-market-service --lib email_auth::tests`
+and a real message render check after SMTP/template changes.

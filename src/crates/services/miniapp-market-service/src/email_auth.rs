@@ -8,7 +8,10 @@ use crate::{
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use lettre::{
-    message::{header::ContentType, Mailbox},
+    message::{
+        header::{ContentTransferEncoding, ContentType},
+        Mailbox, MultiPart, SinglePart,
+    },
     transport::smtp::authentication::Credentials,
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
@@ -83,9 +86,9 @@ fn verification_message(from: Mailbox, email: &str, code: &str) -> MarketResult<
         .from(from)
         .to(email.parse().map_err(|_| invalid_email())?)
         .subject("OpenBitFun 登录验证码 / Sign-in code")
-        .header(lettre::message::header::MIME_VERSION_1_0)
-        .header(ContentType::TEXT_PLAIN)
-        .body(format!("你的 OpenBitFun 登录验证码是：{code}\n\n验证码 10 分钟内有效，仅可使用一次。请勿向他人透露。\n如非本人操作，请忽略此邮件。\n\nYour OpenBitFun verification code is: {code}\nIt expires in 10 minutes and can only be used once. Do not share this code.\nIf you did not request it, ignore this email.\n\nOpenBitFun"))
+        .multipart(MultiPart::alternative()
+            .singlepart(SinglePart::plain(format!("你的 OpenBitFun 登录验证码是：{code}\n\n验证码 10 分钟内有效，仅可使用一次。请勿向他人透露。\n如非本人操作，请忽略此邮件。\n\nYour OpenBitFun verification code is: {code}\nIt expires in 10 minutes and can only be used once. Do not share this code.\nIf you did not request it, ignore this email.\n\nOpenBitFun")))
+            .singlepart(SinglePart::builder().header(ContentType::TEXT_HTML).header(ContentTransferEncoding::Base64).body(include_str!("email/sign-in.html").replace("{{code}}", code))))
         .map_err(|_| MarketError::internal("Could not compose verification email"))
 }
 
@@ -686,7 +689,7 @@ mod tests {
     }
 
     #[test]
-    fn verification_email_declares_inline_utf8_text() {
+    fn verification_email_has_html_and_plain_text_without_attachments() {
         let message = verification_message(
             "OpenBitFun <hello@example.com>".parse().unwrap(),
             "alice@example.com",
@@ -700,13 +703,32 @@ mod tests {
         assert!(!raw.contains("Content-Disposition: attachment"));
         use base64::Engine;
         assert!(raw.contains("Content-Transfer-Encoding: base64"));
-        let body = raw.split_once("\r\n\r\n").unwrap().1;
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(body.split_whitespace().collect::<String>())
+        assert!(raw.contains("Content-Type: multipart/alternative;"));
+        assert!(raw.contains("Content-Type: text/html; charset=utf-8"));
+        let boundary = raw
+            .lines()
+            .find(|line| line.starts_with("--") && !line.ends_with("--"))
             .unwrap();
-        let text = String::from_utf8(decoded).unwrap();
-        assert!(text.contains("Your OpenBitFun verification code is: 123456"));
-        assert!(text.contains("你的 OpenBitFun 登录验证码是：123456"));
+        let parts: Vec<_> = raw
+            .split(boundary)
+            .filter_map(|part| {
+                let (_, body) = part.split_once("\r\n\r\n")?;
+                if !part.contains("Content-Transfer-Encoding: base64") {
+                    return None;
+                }
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(body.trim().split_whitespace().collect::<String>())
+                    .unwrap();
+                Some(String::from_utf8(decoded).unwrap())
+            })
+            .collect();
+        assert_eq!(parts.len(), 2);
+        assert!(parts[0].contains("Your OpenBitFun verification code is: 123456"));
+        assert!(parts[0].contains("你的 OpenBitFun 登录验证码是：123456"));
+        let html = &parts[1];
+        assert!(html.contains(">123456</div>"));
+        assert!(!html.contains("{{code}}"));
+        assert!(!html.contains("<script"));
     }
 
     #[test]
