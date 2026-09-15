@@ -345,7 +345,7 @@
 }
 
 .harmony-sidebar__device-row.is-current .harmony-sidebar__row-label {
-  font-weight: var(--openbitfun-font-weight-bold);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 .harmony-sidebar__status {
@@ -1499,7 +1499,7 @@
 }
 
 .harmony-sidebar__workspace-session.is-current .harmony-sidebar__row-label {
-  font-weight: var(--openbitfun-font-weight-bold);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 .harmony-sidebar__device-icon svg,

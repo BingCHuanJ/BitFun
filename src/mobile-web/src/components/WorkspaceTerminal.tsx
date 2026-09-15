@@ -27,7 +27,13 @@ export function WorkspaceTerminal({ manager, workspace }: { manager: RemoteSessi
     let caughtUp = false;
     let stop: import('../../../shared/relay-transport/SessionStream').SessionStreamHandle | undefined;
     const fail = (cause: unknown) => { if (!disposed) setError(cause instanceof Error ? cause.message : String(cause)); };
-    const terminal = new Terminal({cursorBlink:true,scrollback:5000,fontSize:14,convertEol:false});
+    const typography = getComputedStyle(container.current);
+    const terminal = new Terminal({
+      cursorBlink: true,
+      scrollback: 5000,
+      fontSize: Number.parseFloat(typography.getPropertyValue('--openbitfun-type-body-md-font-size')),
+      convertEol: false,
+    });
     const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(container.current);
     const applyTheme = () => {
       if (!container.current || disposed) return;
