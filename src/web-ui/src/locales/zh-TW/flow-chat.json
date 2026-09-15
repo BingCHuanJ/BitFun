@@ -625,6 +625,9 @@
     "image": "圖片",
     "url": "URL",
     "dropToAdd": "放開即可新增",
+    "dropFilesHint": "將檔案和圖片新增至目前對話",
+    "dropFileCount": "{{fileCount}} 個檔案",
+    "dropPreviewUnavailable": "檔案預覽暫時無法使用，仍可放開新增檔案。",
     "dragHint": "拖放檔案到此處新增上下文"
   },
   "agent": {

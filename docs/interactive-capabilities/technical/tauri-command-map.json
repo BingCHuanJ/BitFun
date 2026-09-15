@@ -2,10 +2,10 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "5473331e06ecd4bfafbf9b547d48b4fe1561ccf69d86fdfde51ea10dc919531c",
-  "commandCount": 656,
+  "commandCount": 657,
   "coverage": {
-    "commandCount": 656,
-    "documentedCommandCount": 612,
+    "commandCount": 657,
+    "documentedCommandCount": 613,
     "implementationCommandCount": 44,
     "implementationDigest": "012cebbd8d7c908d8e4c0787f73a2fa5f43184c240e7fde68cb941667574ba8f"
   },
@@ -8600,6 +8600,22 @@
       "sourceFile": "src/apps/desktop/src/api/external_sources_api.rs",
       "signature": "fn set_external_tool_targets_enabled_command( request: SetExternalToolTargetsEnabledRequest, ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
+    },
+    {
+      "id": "set_file_drop_preview_target",
+      "moduleId": "file_drop_preview",
+      "capabilityId": "feature.files-editor",
+      "capabilityIds": [
+        "feature.files-editor"
+      ],
+      "documentedItemIds": [
+        "feature.files-editor:attachments"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::file_drop_preview_api::set_file_drop_preview_target",
+      "sourceFile": "src/apps/desktop/src/api/file_drop_preview_api.rs",
+      "signature": "fn set_file_drop_preview_target( window: tauri::WebviewWindow, request: SetFileDropPreviewTargetRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "set_global_skill_disabled",

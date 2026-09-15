@@ -640,6 +640,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("set_external_tool_conflict_choice_command",                  Unsupported, Proxied,          HANDLED),
     op("set_external_tool_target_decision_command",                  Unsupported, Proxied,          HANDLED),
     op("set_external_tool_targets_enabled_command",                  Unsupported, Proxied,          HANDLED),
+    op("set_file_drop_preview_target",                               LocalOnly,   ControllerLocal,  REFUSED),
     op("set_global_skill_disabled",                                  Agnostic,    Proxied,          CLI_NOT_IMPLEMENTED),
     op("set_macos_edit_menu_mode",                                   LocalOnly,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("set_main_window_transient_geometry",                         LocalOnly,   ControllerLocal,  REFUSED),
