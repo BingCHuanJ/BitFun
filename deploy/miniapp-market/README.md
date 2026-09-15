@@ -527,6 +527,8 @@ migration 0002 保留原用户 ID 和外键，但旧 binary 不认识邮箱用�
 
 ### Same-host outbound SMTP relay
 
+完整维护流程见 [自建发信服务维护手册](../outbound-mail/README.md)。
+
 For a send-only Postfix relay on the auth server, set `SMTP_SECURITY=local`,
 `SMTP_HOST` to its literal loopback/private IPv4 address, `SMTP_PORT` to the
 private listener port, and `SMTP_USERNAME` to the sender address. Leave
