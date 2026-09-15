@@ -117,7 +117,8 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
     const authWindow = window.open('about:blank', '_blank',
       `popup=yes,width=${width},height=${height},left=${Math.round(left)},top=${Math.round(top)},resizable=yes,scrollbars=yes`);
     if (!authWindow) { setError(t('pairing.allowSignInPopup')); return; }
-    authWindow.opener = null;
+    // Keep the opener relationship: Chrome otherwise refuses cross-origin close()
+    // and focus(). CloudAccountClient only navigates to the trusted auth endpoints.
     popup.current = authWindow;
     const attempt = ++generation.current;
     const controller = new AbortController();
