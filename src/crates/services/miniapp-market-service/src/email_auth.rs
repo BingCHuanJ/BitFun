@@ -32,26 +32,50 @@ impl std::fmt::Debug for Mailer {
 }
 impl Mailer {
     pub(crate) fn from_env() -> MarketResult<Option<Self>> {
-        let get = |key| std::env::var(key).ok().filter(|s| !s.is_empty());
-        let Some(password) = get("SMTP_PASSWORD") else {
+        Self::from_settings(|key| std::env::var(key).ok().filter(|s| !s.is_empty()))
+    }
+    fn from_settings(get: impl Fn(&str) -> Option<String>) -> MarketResult<Option<Self>> {
+        let security = get("SMTP_SECURITY").unwrap_or_else(|| "ssl".into());
+        let password = get("SMTP_PASSWORD");
+        if security != "local" && password.is_none() {
             return Ok(None);
-        };
+        }
         let username = get("SMTP_USERNAME")
             .ok_or_else(|| MarketError::internal("SMTP_USERNAME is required"))?;
         let host = get("SMTP_HOST").unwrap_or_else(|| "smtp.qiye.aliyun.com".into());
-        let security = get("SMTP_SECURITY").unwrap_or_else(|| "ssl".into());
         let builder = match security.as_str() {
-            "ssl" => AsyncSmtpTransport::<Tokio1Executor>::relay(&host),
-            "starttls" => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&host),
+            "ssl" => AsyncSmtpTransport::<Tokio1Executor>::relay(&host)
+                .map_err(|_| MarketError::internal("Invalid SMTP TLS configuration"))?,
+            "starttls" => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&host)
+                .map_err(|_| MarketError::internal("Invalid SMTP TLS configuration"))?,
+            "local" => {
+                // Only explicitly configured same-host/isolated private relays may omit TLS.
+                let private_address = host.parse::<std::net::IpAddr>().is_ok_and(|ip| match ip {
+                    std::net::IpAddr::V4(ip) => ip.is_loopback() || ip.is_private(),
+                    std::net::IpAddr::V6(ip) => ip.is_loopback(),
+                });
+                if !private_address || password.is_some() {
+                    return Err(MarketError::internal(
+                        "Local SMTP requires a private IP literal and must not send a password",
+                    ));
+                }
+                AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&host)
+            }
             _ => {
                 return Err(MarketError::internal(
-                    "SMTP_SECURITY must be ssl or starttls",
+                    "SMTP_SECURITY must be ssl, starttls or local",
                 ))
             }
-        }
-        .map_err(|_| MarketError::internal("Invalid SMTP TLS configuration"))?;
+        };
         let port = get("SMTP_PORT")
-            .unwrap_or_else(|| if security == "ssl" { "465" } else { "587" }.into())
+            .unwrap_or_else(|| {
+                match security.as_str() {
+                    "ssl" => "465",
+                    "local" => "25",
+                    _ => "587",
+                }
+                .into()
+            })
             .parse::<u16>()
             .map_err(|_| MarketError::internal("Invalid SMTP_PORT"))?;
         let from = Mailbox::new(
@@ -60,15 +84,18 @@ impl Mailer {
                 .parse()
                 .map_err(|_| MarketError::internal("Invalid SMTP_USERNAME"))?,
         );
+        let mut transport = builder
+            .port(port)
+            .timeout(Some(std::time::Duration::from_secs(15)));
+        if let Some(password) = password {
+            transport = transport.credentials(Credentials::new(username, password));
+        }
         Ok(Some(Self {
-            transport: builder
-                .port(port)
-                .timeout(Some(std::time::Duration::from_secs(15)))
-                .credentials(Credentials::new(username, password))
-                .build(),
+            transport: transport.build(),
             from,
         }))
     }
+
     async fn send(&self, email: &str, code: &str, locale: &str) -> MarketResult<()> {
         let message = verification_message(self.from.clone(), email, code, locale)?;
         tokio::time::timeout(
@@ -762,6 +789,35 @@ mod tests {
         assert_eq!(profile["email"], "alice@example.com");
         assert!(profile["user"].get("email").is_none());
         assert!(!profile["user"]["login"].as_str().unwrap().contains('@'));
+    }
+
+    #[test]
+    fn local_smtp_is_explicit_private_and_never_sends_credentials() {
+        assert!(Mailer::from_settings(|_| None).unwrap().is_none());
+        for host in ["127.0.0.1", "172.19.0.1", "::1"] {
+            assert!(Mailer::from_settings(|key| match key {
+                "SMTP_SECURITY" => Some("local".into()),
+                "SMTP_HOST" => Some(host.into()),
+                "SMTP_USERNAME" => Some("hello@example.com".into()),
+                _ => None,
+            })
+            .unwrap()
+            .is_some());
+        }
+        for (host, password) in [
+            ("8.8.8.8", None),
+            ("smtp.example.com", None),
+            ("172.19.0.1", Some("do-not-transmit")),
+        ] {
+            assert!(Mailer::from_settings(|key| match key {
+                "SMTP_SECURITY" => Some("local".into()),
+                "SMTP_HOST" => Some(host.into()),
+                "SMTP_USERNAME" => Some("hello@example.com".into()),
+                "SMTP_PASSWORD" => password.map(str::to_owned),
+                _ => None,
+            })
+            .is_err());
+        }
     }
 
     #[test]

@@ -524,3 +524,29 @@ migration 0002 保留原用户 ID 和外键，但旧 binary 不认识邮箱用�
 认证页优先使用该参数，其次使用已保存的语言和浏览器语言；别名遵循共享 i18n contract。
 发送验证码请求可携带 `locale`（`en-US`、`zh-CN` 或 `zh-TW`），邮件主题、HTML 和纯文本使用同一语言。
 旧客户端省略该字段或传入未知值时默认发送英文邮件，不影响验证码和令牌协议。
+
+### Same-host outbound SMTP relay
+
+For a send-only Postfix relay on the auth server, set `SMTP_SECURITY=local`,
+`SMTP_HOST` to its literal loopback/private IPv4 address, `SMTP_PORT` to the
+private listener port, and `SMTP_USERNAME` to the sender address. Leave
+`SMTP_PASSWORD` unset. This explicit mode does not send credentials or use TLS;
+use it only over loopback or an isolated same-host Docker bridge. Public IPs,
+DNS names, and supplied passwords are rejected. Existing `ssl`/`starttls`
+configurations retain certificate validation and authenticated delivery.
+
+Bind Postfix only to loopback and the auth bridge gateway; restrict `mynetworks`
+to loopback and the auth container's exact address, with `permit_mynetworks,
+reject` relay/client restrictions. Recheck the container address after deployment.
+Do not expose SMTP through a public Docker port or WAF. Restrict envelope senders
+to the configured sender, sign with OpenDKIM, and keep `relayhost` empty for direct
+MX delivery. Enable opportunistic TLS for outbound delivery, persistent queues,
+and systemd startup ordering after Docker. Keep DKIM private keys and any SMTP
+configuration under root-controlled server paths, outside the repository.
+
+Before switching production auth, publish a matching A/PTR identity, add the
+outbound IP to the existing SPF record (never create a second SPF record), publish
+DKIM, and establish DMARC. Keep existing MX records when inbound email remains
+with another provider. Verify real delivery and recipient authentication headers;
+SMTP queue acceptance alone does not prove delivery to the inbox. Preserve the
+previous SMTP configuration for rollback until the new route is verified.
