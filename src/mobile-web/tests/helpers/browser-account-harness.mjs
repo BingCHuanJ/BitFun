@@ -229,6 +229,10 @@ export class RelayFixture {
         if (!request.isInterceptResolutionHandled()) await request.abort().catch(() => {});
       });
     });
+    // Account scenarios use English action labels independently of the host OS.
+    await page.evaluateOnNewDocument(() => {
+      localStorage.setItem('openbitfun-mobile-language', 'en-US');
+    });
     if (init) await page.evaluateOnNewDocument(init);
     await page.goto(url, { waitUntil: 'networkidle0' });
     return page;
@@ -274,6 +278,10 @@ export async function signOut(page) {
   if (!await page.$('.devices-page') && await page.$('.harmony-sidebar__settings')) {
     await page.click('button[aria-label="Settings"]');
     await page.waitForSelector('button[aria-label="Devices"]', { visible: true });
+    await page.$eval('button[aria-label="Devices"]', async button => {
+      const sheet = button.closest('[role="dialog"]');
+      if (sheet) await Promise.all(sheet.getAnimations().map(animation => animation.finished));
+    });
   }
   const button = await page.$('button[aria-label="Devices"]');
   if (button) { await button.click(); await page.waitForSelector('.devices-page'); }
