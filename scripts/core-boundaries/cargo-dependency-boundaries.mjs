@@ -539,6 +539,13 @@ const THIRD_PARTY_CAPABILITY_PROFILES = new Map([
   ['image', {
     label: 'Image',
     packages: new Map([
+      ['openbitfun-services-core', dependencyProfile([], {
+        optional: true,
+        useDefaultFeatures: false,
+        ownerFeatureCapabilities: new Map([
+          ['pet-packages', ['gif', 'jpeg', 'png', 'webp']],
+        ]),
+      })],
       ['openbitfun-cli', dependencyProfile(['gif', 'jpeg', 'png', 'webp'], {
         useDefaultFeatures: false,
       })],

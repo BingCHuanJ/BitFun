@@ -113,7 +113,7 @@ export const ECOSYSTEM_IMPORT_ITEM_KINDS: readonly EcosystemImportItemKind[] = [
  */
 const PRODUCT_DISCOVERY_KINDS = {
   'claude-code': ['command', 'subagent', 'skill', 'mcp', 'hook'],
-  codex: ['subagent', 'skill', 'mcp', 'hook'],
+  codex: ['subagent', 'skill', 'mcp', 'hook', 'pet'],
   pi: ['skill', 'hook'],
   dsh: ['skill', 'hook', 'mcp'],
   opencode: ['command', 'tool', 'subagent', 'skill', 'mcp', 'hook'],
@@ -127,7 +127,7 @@ const PRODUCT_NOT_APPLICABLE_KINDS = {
   opencode: ['pet'],
 } as const satisfies Record<EcosystemProductId, readonly EcosystemImportItemKind[]>;
 
-const OWNER_DETECTED_KINDS = new Set<EcosystemImportItemKind>(['skill', 'hook', 'instruction']);
+const OWNER_DETECTED_KINDS = new Set<EcosystemImportItemKind>(['skill', 'hook', 'instruction', 'pet']);
 
 export function ecosystemDiscoverySupport(
   productId: EcosystemProductId,

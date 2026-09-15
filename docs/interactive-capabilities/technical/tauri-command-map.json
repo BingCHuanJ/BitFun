@@ -4818,7 +4818,7 @@
       "visibility": "documented",
       "rustPath": "list_agent_companion_pets",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn list_agent_companion_pets( state: State<'_, AppState>, ) -> Result<ListAgentCompanionPetsResponse, String>",
+      "signature": "fn list_agent_companion_pets( state: State<'_, AppState>, request: Option<ListAgentCompanionPetsRequest>, ) -> Result<ListAgentCompanionPetsResponse, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {

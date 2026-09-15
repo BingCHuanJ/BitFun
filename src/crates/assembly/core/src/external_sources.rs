@@ -68,6 +68,7 @@ use openbitfun_claude_code_adapter::{
     ClaudeCodeCommandProvider, ClaudeCodeMcpProvider, ClaudeCodeSubagentProvider,
 };
 use openbitfun_codex_adapter::{CodexMcpProvider, CodexSubagentProvider};
+
 use openbitfun_dsh_adapter::DshMcpProvider;
 use openbitfun_external_sources::{
     DeferredDiscovery, ExternalMcpDiscoveryResult, ExternalSourceControlPlane,
@@ -118,6 +119,28 @@ use tokio::sync::broadcast;
 use tool_runtime::exec_command::{
     exec_command_argv_for_isolated_shell, exec_command_noninteractive_env, ExecCommandShellKind,
 };
+
+pub use openbitfun_codex_adapter::BuiltinPetCatalog as ExternalBuiltinPetCatalog;
+
+pub fn external_builtin_pet_sources(
+    ecosystem_id: &str,
+    only_id: Option<&str>,
+) -> ExternalBuiltinPetCatalog {
+    match ecosystem_id {
+        "codex" => openbitfun_codex_adapter::builtin_pet_sources(only_id),
+        _ => ExternalBuiltinPetCatalog {
+            pets: Vec::new(),
+            diagnostics: vec!["Built-in pet source is unsupported".into()],
+        },
+    }
+}
+
+pub fn external_pet_source_root(ecosystem_id: &str) -> Option<PathBuf> {
+    match ecosystem_id {
+        "codex" => Some(openbitfun_codex_adapter::pet_source_root()),
+        _ => None,
+    }
+}
 
 const PROVIDER_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const EXTERNAL_SOURCE_PREFERENCES_FILE: &str = "external-sources.json";

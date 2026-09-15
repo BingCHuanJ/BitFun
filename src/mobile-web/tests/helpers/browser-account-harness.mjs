@@ -272,6 +272,24 @@ export async function connected(page, device = 'desktop-a') {
   assert.equal(await page.$('.pairing-page__form'), null);
 }
 
+export async function disconnect(page) {
+  await page.bringToFront();
+  await page.click('.harmony-sidebar__settings');
+  await page.waitForSelector('.harmony-sidebar__settings-disconnect', { visible: true });
+  await page.waitForFunction(() => {
+    const sheet = document.querySelector('.harmony-sidebar__settings-disconnect')?.closest('[role="dialog"]');
+    return sheet && sheet.getBoundingClientRect().bottom <= innerHeight + 1;
+  }, { polling: 100 });
+  await page.$eval('.harmony-sidebar__settings-disconnect', button => button.scrollIntoView({ block: 'center' }));
+  await page.click('.harmony-sidebar__settings-disconnect');
+  await page.waitForFunction(() => [...document.querySelectorAll('[role="dialog"]')]
+    .some(dialog => dialog.textContent.includes('Disconnect this tab')), { polling: 100 });
+  await page.evaluate(() => [...document.querySelectorAll('[role="dialog"]')]
+    .find(dialog => dialog.textContent.includes('Disconnect this tab'))
+    .querySelector('button[data-appearance="danger"]').click());
+  await page.waitForSelector('.devices-page__description');
+}
+
 export async function signOut(page) {
   await page.bringToFront();
   // Open the device directory from the UI if this tab is controlling a host.
