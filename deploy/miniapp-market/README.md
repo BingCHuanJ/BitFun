@@ -539,7 +539,8 @@ Bind Postfix only to loopback and the auth bridge gateway; restrict `mynetworks`
 to loopback and the auth container's exact address, with `permit_mynetworks,
 reject` relay/client restrictions. Recheck the container address after deployment.
 Do not expose SMTP through a public Docker port or WAF. Restrict envelope senders
-to the configured sender, sign with OpenDKIM, and keep `relayhost` empty for direct
+to the owned sender domain (for example, `*@openbitfun.com`), sign all its sender
+addresses with OpenDKIM, and keep `relayhost` empty for direct
 MX delivery. Enable opportunistic TLS for outbound delivery, persistent queues,
 and systemd startup ordering after Docker. Keep DKIM private keys and any SMTP
 configuration under root-controlled server paths, outside the repository.
