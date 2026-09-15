@@ -3,7 +3,7 @@ import { after, before, test } from 'node:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { LAN, OFFICIAL, RelayFixture, connected, invitation, launchBrowser, readAccount,
+import { LAN, OFFICIAL, RelayFixture, connected, disconnect, invitation, launchBrowser, readAccount,
   signIn, signOut, startSourceServer, until } from './helpers/browser-account-harness.mjs';
 
 let browser;
@@ -134,21 +134,7 @@ test('disconnect affects only the current tab and remains disconnected after rel
     await signIn(first); await connected(first);
     const second = await relay.page(context, source.origin);
     await connected(second);
-    await first.bringToFront();
-    await first.click('.harmony-sidebar__settings');
-    await first.waitForSelector('.harmony-sidebar__settings-disconnect', { visible: true });
-    await first.waitForFunction(() => {
-      const sheet = document.querySelector('.harmony-sidebar__settings-disconnect')?.closest('[role="dialog"]');
-      return sheet && sheet.getBoundingClientRect().bottom <= innerHeight + 1;
-    }, { polling: 100 });
-    await first.$eval('.harmony-sidebar__settings-disconnect', button => button.scrollIntoView({ block: 'center' }));
-    await first.click('.harmony-sidebar__settings-disconnect');
-    await first.waitForFunction(() => [...document.querySelectorAll('[role="dialog"]')]
-      .some(dialog => dialog.textContent.includes('Disconnect this tab')), { polling: 100 });
-    await first.evaluate(() => [...document.querySelectorAll('[role="dialog"]')]
-      .find(dialog => dialog.textContent.includes('Disconnect this tab'))
-      .querySelector('button[data-appearance="danger"]').click());
-    await first.waitForSelector('.devices-page__description');
+    await disconnect(first);
     await first.reload();
     await first.waitForSelector('.devices-page__description');
     assert.equal(await first.evaluate(async () => (await import('/src/services/store.ts')).useMobileStore.getState().controlTarget), null);

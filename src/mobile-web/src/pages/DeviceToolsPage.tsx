@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, Files, Monitor, Server, TerminalSquare, X } from 'lucide-react';
-import { MobileBanner, MobileChoiceSheet, MobileIconButton, MobileListRow, MobilePageHeader, MobileStatus } from '@openbitfun/ui/mobile';
+import { MobileBanner, MobileButton, MobileChoiceSheet, MobileIconButton, MobileListRow, MobilePageHeader, MobileStatus } from '@openbitfun/ui/mobile';
 import { WorkspaceFiles } from '../components/WorkspaceFiles';
 import { WorkspaceTerminal } from '../components/WorkspaceTerminal';
 import type { RemoteSessionManager } from '../services/RemoteSessionManager';
@@ -42,8 +42,8 @@ export default function DeviceToolsPage({ manager, onBack }: { manager: RemoteSe
         leading={connection ? <Server size={18}/> : <Monitor size={18}/>} trailing={<ChevronDown size={16}/>}
         onClick={() => setChoosing(true)}/>
       <div className="device-tools-page__tabs" role="tablist" aria-label={t('workspace.tools')}>
-        <button type="button" role="tab" aria-selected={panel === 'files'} onClick={() => setPanel('files')}><Files size={18}/><span>{t('workspace.files')}</span></button>
-        <button type="button" role="tab" aria-selected={panel === 'terminal'} onClick={() => setPanel('terminal')}><TerminalSquare size={18}/><span>{t('workspace.terminal')}</span></button>
+        <MobileButton appearance="plain" role="tab" aria-selected={panel === 'files'} leading={<Files size={18}/>} onClick={() => setPanel('files')}>{t('workspace.files')}</MobileButton>
+        <MobileButton appearance="plain" role="tab" aria-selected={panel === 'terminal'} leading={<TerminalSquare size={18}/>} onClick={() => setPanel('terminal')}>{t('workspace.terminal')}</MobileButton>
       </div>
     </div>
     <MobileChoiceSheet open={choosing} onOpenChange={() => setChoosing(false)} title={t('workspace.location')}

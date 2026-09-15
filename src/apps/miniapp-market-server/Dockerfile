@@ -8,6 +8,8 @@ RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches/ patches/
 COPY design-system/LICENSE design-system/LICENSE
+COPY design-system/tsconfig.base.json design-system/tsconfig.base.json
+COPY design-system/packages/ui/package.json design-system/packages/ui/package.json
 COPY design-system/tooling/token-engine/package.json design-system/tooling/token-engine/package.json
 COPY design-system/packages/design-tokens/package.json design-system/packages/design-tokens/package.json
 COPY design-system/packages/theme-openbitfun/package.json design-system/packages/theme-openbitfun/package.json
@@ -15,12 +17,14 @@ COPY src/miniapp-market-web/package.json src/miniapp-market-web/package.json
 RUN --mount=type=cache,id=openbitfun-market-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --ignore-scripts --filter openbitfun-miniapp-market-web...
 
+COPY design-system/packages/ui/ design-system/packages/ui/
 COPY design-system/tooling/token-engine/ design-system/tooling/token-engine/
 COPY design-system/packages/design-tokens/ design-system/packages/design-tokens/
 COPY design-system/packages/theme-openbitfun/ design-system/packages/theme-openbitfun/
 COPY src/miniapp-market-web/ src/miniapp-market-web/
 RUN pnpm --dir design-system/packages/design-tokens build \
     && pnpm --dir design-system/packages/theme-openbitfun build \
+    && pnpm --dir design-system/packages/ui build \
     && pnpm --dir src/miniapp-market-web build
 
 FROM rust:1.96-bookworm AS rust-builder

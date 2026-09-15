@@ -39,6 +39,8 @@ pub mod memory_store;
 pub mod permission_store;
 #[cfg(feature = "local-storage")]
 pub mod persistence;
+#[cfg(feature = "pet-packages")]
+pub mod pet_packages;
 #[cfg(feature = "process-runtime")]
 pub mod process_manager;
 #[cfg(feature = "process-runtime")]
@@ -81,3 +83,9 @@ pub mod workspace_instructions;
 pub mod workspace_text;
 #[cfg(feature = "workspace-transfer")]
 pub mod workspace_transfer;
+
+#[cfg(feature = "asar")]
+pub mod asar;
+
+#[cfg(all(feature = "installed-apps", target_os = "windows"))]
+pub mod installed_apps;

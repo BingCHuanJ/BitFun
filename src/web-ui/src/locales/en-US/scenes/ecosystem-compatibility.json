@@ -343,6 +343,28 @@
         "notConnected": "Not connected"
       },
       "refresh": "Refresh account status"
+    },
+    "pets": {
+      "builtinSource": "Codex built-in",
+      "customSource": "Codex custom",
+      "description": "Browse built-in and custom Codex pets, then import them to use in OpenBitFun.",
+      "partial": "Some pets could not be read. Check the source diagnostics below.",
+      "reviewTitle": "Import pet",
+      "reviewDescription": "Copy the reviewed pet package into OpenBitFun. You can select it after import; your current pet stays selected.",
+      "operationFailed": "The operation did not complete. The source or copy may have changed. Refresh and review again.",
+      "use": "Use this pet",
+      "states": {
+        "unsupported": "Unsupported",
+        "failed": "Load failed",
+        "partial": "Partly available",
+        "available": "Discovery supported",
+        "empty": "No pets found",
+        "copyModified": "Copy modified",
+        "sourceChanged": "Source changed",
+        "using": "In use",
+        "imported": "Imported",
+        "ready": "Ready to import"
+      }
     }
   },
   "sourceSettings": {

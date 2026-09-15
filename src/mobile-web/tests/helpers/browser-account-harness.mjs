@@ -229,6 +229,10 @@ export class RelayFixture {
         if (!request.isInterceptResolutionHandled()) await request.abort().catch(() => {});
       });
     });
+    // Account scenarios use English action labels independently of the host OS.
+    await page.evaluateOnNewDocument(() => {
+      localStorage.setItem('openbitfun-mobile-language', 'en-US');
+    });
     if (init) await page.evaluateOnNewDocument(init);
     await page.goto(url, { waitUntil: 'networkidle0' });
     return page;
@@ -268,12 +272,34 @@ export async function connected(page, device = 'desktop-a') {
   assert.equal(await page.$('.pairing-page__form'), null);
 }
 
+export async function disconnect(page) {
+  await page.bringToFront();
+  await page.click('.harmony-sidebar__settings');
+  await page.waitForSelector('.harmony-sidebar__settings-disconnect', { visible: true });
+  await page.waitForFunction(() => {
+    const sheet = document.querySelector('.harmony-sidebar__settings-disconnect')?.closest('[role="dialog"]');
+    return sheet && sheet.getBoundingClientRect().bottom <= innerHeight + 1;
+  }, { polling: 100 });
+  await page.$eval('.harmony-sidebar__settings-disconnect', button => button.scrollIntoView({ block: 'center' }));
+  await page.click('.harmony-sidebar__settings-disconnect');
+  await page.waitForFunction(() => [...document.querySelectorAll('[role="dialog"]')]
+    .some(dialog => dialog.textContent.includes('Disconnect this tab')), { polling: 100 });
+  await page.evaluate(() => [...document.querySelectorAll('[role="dialog"]')]
+    .find(dialog => dialog.textContent.includes('Disconnect this tab'))
+    .querySelector('button[data-appearance="danger"]').click());
+  await page.waitForSelector('.devices-page__description');
+}
+
 export async function signOut(page) {
   await page.bringToFront();
   // Open the device directory from the UI if this tab is controlling a host.
   if (!await page.$('.devices-page') && await page.$('.harmony-sidebar__settings')) {
     await page.click('button[aria-label="Settings"]');
     await page.waitForSelector('button[aria-label="Devices"]', { visible: true });
+    await page.$eval('button[aria-label="Devices"]', async button => {
+      const sheet = button.closest('[role="dialog"]');
+      if (sheet) await Promise.all(sheet.getAnimations().map(animation => animation.finished));
+    });
   }
   const button = await page.$('button[aria-label="Devices"]');
   if (button) { await button.click(); await page.waitForSelector('.devices-page'); }

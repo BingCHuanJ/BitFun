@@ -343,6 +343,28 @@
         "notConnected": "未接入"
       },
       "refresh": "刷新账号状态"
+    },
+    "pets": {
+      "builtinSource": "Codex 内置",
+      "customSource": "Codex 自定义",
+      "description": "查看 Codex 内置与自定义宠物，导入后可在 OpenBitFun 中使用。",
+      "partial": "部分宠物无法读取，请检查下方来源诊断。",
+      "reviewTitle": "导入宠物",
+      "reviewDescription": "将已预览的宠物包复制到 OpenBitFun。导入后可单独选择使用，当前宠物保持不变。",
+      "operationFailed": "操作未完成，来源或副本可能已变化。请刷新后重新确认。",
+      "use": "使用此宠物",
+      "states": {
+        "unsupported": "暂不支持",
+        "failed": "读取失败",
+        "partial": "部分可用",
+        "available": "支持发现",
+        "empty": "未发现宠物",
+        "copyModified": "副本已修改",
+        "sourceChanged": "来源已变化",
+        "using": "正在使用",
+        "imported": "已导入",
+        "ready": "可导入"
+      }
     }
   },
   "sourceSettings": {

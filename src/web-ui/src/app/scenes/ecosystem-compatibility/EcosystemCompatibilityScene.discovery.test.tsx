@@ -51,8 +51,15 @@ vi.mock('@openbitfun/ui', async () => {
   };
 });
 
+vi.mock('@/infrastructure/config/services/AgentCompanionPetService', () => ({
+  listExternalAgentCompanionPets: async () => ({ candidates: [], diagnostics: [] }),
+  AGENT_COMPANION_PETS_CHANGED: 'agent-companion-pets-changed',
+}));
+vi.mock('@/infrastructure/config/services/AIExperienceConfigService', () => ({ aiExperienceConfigService: {
+  addChangeListener: () => () => {},
+} }));
 vi.mock('@/infrastructure/runtime', () => ({ isTauriRuntime: () => true }));
-vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({ configAPI: { getSkillScanReport: async () => ({ skills: mocks.skills, diagnostics: [] }) } }));
+vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({ configAPI: { getConfig: async () => ({ enable_agent_companion: false }), getSkillScanReport: async () => ({ skills: mocks.skills, diagnostics: [] }) } }));
 vi.mock('@/infrastructure/api/service-api/ExternalHooksAPI', () => ({ externalHooksAPI: {
   getCatalog: async () => ({ sources: [], entries: [], providers: [], failedProviderIds: [], discoveryPending: false }),
   getImportSnapshot: async () => ({ catalog: { sources: [], entries: [], providers: [], failedProviderIds: [], discoveryPending: false }, imports: [] }),

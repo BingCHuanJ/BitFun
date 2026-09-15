@@ -27,6 +27,7 @@ import {
   type AgentCapabilityTooltipField,
 } from './components/AgentCapabilityTooltip';
 import { capabilityTooltipAriaLabel } from './components/agentCapabilityTooltipUtils';
+import { AgentCapabilityOption } from './components/AgentCapabilityOption';
 import { SkillGroupPicker, SkillGroupSummary } from './components/SkillGroupPicker';
 import { ToolGroupPicker, ToolGroupSummary } from './components/ToolGroupPicker';
 import { useUserSkillGroups } from '@/features/skill-groups/useUserSkillGroups';
@@ -370,8 +371,8 @@ const AgentsHomeView: React.FC = () => {
     })),
     [selectedAgentCoverageSourceBySkillKey, selectedAgentSkillConfigs, t],
   );
-  const selectedAgentRuntimeSkillCount = useMemo(
-    () => selectedAgentSkillConfigs.filter((skill) => skill.selectedForRuntime).length,
+  const selectedAgentRuntimeSkillKeys = useMemo(
+    () => new Set(selectedAgentSkillConfigs.filter((skill) => skill.selectedForRuntime).map((skill) => skill.key)),
     [selectedAgentSkillConfigs],
   );
   const selectedAgentProfileMemberNames = useMemo(() => {
@@ -496,9 +497,7 @@ const AgentsHomeView: React.FC = () => {
     if (selectedAgentHasSkillTool && selectedAgentSkillConfigs.length > 0) {
       const currentSkillCount = skillsEditing
         ? (pendingSkills ?? selectedAgentSkills).length
-        : isPrimaryAgent(selectedAgent)
-          ? selectedAgentRuntimeSkillCount
-          : selectedAgentSkills.length;
+        : selectedAgentSkills.length;
       tabs.push({
         key: 'skills',
         label: t('agentsOverview.skills'),
@@ -531,7 +530,6 @@ const AgentsHomeView: React.FC = () => {
     selectedAgentManageableSubagents.length,
     selectedAgentSkillConfigs.length,
     selectedAgentSkills,
-    selectedAgentRuntimeSkillCount,
     selectedAgentTools,
     skillsEditing,
     subagentsEditing,
@@ -1136,11 +1134,19 @@ const AgentsHomeView: React.FC = () => {
                     testId="agent-detail-tool-groups"
                   />
                 ) : (
-                  <ToolGroupSummary
-                    tools={agentProfileAvailableTools}
-                    selectedToolNames={selectedAgentTools}
-                    userGroups={userToolGroups}
-                  />
+                  <>
+                    <Toolbar
+                      bordered={false}
+                      leading={<span className="agent-detail-dialog__note">
+                        {t('agentsOverview.toolGroups.enabledCount', { count: selectedAgentTools.length })}
+                      </span>}
+                    />
+                    <ToolGroupSummary
+                      tools={agentProfileAvailableTools}
+                      selectedToolNames={selectedAgentTools}
+                      userGroups={userToolGroups}
+                    />
+                  </>
                 )
               ) : null}
 
@@ -1175,6 +1181,7 @@ const AgentsHomeView: React.FC = () => {
                   <SkillGroupSummary
                     skills={selectedAgentSkillItems}
                     selectedSkillKeys={selectedAgentSkills}
+                    runtimeSkillKeys={selectedAgentRuntimeSkillKeys}
                     userGroups={userSkillGroups}
                   />
                 )
@@ -1188,59 +1195,21 @@ const AgentsHomeView: React.FC = () => {
                     {t('agentsOverview.noSubagents')}
                   </span>
                 ) : subagentsEditing ? (
-                  <div className="agent-detail-dialog__token-grid">
-                    {selectedAgentManageableSubagents.map((subagent: SubagentInfo) => {
-                      const isOn = (pendingSubagentIds ?? selectedAgentEnabledSubagentIds).includes(subagent.id);
-                      const isExternal = !isLocallyManageableSubagent(subagent);
-                      const tooltipFields = subagentTooltipFields(subagent, t, isExternal);
-                      return (
-                        <AgentCapabilityTooltip
-                          key={subagent.key}
-                          title={subagent.name}
-                          description={subagent.description}
-                          fields={tooltipFields}
-                        >
-                          <span className="agent-detail-dialog__tooltip-trigger">
-                            <Button
-                              className="agent-detail-dialog__token"
-                              variant={isOn ? 'secondary' : 'outline'}
-                              size="sm"
-                              aria-pressed={isOn}
-                              disabled={isExternal || savingSubagents}
-                              aria-label={capabilityTooltipAriaLabel(
-                                subagent.name,
-                                subagent.description,
-                                tooltipFields,
-                              )}
-                              onClick={isExternal ? undefined : () => {
-                                setPendingSubagentIds((prev) => {
-                                  const current = prev ?? selectedAgentEnabledSubagentIds;
-                                  return isOn
-                                    ? current.filter((id) => id !== subagent.id)
-                                    : [...current, subagent.id];
-                                });
-                              }}
-                            >
-                              {subagent.name}{isExternal ? ` · ${t('filters.external')}` : ''}
-                            </Button>
-                          </span>
-                        </AgentCapabilityTooltip>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="agent-detail-dialog__chip-grid">
-                    {selectedAgentEnabledSubagents.length === 0 ? (
-                      <span className="agent-detail-dialog__empty">
-                        {t('agentsOverview.noSubagents')}
-                      </span>
-                    ) : (
-                      selectedAgentEnabledSubagents.map((subagent: SubagentInfo) => {
-                        const tooltipFields = subagentTooltipFields(
-                          subagent,
-                          t,
-                          !isLocallyManageableSubagent(subagent),
-                        );
+                  <>
+                    <Toolbar
+                      bordered={false}
+                      leading={<span className="agent-detail-dialog__note">
+                        {t('agentsOverview.subagentsSelectedCount', {
+                          count: (pendingSubagentIds ?? selectedAgentEnabledSubagentIds).length,
+                        })}
+                        {' · '}{t('agentsOverview.selectionSaveHint')}
+                      </span>}
+                    />
+                    <div className="agent-detail-dialog__token-grid">
+                      {selectedAgentManageableSubagents.map((subagent: SubagentInfo) => {
+                        const isOn = (pendingSubagentIds ?? selectedAgentEnabledSubagentIds).includes(subagent.id);
+                        const isExternal = !isLocallyManageableSubagent(subagent);
+                        const tooltipFields = subagentTooltipFields(subagent, t, isExternal);
                         return (
                           <AgentCapabilityTooltip
                             key={subagent.key}
@@ -1248,12 +1217,71 @@ const AgentsHomeView: React.FC = () => {
                             description={subagent.description}
                             fields={tooltipFields}
                           >
-                            <StatusPill tone="neutral">{subagent.name}</StatusPill>
+                            <AgentCapabilityOption
+                              className="agent-detail-dialog__token"
+                              checked={isOn}
+                              label={`${subagent.name}${isExternal ? ` · ${t('filters.external')}` : ''}`}
+                              disabled={isExternal || savingSubagents}
+                              inputAriaLabel={capabilityTooltipAriaLabel(
+                                subagent.name,
+                                subagent.description,
+                                tooltipFields,
+                              )}
+                              onCheckedChange={(checked) => {
+                                if (isExternal) return;
+                                setPendingSubagentIds((prev) => {
+                                  const current = prev ?? selectedAgentEnabledSubagentIds;
+                                  return checked
+                                    ? [...new Set([...current, subagent.id])]
+                                    : current.filter((id) => id !== subagent.id);
+                                });
+                              }}
+                            />
                           </AgentCapabilityTooltip>
                         );
-                      })
-                    )}
-                  </div>
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Toolbar
+                      bordered={false}
+                      leading={<span className="agent-detail-dialog__note">
+                        {t('agentsOverview.subagentsEnabledCount', { count: selectedAgentEnabledSubagents.length })}
+                      </span>}
+                    />
+                    <div className="agent-detail-dialog__chip-grid">
+                      {selectedAgentEnabledSubagents.length === 0 ? (
+                        <span className="agent-detail-dialog__empty">
+                          {t('agentsOverview.noEnabledSubagents')}
+                        </span>
+                      ) : (
+                        selectedAgentEnabledSubagents.map((subagent: SubagentInfo) => {
+                          const tooltipFields = subagentTooltipFields(
+                            subagent,
+                            t,
+                            !isLocallyManageableSubagent(subagent),
+                          );
+                          return (
+                            <AgentCapabilityTooltip
+                              key={subagent.key}
+                              title={subagent.name}
+                              description={subagent.description}
+                              fields={tooltipFields}
+                            >
+                              <StatusPill
+                                tone="neutral"
+                                leading={<Icon name="check-line" size="xs" />}
+                                aria-label={`${subagent.name}: ${t('agentsOverview.capabilityEnabled')}`}
+                              >
+                                {subagent.name}
+                              </StatusPill>
+                            </AgentCapabilityTooltip>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
                 )
               ) : null}
             </DialogBody>

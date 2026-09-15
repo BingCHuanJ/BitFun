@@ -197,8 +197,8 @@ describe('ecosystem compatibility scene presentation contract', () => {
     const items = buildEcosystemImportItems(null, runtime!);
 
     expect(items.map((item) => item.kind)).toEqual([
-      'subagent', 'skill', 'mcp', 'hook', 'instruction',
-      'account', 'settings', 'memory', 'plugin', 'pet',
+      'subagent', 'skill', 'mcp', 'hook', 'instruction', 'pet',
+      'account', 'settings', 'memory', 'plugin',
     ]);
     expect(items.every((item) => item.discovered === false)).toBe(true);
     expect(items.every((item) => item.candidateId === undefined)).toBe(true);
@@ -213,7 +213,7 @@ describe('ecosystem compatibility scene presentation contract', () => {
       detection: 'owner',
     }));
     expect(items.find((item) => item.kind === 'memory')?.discoverySupport).toBe('unsupported');
-    expect(items.find((item) => item.kind === 'pet')?.discoverySupport).toBe('unsupported');
+    expect(items.find((item) => item.kind === 'pet')?.discoverySupport).toBe('supported');
   });
 
   it('uses product-specific compatibility instead of one shared capability set', () => {
@@ -248,7 +248,7 @@ describe('ecosystem compatibility scene presentation contract', () => {
     const codexSupport = support('codex');
     expect(codexSupport).toMatchObject({
       memory: 'unsupported',
-      pet: 'unsupported',
+      pet: 'supported',
     });
     expect(codexSupport).not.toHaveProperty('command');
     expect(codexSupport).not.toHaveProperty('tool');

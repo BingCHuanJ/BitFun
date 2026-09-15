@@ -6199,6 +6199,7 @@ dependencies = [
  "openbitfun-product-domains",
  "openbitfun-relay-service",
  "openbitfun-runtime-ports",
+ "openbitfun-services-core",
  "openbitfun-services-integrations",
  "openbitfun-transport",
  "openbitfun-webdriver",
@@ -6645,6 +6646,7 @@ dependencies = [
  "git2",
  "globset",
  "ignore",
+ "image 0.25.10",
  "libc",
  "log",
  "openbitfun-core-types",
@@ -6663,9 +6665,11 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
+ "uuid",
  "which 8.0.5",
  "win32job",
  "windows 0.61.3",
+ "zip 4.6.1",
 ]
 
 [[package]]
