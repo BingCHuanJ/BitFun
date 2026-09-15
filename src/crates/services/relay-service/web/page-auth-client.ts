@@ -110,6 +110,7 @@ form?.addEventListener('submit', async (event) => {
     if (!((authorization.origin === 'https://github.com' && authorization.pathname === '/login/oauth/authorize') || (authorization.origin === 'https://auth.openbitfun.com' && authorization.pathname === '/sign-in')) || !!authorization.username || !!authorization.password) {
       throw new Error(message('登录地址无效。', 'The sign-in URL is invalid.'));
     }
+    if (authorization.origin === 'https://auth.openbitfun.com') authorization.searchParams.set('locale', navigator.language);
     popup.location.replace(authorization.href);
     let accessToken: string | undefined;
     while (Date.now() < start.expiresAt * 1000) {

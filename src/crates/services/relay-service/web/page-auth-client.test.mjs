@@ -55,6 +55,14 @@ test('isolated Page sign-in retains the one-time login state and callback origin
   assert.equal(result.redirect, 'https://pages.example/callback?code=one-time');
 });
 
+test('email sign-in carries the browser locale without changing the authorization ticket', async () => {
+  const result = await runLogin({ authorizationUrl: 'https://auth.openbitfun.com/sign-in#ticket=original-ticket' });
+  const opened = new URL(result.opened);
+  assert.equal(opened.searchParams.get('locale'), 'en');
+  assert.equal(opened.hash, '#ticket=original-ticket');
+  assert.equal(result.calls[2].body.access_token, 'verified-account-token');
+});
+
 test('failed authorization or an untrusted OAuth URL never submits Page access', async () => {
   for (const options of [{ status: 'expired' }, { authorizationUrl: 'https://attacker.example/login' }]) {
     const result = await runLogin(options);

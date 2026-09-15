@@ -298,7 +298,7 @@ pub(crate) async fn verify_identity_credentials(
     let identity = verifier.verify(access_token).await.map_err(|status| {
         err(
             if status == StatusCode::UNAUTHORIZED {
-                "Sign in with GitHub to continue"
+                "Sign in to continue"
             } else {
                 "identity service unavailable"
             },

@@ -60,7 +60,30 @@ impl AuthorizationRate {
     }
 }
 
-pub(crate) async fn admit(mut request: Request, next: Next) -> Response {
+pub(crate) async fn admit(request: Request, next: Next) -> Response {
+    let path = request
+        .uri()
+        .path()
+        .strip_prefix("/miniapp/api/v1")
+        .unwrap_or(request.uri().path());
+    if !path.starts_with("/auth/") {
+        return next.run(request).await;
+    }
+    let mut response = admit_auth(request, next).await;
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+        .headers_mut()
+        .insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+    response.headers_mut().insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    response
+}
+
+async fn admit_auth(mut request: Request, next: Next) -> Response {
     let path = request
         .uri()
         .path()
@@ -209,6 +232,12 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(response.status(), expected);
+            if path.starts_with("/auth/") {
+                assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+                assert_eq!(response.headers()[header::REFERRER_POLICY], "no-referrer");
+            } else {
+                assert!(!response.headers().contains_key(header::CACHE_CONTROL));
+            }
         }
     }
 }

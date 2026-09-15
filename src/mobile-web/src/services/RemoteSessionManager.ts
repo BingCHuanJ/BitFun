@@ -608,7 +608,7 @@ export class RemoteSessionManager {
 
   async ping(): Promise<void> {
     const controllerDeviceId = this.client.controllerDeviceId;
-    if (!controllerDeviceId) throw new Error('Sign in with GitHub to continue');
+    if (!controllerDeviceId) throw new Error('Sign in to continue');
     await this.request({ cmd: 'ping', client: getControlClientIdentity(controllerDeviceId) });
   }
 

@@ -22,6 +22,9 @@ const messages = {
     emailInvalid: "Enter a valid email address.",
     emailCodeInvalid: "Incorrect or expired code. Request a new code if needed.",
     emailRateLimited: "Too many requests. Please try again later.",
+    emailFlowExpired: "This sign-in request has expired or already finished. Close this window and start sign-in again from the app or website you were using.",
+    emailDeliveryFailed: "We couldn't send the email. Wait a minute, then try again.",
+    emailAuthBusy: "Sign-in is busy. Wait a minute, then try again.",
     emailStartFailed: "Sign-in could not be completed. Please try again or reopen the sign-in page.",
     emailUnavailable: "Sign-in is unavailable on this server.",
 
@@ -197,6 +200,9 @@ const messages = {
     emailInvalid: "请输入有效的邮箱地址。",
     emailCodeInvalid: "验证码错误或已过期，请重试或重新获取。",
     emailRateLimited: "请求过于频繁，请稍后重试。",
+    emailFlowExpired: "本次登录已过期或已完成。请关闭此窗口，返回原来的应用或网站重新发起登录。",
+    emailDeliveryFailed: "邮件发送失败，请等待一分钟后重试。",
+    emailAuthBusy: "登录服务繁忙，请等待一分钟后重试。",
     emailStartFailed: "暂时无法完成登录，请重试或重新打开登录页面。",
     emailUnavailable: "此服务器尚未配置登录方式。",
 
@@ -368,6 +374,9 @@ const messages = {
     emailInvalid: "請輸入有效的電子郵件地址。",
     emailCodeInvalid: "驗證碼錯誤或已過期，請重試或重新取得。",
     emailRateLimited: "請求過於頻繁，請稍後重試。",
+    emailFlowExpired: "本次登入已過期或已完成。請關閉此視窗，返回原來的應用程式或網站重新發起登入。",
+    emailDeliveryFailed: "郵件傳送失敗，請等待一分鐘後重試。",
+    emailAuthBusy: "登入服務忙碌，請等待一分鐘後重試。",
     emailStartFailed: "暫時無法完成登入，請重試或重新開啟登入頁面。",
     emailUnavailable: "此伺服器尚未設定登入方式。",
 

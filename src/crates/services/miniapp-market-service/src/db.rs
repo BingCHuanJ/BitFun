@@ -239,6 +239,7 @@ impl Database {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) async fn create_api_token(
         &self,
         user_id: i64,

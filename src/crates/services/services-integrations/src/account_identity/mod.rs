@@ -132,7 +132,7 @@ impl AccountIdentityClient {
         if me.user.identity_id().is_none() || me.user.login.trim().is_empty() {
             return Err(local_error(
                 "invalid_identity_response",
-                "Invalid GitHub identity.",
+                "Invalid account identity.",
             ));
         }
         Ok(me)

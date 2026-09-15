@@ -13,6 +13,7 @@ export function AccountSignIn() {
   const [challenge, setChallenge] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<MessageKey | ''>('');
+  const [expired, setExpired] = useState(false);
   const [retryAt, setRetryAt] = useState(0);
   const [now, setNow] = useState(Date.now());
   const initial = useRef<Promise<void> | null>(null);
@@ -36,7 +37,12 @@ export function AccountSignIn() {
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const showError = (cause: unknown) => {
     const key = cause && typeof cause === 'object' && 'code' in cause ? cause.code : '';
-    setError(key === 'email_rate_limit' ? 'emailRateLimited' : key === 'invalid_email_code' ? 'emailCodeInvalid' : key === 'invalid_email' ? 'emailInvalid' : 'emailStartFailed');
+    if (key === 'login_flow_expired' || key === 'desktop_auth_expired') {
+      setExpired(true);
+      setError('emailFlowExpired');
+      return;
+    }
+    setError(key === 'email_rate_limit' ? 'emailRateLimited' : key === 'auth_rate_limit' || key === 'auth_capacity' ? 'emailAuthBusy' : key === 'email_delivery_failed' ? 'emailDeliveryFailed' : key === 'invalid_email_code' ? 'emailCodeInvalid' : key === 'invalid_email' ? 'emailInvalid' : 'emailStartFailed');
   };
   async function send(event?: FormEvent) {
     event?.preventDefault(); setBusy(true); setError('');
@@ -73,15 +79,15 @@ export function AccountSignIn() {
       <div className="account-auth-symbol"><KeyRound size={24} aria-hidden="true" /></div>
       <h1 id="account-sign-in-title">{t('accountSignIn')}</h1><p className="account-auth-intro">{t('emailLoginIntro')}</p>
       {!ticket && !error && <p role="status">{t('authWorking')}</p>}
-      {emailEnabled && <form onSubmit={challenge ? verify : send}>
+      {emailEnabled && !expired && <form onSubmit={challenge ? verify : send}>
         <label htmlFor="sign-in-email">{t('emailAddress')}</label>
         <div className="account-auth-field"><Mail size={18} aria-hidden="true" /><input id="sign-in-email" type="email" autoComplete="email" placeholder="you@example.com" required maxLength={254} value={email} disabled={busy || !!challenge} onChange={event => setEmail(event.target.value)} /></div>
         {challenge && <><p className="account-auth-notice" role="status">{t('emailCodeSent')}</p><label htmlFor="sign-in-code">{t('emailCode')}</label><div className="account-auth-field"><KeyRound size={18} aria-hidden="true" /><input id="sign-in-code" className="account-auth-code" autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{8}" minLength={8} maxLength={8} required value={code} disabled={busy} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} /></div></>}
         <button className="account-auth-button account-auth-button--primary" type="submit" disabled={busy || !ticket}>{t(busy ? 'authWorking' : challenge ? 'emailVerify' : 'emailSendCode')}<ArrowRight size={18} aria-hidden="true" /></button>
         {challenge && <div className="account-auth-links"><button type="button" disabled={busy || now < retryAt} onClick={() => void send()}>{t(now < retryAt ? 'emailResendWait' : 'emailResend')}</button><button type="button" disabled={busy} onClick={() => { setChallenge(''); setCode(''); setError(''); }}>{t('emailChange')}</button></div>}
       </form>}
-      {emailEnabled && githubEnabled && <div className="account-auth-divider"><span>{t('authOr')}</span></div>}
-      {githubEnabled && <button className="account-auth-button" disabled={busy || !ticket} onClick={() => void github()}><Github size={20} aria-hidden="true" />{t('githubSignIn')}</button>}
+      {emailEnabled && githubEnabled && !expired && <div className="account-auth-divider"><span>{t('authOr')}</span></div>}
+      {githubEnabled && !expired && <button className="account-auth-button" disabled={busy || !ticket} onClick={() => void github()}><Github size={20} aria-hidden="true" />{t('githubSignIn')}</button>}
       {!!ticket && !emailEnabled && !githubEnabled && <p>{t('emailUnavailable')}</p>}
       {error && <p className="account-auth-error" role="alert">{t(error)}</p>}
     </section>

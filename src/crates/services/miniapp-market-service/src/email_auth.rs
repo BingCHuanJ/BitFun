@@ -264,7 +264,7 @@ impl AuthService {
     }
     async fn login_flow(&self, ticket: &str) -> MarketResult<OAuthFlowRecord> {
         let row = sqlx::query("SELECT transaction_id, return_to FROM login_flows WHERE ticket_hash = ? AND expires_at > ? AND consumed_at IS NULL")
-            .bind(token_hash(ticket)).bind(Utc::now().timestamp()).fetch_optional(self.db.pool()).await.map_err(MarketError::internal)?.ok_or_else(invalid_code)?;
+            .bind(token_hash(ticket)).bind(Utc::now().timestamp()).fetch_optional(self.db.pool()).await.map_err(MarketError::internal)?.ok_or_else(|| MarketError::bad_request("login_flow_expired", "This sign-in request is no longer active. Start sign-in again from the original app or website."))?;
         let transaction_id: Option<String> = row.get("transaction_id");
         Ok(OAuthFlowRecord {
             flow_kind: if transaction_id.is_some() {
@@ -669,6 +669,37 @@ mod tests {
                 .await
                 .unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn expired_login_requests_report_restart_without_spending_send_quota() {
+        let (_dir, service) = setup().await;
+        let ticket = service.start_web_login("/miniapp/").await.unwrap();
+        let (id, code) = code(&service, &ticket, "alice@example.com").await;
+        sqlx::query("UPDATE login_flows SET expires_at = 0 WHERE ticket_hash = ?")
+            .bind(token_hash(&ticket))
+            .execute(service.db.pool())
+            .await
+            .unwrap();
+        let error = service
+            .verify_email_code(verify(&ticket, &id, &code))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "login_flow_expired");
+        let error = service
+            .prepare_email_code(EmailSendRequest {
+                ticket,
+                email: "another@example.com".into(),
+                locale: None,
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "login_flow_expired");
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM email_challenges")
+            .fetch_one(service.db.pool())
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]
