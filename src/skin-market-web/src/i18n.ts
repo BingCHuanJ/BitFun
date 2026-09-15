@@ -81,7 +81,6 @@ const messages = {
     notFoundTitle: 'This appearance is not here',
     notFoundBody: 'The link may be outdated, or the release may no longer be public.',
     backToCatalog: 'Browse appearances',
-    footerNote: 'Reviewed packages. Local installation. Your appearance stays on your device.',
     openbitfunHome: 'OpenBitFun website',
     getOpenBitFunTitle: 'New to OpenBitFun?',
     getOpenBitFunCatalogNote:
@@ -219,7 +218,6 @@ const messages = {
     notFoundTitle: '这里没有这个外观',
     notFoundBody: '链接可能已经失效，或者该版本不再公开。',
     backToCatalog: '浏览外观',
-    footerNote: '人工审核安装包，本机安装，外观资源只保存在你的设备中。',
     openbitfunHome: 'OpenBitFun 官网',
     getOpenBitFunTitle: '没有 OpenBitFun？',
     getOpenBitFunCatalogNote:

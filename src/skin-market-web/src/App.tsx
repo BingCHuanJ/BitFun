@@ -249,7 +249,6 @@ export default function App() {
       <footer className="site-footer">
         <div className="shell site-footer__inner">
           <span>{t('brand')} {t('market')}</span>
-          <p>{t('footerNote')}</p>
           <a className="site-footer__link" href={OPENBITFUN_HOME_URL} target="_blank" rel="noreferrer">
             {t('openbitfunHome')}
             <ArrowSquareOut size={16} aria-hidden="true" />

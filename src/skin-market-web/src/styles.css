@@ -1901,13 +1901,6 @@ img {
   font-weight: 700;
 }
 
-.site-footer__inner p {
-  flex: 1;
-  max-width: 620px;
-  margin: 0;
-  text-align: right;
-  line-height: 1.55;
-}
 
 .site-footer__link {
   display: inline-flex;
@@ -2152,9 +2145,6 @@ img {
     padding-block: 28px;
   }
 
-  .site-footer__inner p {
-    text-align: left;
-  }
 }
 
 @media (max-width: 470px) {

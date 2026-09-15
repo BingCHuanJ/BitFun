@@ -209,7 +209,6 @@ function MarketApp() {
             <MarketLogo weight="duotone" aria-hidden="true" />
             <span>OpenBitFun MiniApp Market</span>
           </div>
-          <span className="footer-note">{t('footerNote')}</span>
           <a href={OPENBITFUN_HOME_URL} target="_blank" rel="noreferrer">
             {t('openbitfunHome')}
             <ArrowSquareOut size={18} aria-hidden="true" />

@@ -83,7 +83,6 @@ const messages = {
     authComplete: 'Sign-in complete',
     authCompleteBody: 'Return to the app or browser window where you started signing in. You can close this tab.',
     authSharedIdentity: 'Use the same OpenBitFun account for the marketplaces and remote device control.',
-    footerNote: 'Reviewed releases / Hash-locked packages / Manual updates',
     openbitfunHome: 'OpenBitFun home',
     getOpenBitFunTitle: 'New to OpenBitFun?',
     getOpenBitFunCatalogNote:
@@ -255,7 +254,6 @@ const messages = {
     authComplete: '登录完成',
     authCompleteBody: '请返回发起登录的应用或浏览器窗口。你可以关闭此标签页。',
     authSharedIdentity: '市场与远程设备控制共用你的 OpenBitFun 账号。',
-    footerNote: '人工审核版本 / 哈希锁定安装包 / 手动更新',
     openbitfunHome: 'OpenBitFun 官网',
     getOpenBitFunTitle: '没有 OpenBitFun？',
     getOpenBitFunCatalogNote:
@@ -426,7 +424,6 @@ const messages = {
     authComplete: '登入完成',
     authCompleteBody: '請返回發起登入的應用程式或瀏覽器視窗。你可以關閉此分頁。',
     authSharedIdentity: '市場與遠端裝置控制共用你的 OpenBitFun 帳號。',
-    footerNote: '人工審核版本 / 雜湊鎖定安裝包 / 手動更新',
     openbitfunHome: 'OpenBitFun 官網',
     getOpenBitFunTitle: '還沒有 OpenBitFun？',
     getOpenBitFunCatalogNote:

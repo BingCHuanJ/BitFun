@@ -2120,7 +2120,7 @@ footer {
   margin: auto auto 0;
   padding: 18px 0 26px;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 20px;
   border-top: 1px solid var(--openbitfun-color-border-subtle);
@@ -2387,9 +2387,6 @@ footer a:hover {
     grid-template-columns: 1fr auto;
   }
 
-  .footer-note {
-    display: none;
-  }
 }
 
 @media (max-width: 560px) {
