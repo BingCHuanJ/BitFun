@@ -135,6 +135,11 @@ export function AccountIdentityControls({
   };
 
   const signIn = async () => {
+    if (account.status === 'authorizing') {
+      try { await accountIdentityService.reopenSignIn(); }
+      catch (error) { notification.error(t('market.messages.authFailed', { error: String(error) })); }
+      return;
+    }
     startedHere.current = true;
     try {
       await accountIdentityService.signIn();
@@ -231,7 +236,7 @@ export function AccountIdentityControls({
         <Button
           size="sm"
           variant="outline"
-          disabled={!account.resolved || account.status === 'authorizing'}
+          disabled={!account.resolved}
           onClick={() => setLoginOpen(true)}
         >
           {!account.resolved || account.status === 'authorizing'
@@ -298,14 +303,13 @@ export function AccountIdentityControls({
             </Button>
             <Button
               variant="primary"
-              disabled={account.status === 'authorizing'}
               onClick={() => void signIn()}
             >
               {account.status === 'authorizing'
                 ? <Loader2 size={14} className="market-account-controls__spinner" />
                 : <Github size={14} />}
               {account.status === 'authorizing'
-                ? t('market.account.authorizing')
+                ? t('market.account.reopen')
                 : t('market.account.continue')}
             </Button>
           </div>

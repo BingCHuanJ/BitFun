@@ -892,6 +892,7 @@
     "syncPhaseExportingSessions": "Backing up sessions {{current}}/{{total}}",
     "copyServerUrl": "Copy server address",
     "copyServerFailed": "Could not copy the server address. Check clipboard permission and try again.",
+    "reopen": "Reopen sign-in page",
     "loginValueProp": "Sign in to connect your devices and control them remotely.",
     "linkedDevices": "Linked devices"
   },

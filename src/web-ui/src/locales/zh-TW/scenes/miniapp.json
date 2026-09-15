@@ -123,6 +123,7 @@
       "waiting": "請在瀏覽器中完成授權，OpenBitFun 會自動更新登入狀態。",
       "cancel": "取消",
       "continue": "開啟 GitHub",
+      "reopen": "重新開啟登入頁面",
       "authorizing": "等待 GitHub 授權…"
     },
     "empty": "暫時沒有已發佈的小應用",

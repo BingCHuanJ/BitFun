@@ -123,6 +123,7 @@
       "waiting": "请在浏览器中完成授权，OpenBitFun 会自动更新登录状态。",
       "cancel": "取消",
       "continue": "打开 GitHub",
+      "reopen": "重新打开登录页",
       "authorizing": "等待 GitHub 授权…"
     },
     "empty": "暂时没有已发布的小应用",

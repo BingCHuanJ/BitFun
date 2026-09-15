@@ -123,6 +123,7 @@
       "waiting": "Finish authorization in the browser. OpenBitFun will update automatically.",
       "cancel": "Cancel",
       "continue": "Open GitHub",
+      "reopen": "Reopen sign-in page",
       "authorizing": "Waiting for GitHub…"
     },
     "empty": "No reviewed MiniApps have been published yet.",

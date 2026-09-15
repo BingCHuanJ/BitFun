@@ -443,6 +443,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, [activeAccountEpoch, applyPresenceOnline, isAccountEpochCurrent]);
 
   const handleLogin = useCallback(async () => {
+    if (identity.status === 'authorizing') {
+      try { await accountIdentityService.reopenSignIn(); }
+      catch (e: unknown) { if (mountedRef.current) setError(e instanceof Error ? e.message : String(e)); }
+      return;
+    }
     setLoading(true); setError(null);
     try {
       const me = await accountIdentityService.signIn();
@@ -452,7 +457,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [success, t]);
+  }, [identity.status, success, t]);
 
   const handleLogout = useCallback(async () => {
     const epoch = invalidateAccountRequests();
@@ -588,8 +593,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               <p className="account-panel__value-prop">{t('accountLogin.loginValueProp')}</p>
               <p className="account-panel__security-note">{t('accountLogin.securityNote')}</p>
               <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
-                <Button variant="primary" size="sm" leadingIcon={<LogIn />} onClick={handleLogin} loading={loading}>
-                  {loading ? t('accountLogin.processing') : t('accountLogin.login')}
+                <Button variant="primary" size="sm" leadingIcon={<LogIn />} onClick={handleLogin} loading={loading && identity.status !== 'authorizing'}>
+                  {identity.status === 'authorizing' ? t('accountLogin.reopen') : loading ? t('accountLogin.processing') : t('accountLogin.login')}
                 </Button>
               </div>
             </div>
