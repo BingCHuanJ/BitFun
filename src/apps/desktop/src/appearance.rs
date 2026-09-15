@@ -546,8 +546,36 @@ pub fn create_main_window(
 
     #[cfg(not(debug_assertions))]
     let materialization_workbench = Arc::clone(&frontend_workbench);
+    #[cfg(target_os = "macos")]
+    let builder = {
+        // Configure both Tao's native window and Wry's WebView. The builder's
+        // traffic_light_position setter only configures Wry, so native window
+        // lifecycle events otherwise restore the default button placement.
+        let config = tauri::utils::config::WindowConfig {
+            label: "main".into(),
+            url: main_url,
+            title_bar_style: tauri::TitleBarStyle::Overlay,
+            hidden_title: true,
+            // Native button center = inset + height / 2 - origin.y.
+            // AppKit's 16pt button at y=6 needs 20.5 for the 45px toolbar.
+            traffic_light_position: Some(tauri::utils::config::LogicalPosition {
+                x: 12.0,
+                y: 20.5,
+            }),
+            ..Default::default()
+        };
+        match tauri::WebviewWindowBuilder::from_config(app_handle, &config) {
+            Ok(builder) => builder,
+            Err(error) => {
+                error!("Failed to configure main window: {}", error);
+                return;
+            }
+        }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url);
     #[allow(unused_mut)]
-    let mut builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url)
+    let mut builder = builder
         .title("OpenBitFun")
         .inner_size(
             crate::MAIN_WINDOW_DEFAULT_WIDTH,
@@ -606,17 +634,6 @@ pub fn create_main_window(
     let navigation_workbench = Arc::clone(&frontend_workbench);
     builder =
         builder.on_navigation(move |url| navigation_workbench.should_allow_main_navigation(url));
-
-    #[cfg(target_os = "macos")]
-    {
-        builder = builder
-            .decorations(true)
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            // Match the 45px toolbar row (layout.toolbar.mdHeight) used by
-            // NavBar and SceneTopBar, including when the sidebar is collapsed.
-            .traffic_light_position(tauri::LogicalPosition::new(12.0, 22.5))
-            .hidden_title(true);
-    }
 
     #[cfg(target_os = "windows")]
     {
