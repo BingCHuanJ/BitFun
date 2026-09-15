@@ -176,9 +176,11 @@ HTML body with a complete UTF-8 plain-text fallback. Layout uses presentation
 tables, inline styles and system fonts; the six digits stay selectable text.
 Media queries add compact spacing and dark-mode colors without being required
 for readability. There are no scripts, forms, tracking pixels or recipient data
-in image URLs. The optional static brand image is published by the market web
-build at `/miniapp/assets/openbitfun-email-app-icon.png`; the brand asset generator
-owns it, using the silver application icon on its black rounded-square background.
+in image URLs. The HTML branch is multipart/related with the original application
+PNG embedded as an inline CID resource (`src/email/app-icon.png`). It does not
+require external image downloads. The brand generator owns this byte-identical
+copy of the application icon; do not recolor it or add a CSS placeholder background.
+The market web build publishes the same icon separately for the sign-in page.
 
 Email clients cannot consume CSS variables or theme packages. The template's
 small inline palette is an email-specific snapshot of the existing OpenBitFun

@@ -10,7 +10,7 @@ use hmac::{Hmac, Mac};
 use lettre::{
     message::{
         header::{ContentTransferEncoding, ContentType},
-        Mailbox, MultiPart, SinglePart,
+        Attachment, Mailbox, MultiPart, SinglePart,
     },
     transport::smtp::authentication::Credentials,
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
@@ -88,7 +88,12 @@ fn verification_message(from: Mailbox, email: &str, code: &str) -> MarketResult<
         .subject("OpenBitFun 登录验证码 / Sign-in code")
         .multipart(MultiPart::alternative()
             .singlepart(SinglePart::plain(format!("你的 OpenBitFun 登录验证码是：{code}\n\n验证码 10 分钟内有效，仅可使用一次。请勿向他人透露。\n如非本人操作，请忽略此邮件。\n\nYour OpenBitFun verification code is: {code}\nIt expires in 10 minutes and can only be used once. Do not share this code.\nIf you did not request it, ignore this email.\n\nOpenBitFun")))
-            .singlepart(SinglePart::builder().header(ContentType::TEXT_HTML).header(ContentTransferEncoding::Base64).body(include_str!("email/sign-in.html").replace("{{code}}", code))))
+            .multipart(MultiPart::related()
+                .singlepart(SinglePart::builder().header(ContentType::TEXT_HTML).header(ContentTransferEncoding::Base64).body(include_str!("email/sign-in.html").replace("{{code}}", code)))
+                .singlepart(Attachment::new_inline("openbitfun-app-icon".into()).body(
+                    include_bytes!("email/app-icon.png").to_vec(),
+                    ContentType::parse("image/png").expect("valid PNG MIME type"),
+                ))))
         .map_err(|_| MarketError::internal("Could not compose verification email"))
 }
 
@@ -705,27 +710,30 @@ mod tests {
         assert!(raw.contains("Content-Transfer-Encoding: base64"));
         assert!(raw.contains("Content-Type: multipart/alternative;"));
         assert!(raw.contains("Content-Type: text/html; charset=utf-8"));
-        let boundary = raw
-            .lines()
-            .find(|line| line.starts_with("--") && !line.ends_with("--"))
-            .unwrap();
-        let parts: Vec<_> = raw
-            .split(boundary)
-            .filter_map(|part| {
-                let (_, body) = part.split_once("\r\n\r\n")?;
-                if !part.contains("Content-Transfer-Encoding: base64") {
-                    return None;
-                }
-                let decoded = base64::engine::general_purpose::STANDARD
-                    .decode(body.trim().split_whitespace().collect::<String>())
-                    .unwrap();
-                Some(String::from_utf8(decoded).unwrap())
-            })
-            .collect();
-        assert_eq!(parts.len(), 2);
-        assert!(parts[0].contains("Your OpenBitFun verification code is: 123456"));
-        assert!(parts[0].contains("你的 OpenBitFun 登录验证码是：123456"));
-        let html = &parts[1];
+        assert!(raw.contains("Content-Type: multipart/related;"));
+        assert!(raw.contains("Content-ID: <openbitfun-app-icon>"));
+        assert!(raw.contains("Content-Disposition: inline"));
+        let decode_part = |content_type: &str| {
+            let part = raw
+                .split("Content-Type: ")
+                .find(|part| part.starts_with(content_type))
+                .unwrap();
+            let (_, body) = part.split_once("\r\n\r\n").unwrap();
+            let encoded = body.split("\r\n--").next().unwrap();
+            base64::engine::general_purpose::STANDARD
+                .decode(encoded.split_whitespace().collect::<String>())
+                .unwrap()
+        };
+        let plain = String::from_utf8(decode_part("text/plain;")).unwrap();
+        assert!(plain.contains("Your OpenBitFun verification code is: 123456"));
+        assert!(plain.contains("你的 OpenBitFun 登录验证码是：123456"));
+        let html = String::from_utf8(decode_part("text/html;")).unwrap();
+        assert!(html.contains("src=\"cid:openbitfun-app-icon\""));
+        assert!(!html.contains("src=\"https://"));
+        assert_eq!(
+            decode_part("image/png"),
+            include_bytes!("email/app-icon.png")
+        );
         assert!(html.contains(">123456</div>"));
         assert!(!html.contains("{{code}}"));
         assert!(!html.contains("<script"));
