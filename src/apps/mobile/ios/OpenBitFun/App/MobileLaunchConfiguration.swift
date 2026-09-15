@@ -138,7 +138,7 @@ enum MobileLaunchConfiguration {
                 ComposerModelOption(
                     id: "preview-codex",
                     primaryLabel: "GPT-5.6 Codex",
-                    secondaryLabel: "GitHub 账号",
+                    secondaryLabel: "OpenBitFun 账号",
                     source: "ACCOUNT",
                     selected: true
                 ),

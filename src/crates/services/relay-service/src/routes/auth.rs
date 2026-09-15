@@ -219,7 +219,13 @@ pub struct GithubPollRequest {
     transaction_secret: String,
 }
 
+#[derive(Default, serde::Deserialize)]
+pub(crate) struct LoginMethods {
+    methods: Option<String>,
+}
+
 pub(crate) async fn github_start(
+    axum::extract::Query(query): axum::extract::Query<LoginMethods>,
     State(state): State<AppState>,
     connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
@@ -239,7 +245,7 @@ pub(crate) async fn github_start(
         ));
     }
     identity_verifier(verifier.as_ref().map(|v| &v.0))?
-        .start_auth()
+        .start_auth(query.methods.as_deref() == Some("all"))
         .await
         .map(Json)
         .map_err(|status| err("GitHub sign-in could not be started", status))
@@ -299,12 +305,18 @@ pub(crate) async fn verify_identity_credentials(
             status,
         )
     })?;
-    UserRow::upsert_verified(db, &identity.github_id.to_string(), &identity.login)
-        .await
-        .map_err(|error| {
-            tracing::error!("Identity persistence failed: {error}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })
+    UserRow::upsert_verified(
+        db,
+        &identity
+            .identity_id()
+            .ok_or_else(|| err("Unsupported account identity", StatusCode::UNAUTHORIZED))?,
+        &identity.login,
+    )
+    .await
+    .map_err(|error| {
+        tracing::error!("Identity persistence failed: {error}");
+        err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+    })
 }
 
 /// Exchange a shared OpenBitFun GitHub session for a device-scoped relay token.

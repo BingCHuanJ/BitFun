@@ -321,7 +321,7 @@ final class MobileAppModel: ObservableObject {
             pendingDeviceLink = nil
             pairingError = result.status == .invalid
                 ? localized("请使用当前版本的 OpenBitFun 设备二维码。")
-                : localized("该设备已离线，或不属于当前 GitHub 账户。")
+                : localized("该设备已离线，或不属于当前 OpenBitFun 账户。")
         }
     }
 

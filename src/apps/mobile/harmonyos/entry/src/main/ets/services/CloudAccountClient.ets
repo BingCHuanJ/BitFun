@@ -171,12 +171,12 @@ export class CloudAccountClient {
   async login(relayUrl: string, deviceId: string, openAuthorization: (url: string) => Promise<boolean>, deviceSecret: Uint8Array): Promise<CloudAccountSession> {
     const generation = ++this.authorizationGeneration;
     const startRequest: Record<string, string> = {};
-    const start = await this.post<GitHubStart>(relayUrl, '/api/auth/github/start', startRequest);
+    const start = await this.post<GitHubStart>(relayUrl, '/api/auth/github/start?methods=all', startRequest);
     if (generation !== this.authorizationGeneration) throw new Error('Sign-in cancelled.');
-    if (!start.authorizationUrl.startsWith('https://github.com/login/oauth/authorize?')) {
+    if (!start.authorizationUrl.startsWith('https://github.com/login/oauth/authorize?') && !/^https:\/\/auth\.openbitfun\.com\/sign-in#ticket=[A-Za-z0-9_-]+$/.test(start.authorizationUrl)) {
       throw new Error('Untrusted account authorization URL.');
     }
-    if (!await openAuthorization(start.authorizationUrl)) throw new Error('Could not open GitHub sign-in.');
+    if (!await openAuthorization(start.authorizationUrl)) throw new Error('Could not open account sign-in.');
     const deadline = Math.min(start.expiresAt * 1000, Date.now() + 600000);
     while (Date.now() < deadline && generation === this.authorizationGeneration) {
       await new Promise<void>((resolve) => setTimeout(resolve, Math.min(30, Math.max(1, start.pollIntervalSeconds)) * 1000));

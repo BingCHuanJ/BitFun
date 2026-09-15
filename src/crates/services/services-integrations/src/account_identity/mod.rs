@@ -126,7 +126,7 @@ impl AccountIdentityClient {
         }
         let me: MarketMe = serde_json::from_slice(&body)
             .map_err(|_| local_error("invalid_identity_response", "Invalid account response."))?;
-        if me.user.github_id <= 0 || me.user.login.trim().is_empty() {
+        if me.user.identity_id().is_none() || me.user.login.trim().is_empty() {
             return Err(local_error(
                 "invalid_identity_response",
                 "Invalid GitHub identity.",
@@ -172,8 +172,11 @@ impl AccountIdentityClient {
     }
 
     pub async fn start_desktop_auth(&self) -> Result<DesktopAuthStart, MarketClientError> {
-        self.json(self.client.post(self.url("/auth/desktop/start")))
-            .await
+        self.json(
+            self.client
+                .post(self.url("/auth/desktop/start?methods=all")),
+        )
+        .await
     }
 
     pub async fn poll_desktop_auth(

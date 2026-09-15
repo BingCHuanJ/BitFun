@@ -260,7 +260,7 @@ struct PairingSheet: View {
                         .foregroundStyle(OpenBitFunTheme.ink)
                     SignedOutConnectionActions(
                         scanTitle: model.localized("扫码连接电脑"),
-                        accountTitle: model.localized("使用 GitHub 登录"),
+                        accountTitle: model.localized("使用邮箱或 GitHub 登录"),
                         onScan: { scanError = nil; step = .scan },
                         onOpenAccount: model.openAccountFromPairing,
                         primaryScan: true,

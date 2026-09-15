@@ -177,7 +177,7 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
                     <div>
                       <dt>{t('reviewSubmitter')}</dt>
                       <dd>
-                        {detail.submitter ? (
+                        {detail.submitter ? detail.submitter.githubId > 0 ? (
                           <a
                             className="review-submitter"
                             href={`https://github.com/${detail.submitter.login}`}
@@ -187,7 +187,7 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
                             <img src={detail.submitter.avatarUrl} alt="" loading="lazy" decoding="async" />
                             <span>@{detail.submitter.login}</span>
                           </a>
-                        ) : t('reviewSubmitterUnknown')}
+                        ) : <span>{detail.submitter.login}</span> : t('reviewSubmitterUnknown')}
                       </dd>
                     </div>
                     <div><dt>{t('packageIdentity')}</dt><dd>{detail.submission.packageId || t('notDeclared')}</dd></div>

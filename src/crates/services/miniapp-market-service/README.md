@@ -136,3 +136,37 @@ yank、上传和 migration 变化不能只测试成功路径。
 不要在生产服务器直接执行 `cargo run`，不要手工替换 binary，也不要直接编辑
 SQLite/artifacts。完整流程见
 [生产部署手册](../../../../deploy/miniapp-market/README.md)。
+
+## 邮箱验证码登录
+
+统一登录页提供两个独立入口：GitHub OAuth 和邮箱验证码。首次验证邮箱后创建独立
+账号；不创建密码，不按邮箱或昵称自动绑定、合并 GitHub 账号。跨设备必须使用同一种
+登录方式和同一个账号。
+
+新版客户端向 `POST /auth/desktop/start?methods=all` 请求统一登录页，继续使用原有
+事务 secret 和一次性轮询 token。未携带该参数的旧客户端仍直接收到 GitHub OAuth
+URL。Relay 的旧命名 `/api/auth/github/start` 同样仅在 `methods=all` 时转发新能力。
+旧服务器忽略该参数时保留原 GitHub 路径，不向旧客户端发放邮箱身份。
+
+`POST /auth/login/start` 创建浏览器授权票据；`POST /auth/login/github` 选择 GitHub；
+`POST /auth/email/send` 发码，`POST /auth/email/verify` 验码。邮箱地址按 ASCII 小写
+规范化，不删除加号标签或点。六位随机验证码十分钟有效，单次最多五次尝试，只存
+基于 session secret 的 HMAC 摘要。每个邮箱一分钟一次、一天十次；服务器整体
+一分钟三十封、一天一千封，发送失败也计入配额。发送记录保留一天，配额跨重启有效。
+SMTP 错误不得包含地址、凭据或验证码。认证接口保留 body、并发、期限和全局限流。
+
+浏览器授权票据与设备轮询 secret 分离。邮箱验证完成后使用六十秒、一次性 grant
+在市场 origin 建立 host-only Cookie；不在 URL 中传输长期 session 或 API token。
+
+新增 migration 0002 保留旧 users 内部 ID、会话和产品外键，将 github_id 改为可空。
+`/me` 增加可选 `accountId`：GitHub 用户保持原数字 ID 字符串，邮箱用户为独立
+`email-<internal-id>` 命名空间。兼容字段 `githubId=0` 表示没有 GitHub 身份，不是
+合成 GitHub ID；旧消费者必须拒绝该身份。管理员仍仅由正数 GitHub ID 决定。
+已产生邮箱用户后不得回滚到旧 binary；应向前修复，恢复备份需单独的数据恢复决策。
+
+发信使用 `SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURITY`（ssl/starttls）、`SMTP_USERNAME`、
+`SMTP_PASSWORD` 和可选 `SMTP_FROM_NAME`。默认阿里企业邮箱 TLS 主机
+`smtp.qiye.aliyun.com:465`，不允许关闭证书验证。未配置密码时只关闭邮箱入口，
+`/config` 和 `/health` 的 `emailAuthConfigured` 明确报告能力。
+
+重点回归：`cargo test -p openbitfun-miniapp-market-service --lib email_`。

@@ -15,6 +15,7 @@ export interface SharedMarketAccount {
 
 export interface SharedMarketAccountConfig {
   githubAuthConfigured: boolean;
+  emailAuthConfigured?: boolean;
 }
 
 export interface AppearanceListingSummary {

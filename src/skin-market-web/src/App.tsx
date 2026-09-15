@@ -1,5 +1,5 @@
-import { GithubLogo } from '@phosphor-icons/react';
 import {
+  LogIn,
   RefreshCw as ArrowClockwise,
   ExternalLink as ArrowSquareOut,
   Globe as GlobeSimple,
@@ -58,7 +58,7 @@ export default function App() {
   useEffect(() => {
     void sharedMarketAccountApi
       .config()
-      .then((config) => setGithubAuthConfigured(config.githubAuthConfigured))
+      .then((config) => setGithubAuthConfigured(config.githubAuthConfigured || config.emailAuthConfigured === true))
       .catch(() => undefined);
     void refreshAccount();
   }, [refreshAccount]);
@@ -191,7 +191,7 @@ export default function App() {
                   if (githubAuthConfigured === false) event.preventDefault();
                 }}
               >
-                <GithubLogo size={18} weight="bold" aria-hidden="true" />
+                <LogIn size={18} aria-hidden="true" />
                 <span>{t('signInGitHub')}</span>
               </a>
             )}

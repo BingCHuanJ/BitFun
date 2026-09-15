@@ -497,3 +497,23 @@ API 的 Relay/客户端。两个市场各自的网页仍在所属 Compose 项目
 统一 callback 迁移时，先部署 auth 回调路由和服务配置，再在 GitHub OAuth App
 设置中添加上述精确 Redirect URI。设置更新前，新发起的登录暂时无法完成。
 旧市场 callback 路由作为 Cookie 会话完成端点保留，不扩大 Cookie Domain。
+
+## 邮箱验证码发布补充
+
+邮箱登录与 GitHub 登录是独立账号，不自动绑定或合并。部署前需同时验证身份服务、
+当前版本 Relay 和 Skin 身份消费者；保留旧 GitHub 数字账号及旧授权启动行为。
+客户端使用 `methods=all` 主动选择统一登录页，旧客户端继续走原 GitHub URL。
+
+SMTP 配置单独存放在 `/etc/openbitfun-miniapp-market/smtp.env`，root:root 0600，
+Compose 以可选 env_file 加载；不要将其复制到 checkout，也不要打印内容。
+使用现有企业邮箱的 SMTP 配置，变量参见后端 README。不要复制收件人列表、测试
+主题或 BCC 等与认证发信无关的配置。发件配置更新后需重建容器，核对
+`emailAuthConfigured=true`。真实收件验收只向操作者明确指定的地址发送。
+
+`/sign-in` 改为统一登录网页；auth vhost 仅新增 `/config` 和指定 login/email API，
+验证码完成后经一次性 grant 跳转至 market host 设置 Cookie。登录票据放在 fragment，
+Nginx 日志必须继续只记录 `$uri`，不能记录验证码 body 或 grant query。
+
+migration 0002 保留原用户 ID 和外键，但旧 binary 不认识邮箱用户；发布后不能把
+回退镜像当作数据库回滚。先完成两个市场的一致性备份和恢复演练，保留旧镜像，
+出现问题优先向前修复；不得未经确认恢复备份或丢弃新增用户。

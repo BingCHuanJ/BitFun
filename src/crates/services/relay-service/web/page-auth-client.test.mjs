@@ -27,7 +27,7 @@ async function runLogin({ state, status = 'approved', authorizationUrl = 'https:
     fetch: async (url, options) => {
       const body = JSON.parse(options.body);
       calls.push({ url, body });
-      if (url.endsWith('/github/start')) return { ok: true, json: async () => ({ transactionId: 'txn', transactionSecret: 'secret', authorizationUrl, expiresAt: Date.now() / 1000 + 60, pollIntervalSeconds: 3 }) };
+      if (url.endsWith('/github/start?methods=all')) return { ok: true, json: async () => ({ transactionId: 'txn', transactionSecret: 'secret', authorizationUrl, expiresAt: Date.now() / 1000 + 60, pollIntervalSeconds: 3 }) };
       if (url.endsWith('/github/poll')) return { ok: true, json: async () => ({ status, tokens: status === 'approved' ? { accessToken: 'verified-account-token' } : undefined }) };
       if (url.endsWith('/page-auth/login')) return { ok: true, json: async () => ({ redirect_to: state ? 'https://pages.example/callback?code=one-time' : '/p/alice/demo?q=1' }) };
       throw new Error(`Unexpected URL ${url}`);

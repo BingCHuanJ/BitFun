@@ -74,9 +74,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
   const { success, warning } = useNotification();
   const peerContext = usePeerDeviceModeOptional();
   const identity = useAccountIdentity();
-  const accountId = identity.status === 'signed-in' ? identity.me?.user.githubId : undefined;
+  const accountId = identity.status === 'signed-in' ? (identity.me?.user.accountId ?? identity.me?.user.githubId) : undefined;
   const [switchTargets, setSwitchTargets] = useState<{
-    accountId: number; localId: string; devices: AccountDeviceInfo[];
+    accountId: string | number; localId: string; devices: AccountDeviceInfo[];
   } | null>(null);
   const [switchingDevice, setSwitchingDevice] = useState(false);
   const [returningLocal, setReturningLocal] = useState(false);

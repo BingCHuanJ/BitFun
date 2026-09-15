@@ -21,6 +21,7 @@ export type MarketSubmissionStatus =
 
 export interface MarketUserSummary {
   githubId: number;
+  accountId?: string;
   login: string;
   avatarUrl: string;
 }

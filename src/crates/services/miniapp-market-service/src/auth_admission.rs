@@ -59,7 +59,13 @@ pub(crate) async fn admit(mut request: Request, next: Next) -> Response {
     }
     if matches!(
         path,
-        "/auth/github/start" | "/auth/desktop/start" | "/auth/github/callback"
+        "/auth/github/start"
+            | "/auth/desktop/start"
+            | "/auth/github/callback"
+            | "/auth/login/start"
+            | "/auth/login/github"
+            | "/auth/email/send"
+            | "/auth/email/verify"
     ) {
         static RATE: OnceLock<Mutex<AuthorizationRate>> = OnceLock::new();
         let allowed = RATE

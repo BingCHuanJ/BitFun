@@ -236,16 +236,17 @@ impl AccountClient {
         let profile = identity
             .me()
             .await?
-            .ok_or_else(|| anyhow!("Sign in with GitHub to continue"))?;
+            .ok_or_else(|| anyhow!("Sign in to continue"))?;
         let access_token = identity
             .access_token()
             .await?
-            .ok_or_else(|| anyhow!("Sign in with GitHub to continue"))?;
-        let device_secret = super::session_store::device_secret(
-            relay_url,
-            &profile.user.github_id.to_string(),
-            &device.device_id,
-        )?;
+            .ok_or_else(|| anyhow!("Sign in to continue"))?;
+        let account_id = profile
+            .user
+            .identity_id()
+            .ok_or_else(|| anyhow!("Unsupported account identity"))?;
+        let device_secret =
+            super::session_store::device_secret(relay_url, &account_id, &device.device_id)?;
         let body = serde_json::json!({
             "access_token": access_token,
             "device_id": device.device_id,
@@ -266,10 +267,8 @@ impl AccountClient {
             return Err(Self::into_buffered_error(response));
         }
         let auth: AuthResponse = response.json().await?;
-        if auth.user_id != profile.user.github_id.to_string() {
-            return Err(anyhow!(
-                "relay returned a different GitHub account identity"
-            ));
+        if auth.user_id != account_id {
+            return Err(anyhow!("relay returned a different account identity"));
         }
         Ok((
             AccountSession::new(auth.token, auth.user_id, device_secret),

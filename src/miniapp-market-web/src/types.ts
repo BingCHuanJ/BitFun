@@ -1,5 +1,6 @@
 export interface MarketUser {
   githubId: number;
+  accountId?: string;
   login: string;
   avatarUrl: string;
 }
@@ -148,6 +149,7 @@ export interface Me {
 
 export interface MarketConfig {
   githubAuthConfigured: boolean;
+  emailAuthConfigured?: boolean;
   publicBrowse: boolean;
   webSubmissionsEnabled: boolean;
   categories: string[];

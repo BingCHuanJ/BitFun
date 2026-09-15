@@ -2552,3 +2552,9 @@ footer a:hover {
     animation-iteration-count: 1 !important;
   }
 }
+
+.account-sign-in { gap: 16px; padding-block: 32px; }
+.account-sign-in form { display: grid; gap: 16px; width: min(100%, 360px); text-align: left; }
+.account-sign-in label { display: grid; gap: 8px; }
+.account-sign-in input { width: 100%; min-height: 44px; }
+.account-sign-in button { min-height: 44px; }

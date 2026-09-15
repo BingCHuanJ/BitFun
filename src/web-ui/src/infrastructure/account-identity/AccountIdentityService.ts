@@ -357,7 +357,7 @@ function asAccountIdentityError(error: unknown): AccountIdentityError {
 }
 
 function identityKey(me: MarketMe | null): string {
-  return me ? `${me.user.githubId}:${me.user.login}` : '';
+  return me ? `${me.user.accountId || me.user.githubId}:${me.user.login}` : '';
 }
 
 export const accountIdentityService = new AccountIdentityService();

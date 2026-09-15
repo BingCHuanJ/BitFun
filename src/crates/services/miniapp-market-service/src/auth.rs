@@ -27,9 +27,10 @@ const REFRESH_TOKEN_DAYS: i64 = 30;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AuthService {
-    config: MarketConfig,
-    db: Database,
+    pub(super) config: MarketConfig,
+    pub(super) db: Database,
     client: reqwest::Client,
+    pub(super) mailer: Option<crate::email_auth::Mailer>,
 }
 
 #[derive(Debug, Clone)]
@@ -143,11 +144,11 @@ struct GitHubUser {
 }
 
 #[derive(Debug)]
-struct OAuthFlowRecord {
-    flow_kind: String,
-    transaction_id: Option<String>,
-    code_verifier: String,
-    return_to: String,
+pub(super) struct OAuthFlowRecord {
+    pub(super) flow_kind: String,
+    pub(super) transaction_id: Option<String>,
+    pub(super) code_verifier: String,
+    pub(super) return_to: String,
 }
 
 impl AuthService {
@@ -160,7 +161,12 @@ impl AuthService {
             .timeout(std::time::Duration::from_secs(20))
             .build()
             .map_err(MarketError::internal)?;
-        Ok(Self { config, db, client })
+        Ok(Self {
+            config,
+            db,
+            client,
+            mailer: crate::email_auth::Mailer::from_env()?,
+        })
     }
 
     pub(crate) async fn optional_auth(
@@ -202,7 +208,7 @@ impl AuthService {
     pub(crate) async fn require_auth(&self, headers: &HeaderMap) -> MarketResult<RequestAuth> {
         self.optional_auth(headers)
             .await?
-            .ok_or_else(|| MarketError::unauthorized("Sign in with GitHub to continue."))
+            .ok_or_else(|| MarketError::unauthorized("Sign in to continue."))
     }
 
     pub(crate) fn require_csrf(&self, headers: &HeaderMap, auth: &RequestAuth) -> MarketResult<()> {
@@ -229,9 +235,11 @@ impl AuthService {
     }
 
     pub(crate) fn is_admin(&self, user: &AuthenticatedUser) -> bool {
-        self.config
-            .admin_github_ids
-            .contains(&user.profile.github_id)
+        user.profile.github_id > 0
+            && self
+                .config
+                .admin_github_ids
+                .contains(&user.profile.github_id)
     }
 
     pub(crate) async fn start_web_oauth(&self, return_to: &str) -> MarketResult<String> {
@@ -239,8 +247,18 @@ impl AuthService {
         self.create_oauth_flow("web", None, &return_to).await
     }
 
+    #[cfg(test)]
     pub(crate) async fn start_desktop_oauth(&self) -> MarketResult<DesktopAuthStart> {
-        self.ensure_github_configured()?;
+        self.start_desktop_login(false).await
+    }
+
+    pub(crate) async fn start_desktop_login(
+        &self,
+        all_methods: bool,
+    ) -> MarketResult<DesktopAuthStart> {
+        if !all_methods {
+            self.ensure_github_configured()?;
+        }
         let transaction_id = Uuid::new_v4().to_string();
         let transaction_secret = random_token(32);
         let now = Utc::now().timestamp();
@@ -273,14 +291,20 @@ impl AuthService {
                 "Sign-in is busy. Please try again shortly.",
             ));
         }
-        let authorization_url = self
-            .create_oauth_flow_in_transaction(
+        let authorization_url = if all_methods {
+            let ticket = self
+                .create_login_flow(&mut transaction, Some(&transaction_id), "/miniapp/")
+                .await?;
+            format!("https://auth.openbitfun.com/sign-in#ticket={ticket}")
+        } else {
+            self.create_oauth_flow_in_transaction(
                 &mut transaction,
                 "desktop",
                 Some(&transaction_id),
                 "https://auth.openbitfun.com/complete",
             )
-            .await?;
+            .await?
+        };
         transaction.commit().await.map_err(MarketError::internal)?;
         Ok(DesktopAuthStart {
             transaction_id,
@@ -291,7 +315,7 @@ impl AuthService {
         })
     }
 
-    async fn create_oauth_flow(
+    pub(super) async fn create_oauth_flow(
         &self,
         kind: &str,
         transaction_id: Option<&str>,
@@ -379,7 +403,7 @@ impl AuthService {
         self.finish_verified_oauth(flow, user.internal_id).await
     }
 
-    async fn finish_verified_oauth(
+    pub(super) async fn finish_verified_oauth(
         &self,
         flow: OAuthFlowRecord,
         user_id: i64,
@@ -747,13 +771,13 @@ async fn bounded_github_json<T: serde::de::DeserializeOwned>(
     serde_json::from_slice(&bytes).map_err(MarketError::internal)
 }
 
-fn random_token(bytes: usize) -> String {
+pub(super) fn random_token(bytes: usize) -> String {
     let mut value = vec![0_u8; bytes];
     OsRng.fill_bytes(&mut value);
     URL_SAFE_NO_PAD.encode(value)
 }
 
-fn safe_return_to(value: &str) -> String {
+pub(super) fn safe_return_to(value: &str) -> String {
     const FALLBACK: &str = "/miniapp/";
     if value.len() > 2_048
         || !value.starts_with('/')

@@ -183,11 +183,11 @@ public class CloudAccountClient internal constructor(
         }
 
     public suspend fun startAuthorization(relayUrl: String): GitHubAuthorization = request(
-        relayUrl, "/api/auth/github/start", HttpMethod.Post,
+        relayUrl, "/api/auth/github/start?methods=all", HttpMethod.Post,
         JsonObject.serializer(), JsonObject(emptyMap()), GitHubAuthorization.serializer(), "", RELAY_DEFAULT_TIMEOUT_MS,
     ).also {
         val url = io.ktor.http.Url(it.authorizationUrl)
-        require(url.protocol.name == "https" && url.host == "github.com" && url.encodedPath == "/login/oauth/authorize" && url.port == 443 && url.user == null && url.password == null)
+        require(url.protocol.name == "https" && ((url.host == "github.com" && url.encodedPath == "/login/oauth/authorize") || (url.host == "auth.openbitfun.com" && url.encodedPath == "/sign-in")) && url.port == 443 && url.user == null && url.password == null)
     }
 
     public suspend fun pollAuthorization(relayUrl: String, start: GitHubAuthorization): GitHubAuthorizationPoll = request(
