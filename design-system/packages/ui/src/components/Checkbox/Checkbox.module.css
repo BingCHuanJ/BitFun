@@ -74,7 +74,10 @@
   }
 
   .root[data-invalid="true"] .box { border-color: var(--openbitfun-color-status-danger-border); }
-  .root[data-disabled="true"] .box { background: var(--openbitfun-color-field-background); }
+  .root[data-disabled="true"] .box {
+    color: var(--openbitfun-color-content-disabled);
+    background: var(--openbitfun-color-field-background);
+  }
 
   .icon {
     inline-size: 100%;
