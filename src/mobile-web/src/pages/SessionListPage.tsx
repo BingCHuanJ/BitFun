@@ -1578,7 +1578,6 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
               <h2>{t('devices.title')}</h2>
               <span className="harmony-sidebar__heading-actions">
                 <MobileIconButton appearance="plain" size="sm" aria-label={t('devices.refresh')} loading={compactDirectoryLoading} onClick={() => void loadCompactDirectory()} icon={<LucideRefreshCw className={compactDirectoryLoading ? 'is-spinning' : ''} width="20" height="20" stroke="currentColor" aria-hidden="true" />} />
-                <MobileIconButton appearance="plain" size="sm" aria-label={t('devices.title')} onClick={onOpenDevices} icon={<LucidePlus width="20" height="20" stroke="currentColor" aria-hidden="true" />} />
               </span>
             </div>
             <div className="harmony-sidebar__rows">
