@@ -206,13 +206,13 @@ test('ICNS canonicalization rejects malformed containers', () => {
 });
 
 test('verification email reuses the current mark and the OpenBitFun reference palette', () => {
-  const emailMark = readFileSync('src/miniapp-market-web/public/assets/openbitfun-email-mark.png');
-  assert.deepEqual(emailMark, readFileSync('assets/brand/exports/openbitfun-mark-dark-128.png'));
+  const emailMark = readFileSync('src/miniapp-market-web/public/assets/openbitfun-email-app-icon.png');
+  assert.deepEqual(emailMark, readFileSync('src/web-ui/public/brand/openbitfun-app-icon.png'));
   const html = readFileSync('src/crates/services/miniapp-market-service/src/email/sign-in.html', 'utf8');
   const tokens = JSON.parse(readFileSync('design-system/packages/theme-openbitfun/src/reference.tokens.json', 'utf8'));
   const palette = new Set([...Object.values(tokens.ref.color.neutral), ...Object.values(tokens.ref.color.cyan)]
     .map(token => token?.$value).filter(Boolean));
   for (const [color] of html.matchAll(/#[0-9a-f]{6}\b/g)) assert.ok(palette.has(color), `Email color ${color} must come from the existing neutral/cyan palette`);
-  assert.match(html, /https:\/\/auth\.openbitfun\.com\/miniapp\/assets\/openbitfun-email-mark\.png/);
+  assert.match(html, /https:\/\/auth\.openbitfun\.com\/miniapp\/assets\/openbitfun-email-app-icon\.png/);
   assert.doesNotMatch(html, /<script|<form|data:image|\?[^\s]*\{\{code\}\}/i);
 });

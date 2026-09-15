@@ -325,6 +325,8 @@ async function generateBrandAssets() {
 
   await writePng(outputPath('src', 'miniapp-market-web', 'public', 'assets', 'openbitfun-email-mark.png'), darkMarkSmall);
 
+  await writePng(outputPath('src', 'miniapp-market-web', 'public', 'assets', 'openbitfun-email-app-icon.png'), applicationIcon);
+
   const webBrandDir = outputPath('src', 'web-ui', 'public', 'brand');
   await writePng(path.join(webBrandDir, 'openbitfun-mark-dark.png'), darkMark);
   await writePng(path.join(webBrandDir, 'openbitfun-mark-light.png'), lightMark);

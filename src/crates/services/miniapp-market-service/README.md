@@ -177,12 +177,12 @@ tables, inline styles and system fonts; the six digits stay selectable text.
 Media queries add compact spacing and dark-mode colors without being required
 for readability. There are no scripts, forms, tracking pixels or recipient data
 in image URLs. The optional static brand image is published by the market web
-build at `/miniapp/assets/openbitfun-email-mark.png`; the brand asset generator
-owns it, using the current fine-line mark rather than the application icon.
+build at `/miniapp/assets/openbitfun-email-app-icon.png`; the brand asset generator
+owns it, using the silver application icon on its black rounded-square background.
 
 Email clients cannot consume CSS variables or theme packages. The template's
 small inline palette is an email-specific snapshot of the existing OpenBitFun
-reference scales: neutral 0/70/75/200/350/650/800/850/900/950 and cyan 500 from
+reference scales: neutral 0/70/75/200/350/650/800/850/900/950/1000 and cyan 500 from
 `design-system/packages/theme-openbitfun/src/reference.tokens.json`. Preserve
 those source mappings when updating the template; do not add a separate brand
 palette. Check the HTML at 390px and desktop widths in light and dark mode,

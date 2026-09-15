@@ -43,7 +43,10 @@ by the release letter's connected animation rig. The gradients belong to this
 illustration, not to the application theme. Vite bundles this source directly;
 it is independent of the application icon generator and needs no PNG export.
 
-Verification emails reuse the 128px dark fine-line mark, generated at
-`src/miniapp-market-web/public/assets/openbitfun-email-mark.png`. The market build
+Verification emails use the silver application mark on its black rounded-square
+background, generated at
+`src/miniapp-market-web/public/assets/openbitfun-email-app-icon.png`. The market build
 publishes this stable anonymous image path for email clients; it contains no
 recipient or verification data and does not require authentication.
+
+The previous email mark URL remains available for already-sent messages.
