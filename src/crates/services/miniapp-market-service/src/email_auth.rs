@@ -327,9 +327,9 @@ impl AuthService {
             .await
             .map_err(MarketError::internal)?;
         // INSERT is the first statement: serialize competing requests before quota evaluation.
-        let inserted = sqlx::query("INSERT INTO email_challenges(id, ticket_hash, email, code_hash, created_at, expires_at) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM email_challenges WHERE email = ? AND created_at > ?) AND (SELECT COUNT(*) FROM email_challenges WHERE email = ? AND created_at > ?) < 10 AND (SELECT COUNT(*) FROM email_challenges WHERE created_at > ?) < 30 AND (SELECT COUNT(*) FROM email_challenges WHERE created_at > ?) < 1000")
+        let inserted = sqlx::query("INSERT INTO email_challenges(id, ticket_hash, email, code_hash, created_at, expires_at) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM email_challenges WHERE email = ? AND created_at > ?) AND (SELECT COUNT(*) FROM email_challenges WHERE email = ? AND created_at > ?) < 20 AND (SELECT COUNT(*) FROM email_challenges WHERE created_at > ?) < 300")
             .bind(&id).bind(token_hash(&request.ticket)).bind(&email).bind(code_digest(&self.config.session_secret, &id, &code)).bind(now).bind(now + 600)
-            .bind(&email).bind(now - 60).bind(&email).bind(now - 86400).bind(now - 60).bind(now - 86400).execute(&mut *tx).await.map_err(MarketError::internal)?;
+            .bind(&email).bind(now - 60).bind(&email).bind(now - 86400).bind(now - 60).execute(&mut *tx).await.map_err(MarketError::internal)?;
         if inserted.rows_affected() != 1 {
             return Err(rate_limit());
         }
@@ -692,7 +692,7 @@ mod tests {
             first.err().or(second.err()).unwrap().code,
             "email_rate_limit"
         );
-        for _ in 1..10 {
+        for _ in 1..20 {
             sqlx::query("UPDATE email_challenges SET created_at = created_at - 61")
                 .execute(service.db.pool())
                 .await
@@ -717,7 +717,52 @@ mod tests {
             .fetch_one(service.db.pool())
             .await
             .unwrap();
-        assert_eq!(count, 10);
+        assert_eq!(count, 20);
+    }
+
+    #[tokio::test]
+    async fn global_send_quota_allows_300_per_minute_without_a_daily_cap() {
+        let (_dir, service) = setup().await;
+        let ticket = service.start_web_login("/miniapp/").await.unwrap();
+        let now = Utc::now().timestamp();
+        // Yesterday's old cap would reject all new sends after these 1,000 records.
+        sqlx::query("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 1000) INSERT INTO email_challenges(id, ticket_hash, email, code_hash, created_at, expires_at) SELECT 'history-' || n, ?, 'history-' || n || '@example.com', 'unused', ?, ? FROM numbers")
+            .bind(token_hash(&ticket)).bind(now - 120).bind(now - 1)
+            .execute(service.db.pool()).await.unwrap();
+        for index in 0..300 {
+            service
+                .prepare_email_code(EmailSendRequest {
+                    ticket: ticket.clone(),
+                    email: format!("recipient-{index}@example.com"),
+                    locale: None,
+                })
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            service
+                .prepare_email_code(EmailSendRequest {
+                    ticket: ticket.clone(),
+                    email: "over-minute-limit@example.com".into(),
+                    locale: None,
+                })
+                .await
+                .unwrap_err()
+                .code,
+            "email_rate_limit"
+        );
+        sqlx::query("UPDATE email_challenges SET created_at = created_at - 61")
+            .execute(service.db.pool())
+            .await
+            .unwrap();
+        service
+            .prepare_email_code(EmailSendRequest {
+                ticket,
+                email: "next-minute@example.com".into(),
+                locale: None,
+            })
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
