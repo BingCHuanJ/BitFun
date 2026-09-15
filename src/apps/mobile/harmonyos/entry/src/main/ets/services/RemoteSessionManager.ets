@@ -446,7 +446,10 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
 
   async getFileInfo(path: string, sessionId?: string): Promise<FileInfo> {
     const command = RemoteCommandFactory.getFileInfo(path, sessionId);
-    this.applyFileWorkspace(command, sessionId, this.workspace);
+    const workspace: RuntimeFileLocation | undefined = this.workspace ? {
+      path: this.workspace.path, remoteConnectionId: this.workspace.remoteConnectionId
+    } : undefined;
+    this.applyFileWorkspace(command, sessionId, workspace);
     const response = await this.send<FileInfoResponse>(command);
     return {
       name: response.name || RemoteResponseMapper.basename(path),
