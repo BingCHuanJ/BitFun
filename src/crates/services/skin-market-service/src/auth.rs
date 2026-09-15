@@ -120,7 +120,7 @@ impl IdentityVerifier {
         let identity: IdentityResponse = response.json().await.map_err(|_| {
             SkinMarketError::unavailable("The identity service returned an invalid response.")
         })?;
-        if identity.user.github_id <= 0
+        if identity.user.identity_id().is_none()
             || identity.user.login.trim().is_empty()
             || identity.user.login.len() > 100
             || identity.user.avatar_url.len() > 2_048

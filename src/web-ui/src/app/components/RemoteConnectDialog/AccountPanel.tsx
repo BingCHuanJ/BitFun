@@ -73,8 +73,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const { success } = useNotification();
   const { peerMode, switchToDevice, switchToLocal } = usePeerDeviceMode();
   const identity = useAccountIdentity();
-  const githubId = identity.me?.user.githubId;
-  const username = identity.me?.user.login ?? '';
+  const githubId = (identity.me?.user.accountId ?? identity.me?.user.githubId);
+  const username = identity.me?.email ?? identity.me?.user.login ?? '';
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<View>('login');
@@ -446,7 +446,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     setLoading(true); setError(null);
     try {
       const me = await accountIdentityService.signIn();
-      if (mountedRef.current) success(t('accountLogin.loginSuccess', { user_id: me.user.login }));
+      if (mountedRef.current) success(t('accountLogin.loginSuccess', { user_id: me.email ?? me.user.login }));
     } catch (e: unknown) {
       if (mountedRef.current) setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -599,7 +599,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         {view === 'devices' && (
           <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
             <div className="account-panel__identity-line">
-              <Avatar size="md" src={identity.me?.user.avatarUrl} alt={username} />
+              <Avatar key={username} size="md" src={identity.me?.user.avatarUrl} alt={username} aria-label={username}>
+                {username.trim().charAt(0).toUpperCase() || <Icon name="user" />}
+              </Avatar>
               <span className="account-panel__identity-copy">
                 <span className="account-panel__identity-label">{t('accountLogin.signedInAccount')}</span>
                 <OverflowText className="account-panel__identity-name" title={username}>{username.trim()}</OverflowText>

@@ -60,10 +60,25 @@ function setup() {
 const activeServices: AccountIdentityService[] = [];
 
 afterEach(() => {
+  document.documentElement.lang = '';
   activeServices.splice(0).forEach(service => service.dispose());
 });
 
 describe('AccountIdentityService', () => {
+  it('carries the selected app language into auth without changing the ticket fragment', async () => {
+    const { api, dependencies, service } = setup();
+    activeServices.push(service);
+    document.documentElement.lang = 'en-US';
+    api.authStart.mockResolvedValue({
+      transactionId: 'transaction-1', authorizationUrl: 'https://auth.openbitfun.com/sign-in#ticket=test-ticket',
+      expiresAt: 100, pollIntervalSeconds: 1,
+    });
+    await service.initialize();
+    api.me.mockResolvedValue(profile);
+    await service.signIn();
+    expect(dependencies.openExternal).toHaveBeenCalledWith('https://auth.openbitfun.com/sign-in?locale=en-US#ticket=test-ticket');
+  });
+
   it('uses the MiniApp desktop OAuth flow, keeps tokens out of the renderer, and shares identity', async () => {
     const { api, dependencies, service, syncPort } = setup();
     activeServices.push(service);
@@ -130,4 +145,17 @@ describe('AccountIdentityService', () => {
     expect(service.getSnapshot()).toMatchObject({ status: 'signed-in', me: profile });
   });
 
+});
+
+it('refreshes verified email metadata without changing the account or device routing identity', async () => {
+  const { api, service, syncPort } = setup();
+  activeServices.push(service);
+  const existing = { user: { githubId: 0, accountId: 'email-7', login: 'user-internal', avatarUrl: '' }, isAdmin: false };
+  api.me.mockResolvedValue(existing);
+  await service.initialize();
+  const previousEvents = syncPort.published.length;
+  api.me.mockResolvedValue({ ...existing, email: 'alice@example.com' });
+  await service.refresh();
+  expect(service.getSnapshot().me).toMatchObject({ email: 'alice@example.com', user: existing.user });
+  expect(syncPort.published).toHaveLength(previousEvents);
 });

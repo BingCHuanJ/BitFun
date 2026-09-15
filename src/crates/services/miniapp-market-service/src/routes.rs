@@ -112,6 +112,7 @@ struct ModerationReason {
 #[serde(rename_all = "camelCase")]
 struct MarketConfigResponse {
     github_auth_configured: bool,
+    email_auth_configured: bool,
     public_browse: bool,
     web_submissions_enabled: bool,
     categories: &'static [&'static str],
@@ -121,6 +122,8 @@ struct MarketConfigResponse {
 #[serde(rename_all = "camelCase")]
 struct MeResponse {
     user: MarketUserSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
     is_admin: bool,
 }
 
@@ -186,6 +189,11 @@ pub(crate) fn api_router(state: Arc<MarketState>) -> Router {
         .route("/auth/github/start", get(start_github_oauth))
         .route("/auth/github/callback", get(github_oauth_callback))
         .route("/auth/desktop/start", post(start_desktop_auth))
+        .route("/auth/login/start", post(start_web_login))
+        .route("/auth/login/github", post(login_github))
+        .route("/auth/email/send", post(send_email_code))
+        .route("/auth/email/verify", post(verify_email_code))
+        .route("/auth/email/complete", get(complete_email_browser))
         .route("/auth/desktop/poll", post(poll_desktop_auth))
         .route("/auth/refresh", post(refresh_tokens))
         .route("/auth/logout", post(logout))
@@ -285,6 +293,7 @@ async fn health(State(state): State<Arc<MarketState>>) -> impl IntoResponse {
             "status": if database_ready { "ok" } else { "degraded" },
             "database": database_ready,
             "githubAuthConfigured": state.config.github_configured(),
+            "emailAuthConfigured": state.auth.mailer.is_some(),
         })),
     )
 }
@@ -292,6 +301,7 @@ async fn health(State(state): State<Arc<MarketState>>) -> impl IntoResponse {
 async fn config(State(state): State<Arc<MarketState>>) -> Json<MarketConfigResponse> {
     Json(MarketConfigResponse {
         github_auth_configured: state.config.github_configured(),
+        email_auth_configured: state.auth.mailer.is_some(),
         public_browse: state.config.public_browse,
         web_submissions_enabled: state.config.web_submissions_enabled,
         categories: MARKET_CATEGORIES,
@@ -324,7 +334,7 @@ async fn list_listings(
         "SELECT l.id AS listing_id, l.slug, r.id AS release_id, r.release_number,
                 r.metadata_json, r.package_sha256, r.package_size,
                 r.review_bundle_hash, r.published_at,
-                u.github_id, u.login, u.avatar_url,
+                u.id AS owner_identity_id, u.github_id, u.login, u.avatar_url,
                 COALESCE((SELECT AVG(value) FROM ratings WHERE listing_id = l.id), 0.0) AS rating_average,
                 (SELECT COUNT(*) FROM ratings WHERE listing_id = l.id) AS rating_count,
                 (SELECT COUNT(*) FROM favorites WHERE listing_id = l.id) AS favorite_count,
@@ -540,14 +550,30 @@ async fn github_oauth_callback(
     let oauth_state = query.state.ok_or_else(|| {
         MarketError::bad_request("missing_oauth_state", "GitHub did not return state.")
     })?;
-    match state.auth.complete_oauth(&code, &oauth_state).await? {
+    complete_login_response(
+        &state,
+        state.auth.complete_oauth(&code, &oauth_state).await?,
+        false,
+    )
+}
+
+fn complete_login_response(
+    state: &MarketState,
+    completed: CompletedOAuth,
+    json: bool,
+) -> MarketResult<Response> {
+    match completed {
         CompletedOAuth::Web {
             return_to,
             session_token,
             csrf_token,
             expires_at,
         } => {
-            let mut response = Redirect::to(&return_to).into_response();
+            let mut response = if json {
+                Json(serde_json::json!({"redirectUrl": return_to})).into_response()
+            } else {
+                Redirect::to(&return_to).into_response()
+            };
             state.auth.append_web_session_cookies(
                 response.headers_mut(),
                 &session_token,
@@ -561,7 +587,12 @@ async fn github_oauth_callback(
             csrf_token,
             expires_at,
         } => {
-            let mut response = Redirect::to("https://auth.openbitfun.com/complete").into_response();
+            let mut response = if json {
+                Json(serde_json::json!({"redirectUrl": "https://auth.openbitfun.com/complete"}))
+                    .into_response()
+            } else {
+                Redirect::to("https://auth.openbitfun.com/complete").into_response()
+            };
             state.auth.append_web_session_cookies(
                 response.headers_mut(),
                 &session_token,
@@ -573,10 +604,21 @@ async fn github_oauth_callback(
     }
 }
 
+#[derive(Default, Deserialize)]
+struct LoginMethods {
+    methods: Option<String>,
+}
+
 async fn start_desktop_auth(
     State(state): State<Arc<MarketState>>,
+    Query(query): Query<LoginMethods>,
 ) -> MarketResult<Json<crate::auth::DesktopAuthStart>> {
-    Ok(Json(state.auth.start_desktop_oauth().await?))
+    Ok(Json(
+        state
+            .auth
+            .start_desktop_login(query.methods.as_deref() == Some("all"))
+            .await?,
+    ))
 }
 
 async fn poll_desktop_auth(
@@ -617,6 +659,7 @@ fn identity_response(state: &MarketState, auth: &RequestAuth) -> Response {
     let mut response = Json(MeResponse {
         is_admin: state.auth.is_admin(&auth.user),
         user: auth.user.profile.clone(),
+        email: auth.user.email.clone(),
     })
     .into_response();
     response
@@ -1284,7 +1327,12 @@ async fn summary_from_row(
         category: metadata.category,
         tags: metadata.tags,
         owner: MarketUserSummary {
-            github_id: row.get("github_id"),
+            account_id: Some(
+                row.get::<Option<i64>, _>("github_id")
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| format!("email-{}", row.get::<i64, _>("owner_identity_id"))),
+            ),
+            github_id: row.get::<Option<i64>, _>("github_id").unwrap_or_default(),
             login: row.get("login"),
             avatar_url: row.get("avatar_url"),
         },
@@ -1315,7 +1363,7 @@ async fn listing_detail_by_slug(
         "SELECT l.id AS listing_id, l.slug, r.id AS release_id, r.release_number,
                 r.metadata_json, r.package_sha256, r.package_size,
                 r.review_bundle_hash, r.published_at,
-                u.github_id, u.login, u.avatar_url,
+                u.id AS owner_identity_id, u.github_id, u.login, u.avatar_url,
                 COALESCE((SELECT AVG(value) FROM ratings WHERE listing_id = l.id), 0.0) AS rating_average,
                 (SELECT COUNT(*) FROM ratings WHERE listing_id = l.id) AS rating_count,
                 (SELECT COUNT(*) FROM favorites WHERE listing_id = l.id) AS favorite_count,
@@ -1436,7 +1484,10 @@ async fn admin_submission_from_row(
     row: sqlx::sqlite::SqliteRow,
 ) -> MarketResult<AdminSubmissionSummary> {
     let submitter = MarketUserSummary {
-        github_id: row.get("submitter_github_id"),
+        account_id: None,
+        github_id: row
+            .get::<Option<i64>, _>("submitter_github_id")
+            .unwrap_or_default(),
         login: row.get("submitter_login"),
         avatar_url: row.get("submitter_avatar_url"),
     };
@@ -1593,10 +1644,9 @@ async fn approve_submission(
         )
     })?;
     let owner_user_id: i64 = submission.get("owner_user_id");
-    let submitter_is_admin = state
-        .config
-        .admin_github_ids
-        .contains(&submission.get::<i64, _>("submitter_github_id"));
+    let submitter_is_admin = submission
+        .get::<Option<i64>, _>("submitter_github_id")
+        .is_some_and(|id| id > 0 && state.config.admin_github_ids.contains(&id));
     let slug: String = submission.get("slug");
     let release_number: i64 = submission.get("release_number");
     let metadata_json: String = submission.get("metadata_json");
@@ -2785,4 +2835,53 @@ mod tests {
             .unwrap();
         assert!(matches!(desktop_auth.kind, RequestAuthKind::Bearer { .. }));
     }
+}
+
+async fn start_web_login(
+    State(state): State<Arc<MarketState>>,
+    Json(query): Json<OAuthStartQuery>,
+) -> MarketResult<Json<serde_json::Value>> {
+    let ticket = state
+        .auth
+        .start_web_login(query.return_to.as_deref().unwrap_or("/miniapp/"))
+        .await?;
+    Ok(Json(
+        serde_json::json!({"ticket": ticket, "emailEnabled": state.auth.mailer.is_some(), "githubEnabled": state.config.github_configured()}),
+    ))
+}
+async fn login_github(
+    State(state): State<Arc<MarketState>>,
+    Json(request): Json<crate::email_auth::LoginRequest>,
+) -> MarketResult<Json<serde_json::Value>> {
+    Ok(Json(
+        serde_json::json!({"authorizationUrl": state.auth.login_github(&request.ticket).await?}),
+    ))
+}
+async fn send_email_code(
+    State(state): State<Arc<MarketState>>,
+    Json(request): Json<crate::email_auth::EmailSendRequest>,
+) -> MarketResult<Json<crate::email_auth::EmailSent>> {
+    Ok(Json(state.auth.send_email_code(request).await?))
+}
+async fn verify_email_code(
+    State(state): State<Arc<MarketState>>,
+    Json(request): Json<crate::email_auth::EmailVerifyRequest>,
+) -> MarketResult<Response> {
+    let completed = state.auth.verify_email_code(request).await?;
+    // Establish market host-only cookies through a short-lived, one-use grant,
+    // just as the GitHub callback is bridged to the market origin by Nginx.
+    let redirect_url = state.auth.email_browser_redirect(completed).await?;
+    Ok(Json(serde_json::json!({"redirectUrl": redirect_url})).into_response())
+}
+
+#[derive(Deserialize)]
+struct EmailBrowserGrant {
+    grant: String,
+}
+async fn complete_email_browser(
+    State(state): State<Arc<MarketState>>,
+    Query(query): Query<EmailBrowserGrant>,
+) -> MarketResult<Response> {
+    let completed = state.auth.complete_email_browser(&query.grant).await?;
+    complete_login_response(&state, completed, false)
 }

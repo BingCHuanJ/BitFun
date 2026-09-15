@@ -867,7 +867,7 @@ struct SidebarView: View {
             if !showsPrimaryNavigation {
                 SignedOutConnectionActions(
                     scanTitle: model.localized("扫码连接"),
-                    accountTitle: model.localized("使用 GitHub 登录"),
+                    accountTitle: model.localized("使用邮箱或 GitHub 登录"),
                     onScan: model.scanRemote,
                     onOpenAccount: { model.accountSheetOpen = true; model.drawerOpen = false },
                     showScan: !model.remoteConnected

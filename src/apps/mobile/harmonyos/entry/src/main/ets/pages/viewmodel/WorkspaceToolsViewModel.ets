@@ -4,7 +4,7 @@ import { Encoding } from '../../services/Encoding';
 import { RemoteSessionManager } from '../../services/RemoteSessionManager';
 import { DurableSessionStream } from '../../services/DurableSessionStream';
 import { WorkspaceToolsState, WorkspaceToolsIntent, WorkspaceFileEntry, WorkspaceTerminalEntry } from '../state/WorkspaceToolsState';
-interface RuntimeLocation { path: string; remoteConnectionId?: string; }
+import { RuntimeFileLocation as RuntimeLocation } from '../../model/RemoteModels';
 interface RuntimeSystemInfo { homeDir?: string; }
 interface DirectoryPage { children: WorkspaceFileEntry[]; hasMore: boolean; }
 interface TerminalPage { data: string; nextOffset: number; cursor: number; truncated: boolean; }

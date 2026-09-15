@@ -302,7 +302,7 @@ export class RelayHttpClient {
 
   private async withAccount<T>(operation: (identity: AccountIdentitySnapshot) => Promise<T>): Promise<T> {
     const identity = this.identity;
-    if (!identity) throw new Error('Sign in with GitHub to continue');
+    if (!identity) throw new Error('Sign in to continue');
     try {
       const result = await operation(identity);
       if (this.identity !== identity) throw new AccountIdentityChangedError();

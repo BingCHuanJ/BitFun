@@ -407,3 +407,55 @@ test('a retired official relay token stays archived and is never rebound to the 
   assert.equal(result.session,null);assert.deepEqual(result.retained,result.old);
  }finally{await context.close();}
 });
+
+test('sign-in uses a separate popup, can cancel and reopen a closed window, and closes on success', { timeout: 40_000 }, async () => {
+  const context = await browser.createIncognitoBrowserContext();
+  const relay = new RelayFixture();
+  try {
+    const page = await relay.page(context, source.origin, invitation());
+    await page.waitForSelector('.pairing-page__form button[type="submit"]');
+    await page.evaluate(async () => {
+      const { CloudAccountClient } = await import('/src/services/CloudAccountClient.ts');
+      CloudAccountClient.prototype.authorize = async (popup, signal) => {
+        window.authFixturePopup = popup;
+        return new Promise((resolve, reject) => {
+          window.completeAuthFixture = () => resolve('fixture-user-123');
+          signal.addEventListener('abort', () => reject(new Error('Cancelled')), { once: true });
+        });
+      };
+    });
+    const open = async (selector) => {
+      await page.evaluate(() => { window.completeAuthFixture = undefined; });
+      const targetPromise = browser.waitForTarget(target => target.opener() === page.target() && target.type() === 'page');
+      await page.click(selector);
+      const target = await targetPromise;
+      const popupPage = await target.page();
+      await page.waitForFunction(() => typeof window.completeAuthFixture === 'function');
+      await popupPage.setRequestInterception(true);
+      popupPage.on('request', request => request.respond({ status: 200, contentType: 'text/html', body: '<h1>Authentication fixture</h1>' }));
+      await popupPage.goto('https://auth.openbitfun.com/sign-in');
+      assert.equal(await popupPage.evaluate(() => window.opener !== null), true);
+      const parentSession = await page.target().createCDPSession();
+      const popupSession = await target.createCDPSession();
+      const parentWindow = await parentSession.send('Browser.getWindowForTarget');
+      const authWindow = await popupSession.send('Browser.getWindowForTarget');
+      assert.notEqual(authWindow.windowId, parentWindow.windowId);
+      assert.ok(authWindow.bounds.width <= 500);
+      await parentSession.detach(); await popupSession.detach();
+      return popupPage;
+    };
+    const first = await open('.pairing-page__retry');
+    await page.click('.pairing-page__action button:last-child');
+    await until(() => first.isClosed());
+    assert.equal(relay.logins.length, 0);
+    const second = await open('.pairing-page__retry');
+    await second.close();
+    // The return action starts a fresh attempt if the user closed the popup.
+    const third = await open('.pairing-page__retry');
+    await page.evaluate(() => window.completeAuthFixture());
+    await connected(page);
+    await until(() => third.isClosed());
+    assert.equal(relay.logins.length, 1);
+    assert.deepEqual(relay.errors, []);
+  } finally { await context.close(); }
+});

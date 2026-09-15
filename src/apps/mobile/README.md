@@ -138,3 +138,8 @@ Native iOS and Android controllers probe idle session lists while the app is in 
 foreground. An open transcript uses its durable session stream for recovery instead
 of duplicating the health request. Temporary transport failures keep the displayed
 list or transcript; a successful response restores the connected state.
+
+Account sign-in on Android, iOS and HarmonyOS opens the shared authorization page
+with separate GitHub and email-code options. Email users need no password and are
+not automatically linked to GitHub users. Sign in with the same method and account
+on the phone and the controlled desktop/CLI.

@@ -135,6 +135,7 @@ indexmap = "2"
 include_dir = "0.7"
 aes = "0.8"
 hmac = "0.12"
+lettre = { version = "0.11.23", default-features = false }
 hex = "0.4"
 chardetng = "0.1.17"
 encoding_rs = "0.8.35"

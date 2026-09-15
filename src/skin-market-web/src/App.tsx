@@ -1,6 +1,6 @@
 import { Button, IconButton } from '@openbitfun/ui';
-import { GithubLogo } from '@phosphor-icons/react';
 import {
+  LogIn,
   RefreshCw as ArrowClockwise,
   ExternalLink as ArrowSquareOut,
   Globe as GlobeSimple,
@@ -36,6 +36,8 @@ export default function App() {
     currentRoute().kind === 'catalog' ? window.location.search : '',
   );
   const [account, setAccount] = useState<SharedMarketAccount>();
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
+  const accountLabel = account?.email ?? account?.user.login ?? '';
   const [accountResolved, setAccountResolved] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountError, setAccountError] = useState<Error>();
@@ -59,7 +61,7 @@ export default function App() {
   useEffect(() => {
     void sharedMarketAccountApi
       .config()
-      .then((config) => setGithubAuthConfigured(config.githubAuthConfigured))
+      .then((config) => setGithubAuthConfigured(config.githubAuthConfigured || config.emailAuthConfigured === true))
       .catch(() => undefined);
     void refreshAccount();
   }, [refreshAccount]);
@@ -168,8 +170,12 @@ export default function App() {
               </div>
             ) : account ? (
               <div className="account-profile">
-                <img src={account.user.avatarUrl} alt="" width="28" height="28" />
-                <span title={`@${account.user.login}`}>@{account.user.login}</span>
+                <div className="profile-avatar" role="img" aria-label={accountLabel}>
+                  {account.user.avatarUrl && failedAvatar !== account.user.avatarUrl
+                    ? <img src={account.user.avatarUrl} alt="" width="28" height="28" onError={() => setFailedAvatar(account.user.avatarUrl)} />
+                    : accountLabel.trim().charAt(0).toUpperCase() || '?'}
+                </div>
+                <span title={accountLabel}>{account.email ?? `@${account.user.login}`}</span>
                 <IconButton
                   type="button"
                   className="account-signout"
@@ -190,7 +196,7 @@ export default function App() {
                   if (githubAuthConfigured === false) event.preventDefault();
                 }}
               >
-                <GithubLogo size={18} weight="bold" aria-hidden="true" />
+                <LogIn size={18} aria-hidden="true" />
                 <span>{t('signInGitHub')}</span>
               </a>
             )}
@@ -242,7 +248,6 @@ export default function App() {
       <footer className="site-footer">
         <div className="shell site-footer__inner">
           <span>{t('brand')} {t('market')}</span>
-          <p>{t('footerNote')}</p>
           <a className="site-footer__link" href={OPENBITFUN_HOME_URL} target="_blank" rel="noreferrer">
             {t('openbitfunHome')}
             <ArrowSquareOut size={16} aria-hidden="true" />

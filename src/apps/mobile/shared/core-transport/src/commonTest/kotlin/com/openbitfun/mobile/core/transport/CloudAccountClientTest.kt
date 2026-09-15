@@ -50,10 +50,10 @@ class CloudAccountClientTest {
 
     @Test
     fun authorizationAcceptsTheIdentityAuthorityGithubUrlAndRejectsOtherDestinations() = runTest {
-        for (url in listOf("https://github.com/login/oauth/authorize?state=test", "https://github.com.evil.example/login/oauth/authorize", "https://github.com/login", "https://user@github.com/login/oauth/authorize", "http://github.com/login/oauth/authorize")) {
+        for (url in listOf("https://github.com/login/oauth/authorize?state=test", "https://auth.openbitfun.com/sign-in#ticket=test", "https://auth.openbitfun.com.evil.example/sign-in", "https://user@auth.openbitfun.com/sign-in", "https://auth.openbitfun.com:444/sign-in", "https://github.com.evil.example/login/oauth/authorize", "https://github.com/login", "https://user@github.com/login/oauth/authorize", "http://github.com/login/oauth/authorize")) {
             val engine = MockEngine { json("""{"transactionId":"txn","transactionSecret":"secret","authorizationUrl":"$url","expiresAt":9999999999,"pollIntervalSeconds":3}""") }
             val client = CloudAccountClient(relayHttpClient(engine))
-            if (url == "https://github.com/login/oauth/authorize?state=test") assertEquals(url, client.startAuthorization(DEFAULT_CLOUD_RELAY_URL).authorizationUrl)
+            if (url == "https://github.com/login/oauth/authorize?state=test" || url == "https://auth.openbitfun.com/sign-in#ticket=test") assertEquals(url, client.startAuthorization(DEFAULT_CLOUD_RELAY_URL).authorizationUrl)
             else assertFailsWith<IllegalArgumentException> { client.startAuthorization(DEFAULT_CLOUD_RELAY_URL) }
         }
     }

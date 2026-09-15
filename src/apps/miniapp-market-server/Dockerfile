@@ -22,6 +22,7 @@ COPY design-system/tooling/token-engine/ design-system/tooling/token-engine/
 COPY design-system/packages/design-tokens/ design-system/packages/design-tokens/
 COPY design-system/packages/theme-openbitfun/ design-system/packages/theme-openbitfun/
 COPY src/miniapp-market-web/ src/miniapp-market-web/
+COPY src/shared/i18n/contract/locales.json src/shared/i18n/contract/locales.json
 RUN pnpm --dir design-system/packages/design-tokens build \
     && pnpm --dir design-system/packages/theme-openbitfun build \
     && pnpm --dir design-system/packages/ui build \
@@ -44,6 +45,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock ./
+COPY third_party/eioc/ third_party/eioc/
 COPY src/ src/
 
 RUN --mount=type=cache,id=openbitfun-market-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \

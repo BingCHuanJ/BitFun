@@ -30,6 +30,7 @@ import {
   CircleAlert as WarningCircle,
   X,
 } from 'lucide-react';
+import { AccountSignIn } from './AccountSignIn';
 import { downloadUrl, loginUrl, marketApi, MarketApiError } from './api';
 import { formatCompactNumber, formatMarketDate, formatMarketDateTime } from './format';
 import { GetOpenBitFunCta } from './GetOpenBitFunCta';
@@ -88,7 +89,7 @@ function navigate(path: string) {
 
 function App() {
   const path = window.location.pathname;
-  if (window.location.hostname === 'auth.openbitfun.com' || path === '/miniapp/auth/complete' || path === '/miniapp/auth/desktop-complete') {
+  if (window.location.hostname === 'auth.openbitfun.com' || path === '/miniapp/auth/sign-in' || path === '/miniapp/auth/complete' || path === '/miniapp/auth/desktop-complete') {
     return <GitHubIdentityPage complete={path.endsWith('complete')} />;
   }
   return <MarketApp />;
@@ -97,16 +98,9 @@ function App() {
 function GitHubIdentityPage({ complete }: { complete: boolean }) {
   const { t } = useLocale();
   useTheme();
-  useEffect(() => { document.title = `OpenBitFun · ${t('signIn')}`; }, [t]);
+  useEffect(() => { document.title = `OpenBitFun · ${t(complete ? 'authComplete' : 'signIn')}`; }, [complete, t]);
   return <IconContext.Provider value={{ size: 24, weight: 'regular' }}>
-    {complete ? <DesktopComplete t={t} /> : <main className="form-page">
-      <section className="auth-gate">
-        <GithubLogo size={40} aria-hidden="true" />
-        <h1>{t('signIn')}</h1>
-        <p>{t('authSharedIdentity')}</p>
-        <a className="button primary" href="/sign-in?returnTo=/miniapp/">{t('signIn')}</a>
-      </section>
-    </main>}
+    {complete ? <DesktopComplete t={t} /> : <AccountSignIn />}
   </IconContext.Provider>;
 }
 
@@ -216,7 +210,6 @@ function MarketApp() {
             <MarketLogo weight="duotone" aria-hidden="true" />
             <span>OpenBitFun MiniApp Market</span>
           </div>
-          <span className="footer-note">{t('footerNote')}</span>
           <a href={OPENBITFUN_HOME_URL} target="_blank" rel="noreferrer">
             {t('openbitfunHome')}
             <ArrowSquareOut size={18} aria-hidden="true" />
@@ -249,6 +242,9 @@ function Header({
   onLogout: () => Promise<void>;
 }) {
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
+  const accountLabel = me?.email ?? me?.user.login ?? '';
+
   const languageControlRef = useRef<HTMLDivElement>(null);
   const languageTriggerRef = useRef<HTMLButtonElement>(null);
   const activeLocale =
@@ -392,8 +388,12 @@ function Header({
           />
           {me ? (
             <div className="profile">
-              <img src={me.user.avatarUrl} alt="" />
-              <span>@{me.user.login}</span>
+              <div className="profile-avatar" role="img" aria-label={accountLabel}>
+                {me.user.avatarUrl && failedAvatar !== me.user.avatarUrl
+                  ? <img src={me.user.avatarUrl} alt="" onError={() => setFailedAvatar(me.user.avatarUrl)} />
+                  : accountLabel.trim().charAt(0).toUpperCase() || '?'}
+              </div>
+              <span title={accountLabel}>{me.email ?? `@${me.user.login}`}</span>
               <IconButton
                 className="icon-button"
                 onClick={() => void onLogout()}
@@ -405,11 +405,11 @@ function Header({
             </div>
           ) : (
             <a
-              className={`button button-small ${config?.githubAuthConfigured === false ? 'disabled' : ''}`}
+              className={`button button-small ${(config?.githubAuthConfigured || config?.emailAuthConfigured) === false ? 'disabled' : ''}`}
               href={loginUrl(window.location.pathname)}
-              aria-disabled={config?.githubAuthConfigured === false}
+              aria-disabled={(config?.githubAuthConfigured || config?.emailAuthConfigured) === false}
               onClick={(event) => {
-                if (config?.githubAuthConfigured === false) event.preventDefault();
+                if ((config?.githubAuthConfigured || config?.emailAuthConfigured) === false) event.preventDefault();
               }}
             >
               <GithubLogo weight="bold" aria-hidden="true" />
@@ -743,7 +743,9 @@ function DetailPage({
   }
   if (!app) return <PageLoading t={t} />;
 
-  const owner = me?.user.githubId === app.owner.githubId;
+  const owner = !!me && (app.owner.accountId
+    ? me.user.accountId === app.owner.accountId
+    : app.owner.githubId > 0 && me.user.githubId === app.owner.githubId);
   const localized = localizedListing(app, locale);
   return (
     <main className="detail-page">

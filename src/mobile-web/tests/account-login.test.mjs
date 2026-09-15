@@ -148,13 +148,17 @@ test('authorization follows the central GitHub OAuth URL and rejects lookalike d
   try {
     for (const authorizationUrl of [
       'https://github.com/login/oauth/authorize?state=test',
+      'https://auth.openbitfun.com/sign-in#ticket=test',
+      'https://auth.openbitfun.com.evil.example/sign-in',
+      'https://user@auth.openbitfun.com/sign-in',
+      'https://auth.openbitfun.com/other',
       'https://github.com.attacker.example/login/oauth/authorize',
       'https://github.com/login', 'https://user@github.com/login/oauth/authorize',
       'http://github.com/login/oauth/authorize',
     ]) {
       let polls = 0;
       globalThis.fetch = async url => {
-        if (url.endsWith('/start')) return Response.json({
+        if (url.endsWith('/start?methods=all')) return Response.json({
           transactionId: 'txn', transactionSecret: 'secret', authorizationUrl,
           expiresAt: Date.now() / 1000 + 60, pollIntervalSeconds: 3,
         });
@@ -163,9 +167,9 @@ test('authorization follows the central GitHub OAuth URL and rejects lookalike d
       };
       const popup = { location: { href: 'about:blank' } };
       const result = new CloudAccountClient('https://remote.openbitfun.com/v/1.0.1').authorize(popup, new AbortController().signal);
-      if (authorizationUrl === 'https://github.com/login/oauth/authorize?state=test') {
+      if (authorizationUrl === 'https://github.com/login/oauth/authorize?state=test' || authorizationUrl === 'https://auth.openbitfun.com/sign-in#ticket=test') {
         assert.equal(await result, 'verified');
-        assert.equal(popup.location.href, authorizationUrl);
+        assert.equal(popup.location.href, authorizationUrl.startsWith('https://auth.openbitfun.com') ? authorizationUrl.replace('/sign-in#', '/sign-in?locale=en-US#') : authorizationUrl);
         assert.equal(polls, 1);
       } else {
         await assert.rejects(result, /Untrusted/);

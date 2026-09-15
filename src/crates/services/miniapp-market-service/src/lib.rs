@@ -5,6 +5,7 @@ mod auth;
 mod auth_admission;
 pub mod config;
 mod db;
+mod email_auth;
 mod error;
 mod package;
 mod request_id;

@@ -1314,7 +1314,8 @@ fn summary_from_row(
         min_openbitfun_version: draft.min_openbitfun_version,
         required_capabilities: meta.required_capabilities,
         owner: AppearanceMarketUserSummary {
-            github_id: row.get("github_id"),
+            account_id: None,
+            github_id: row.get::<Option<i64>, _>("github_id").unwrap_or_default(),
             login: row.get("login"),
             avatar_url: row.get("avatar_url"),
         },
@@ -1564,12 +1565,16 @@ async fn admin_submission_detail(
         _ => None,
     };
     let submitter = row
-        .try_get::<Option<i64>, _>("github_id")
+        .try_get::<Option<String>, _>("login")
         .map_err(SkinMarketError::internal)?
-        .map(|github_id| {
+        .map(|login| {
             Ok::<_, SkinMarketError>(AppearanceMarketUserSummary {
-                github_id,
-                login: row.try_get("login").map_err(SkinMarketError::internal)?,
+                account_id: None,
+                github_id: row
+                    .try_get::<Option<i64>, _>("github_id")
+                    .map_err(SkinMarketError::internal)?
+                    .unwrap_or_default(),
+                login,
                 avatar_url: row
                     .try_get("avatar_url")
                     .map_err(SkinMarketError::internal)?,

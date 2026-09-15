@@ -68,3 +68,7 @@ The workspace tools provide directory browsing, text-file reading/editing, file/
 Pending questions and permissions use the runtime interaction mailbox independently of transcript history. Initial attachment, reconnect, foreground recovery, and permission control events refresh that mailbox. Requests are answered by `requestId`, including requests with no tool-call attachment; edited approval input is sent to the same runtime permission owner.
 
 File uploads stream 3 MiB chunks through the runtime transfer owner, use a whole-file digest, and resolve a lost append acknowledgment through the transfer cursor. Downloads stream chunks to the browser writable-file picker with backpressure; browsers without that API retain Blob parts until their download API accepts the file. Preview buffers remain separate from downloads. Terminal input is coalesced and serialized, resize keeps the latest dimensions, and ANSI output is rendered by xterm rather than interpreted by a custom parser.
+
+Account sign-in offers independent GitHub and email-code accounts through the
+shared OpenBitFun authorization page. No password registration is needed. Use the
+same login method and account on the desktop/CLI and phone to see its devices.
