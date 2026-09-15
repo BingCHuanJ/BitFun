@@ -128,6 +128,31 @@ run `cargo test -p openbitfun-desktop --lib api::local_file_download::tests`.
 After changing its registration, also run
 `cargo test -p openbitfun-desktop --lib remote_workspace_policy`.
 
+For Windows external-file drag previews, run
+`cargo test --locked -p openbitfun-desktop --lib file_drop_preview_api` and
+`pnpm --dir src/web-ui run test:run src/infrastructure/files/useWindowsFileDropPreview.test.tsx src/app/scenes/session/FileDropPreviewCards.test.tsx`.
+After rebuilding Desktop, manually check Explorer drags with one image, more than
+four images, mixed file formats, Escape, leaving the pane, and a scene switch.
+Verify HTML text/tab/file-tree drags still work. The temporary OLE child only
+covers the active chat target during an external file drag; do not enable Wry's
+window-wide Windows handler as a replacement. After command registration changes,
+also run `cargo test -p openbitfun-desktop --lib remote_workspace_policy`.
+
+The layered receiver requires the compatibility declaration in
+`windows-app.manifest`; keep it wired through `build.rs` for dev and release.
+After changes to that contract, run
+`node --test scripts/desktop-tauri-build.test.mjs` and `cargo build -p openbitfun-desktop`.
+The focused native test creates and destroys 50 real, hidden receiver windows.
+The Shell regression also uses a real `IDataObject` and drag-image helpers to
+verify 20 takeovers leave no `SysDragImage`, and that the next target can restore
+the source image and clean it up on drop/cancel. `IDropTargetHelper::Show(false)`
+alone does not dismiss the modern layered image; end the Shell renderer session
+before displaying the custom preview, while keeping the OLE receiver active.
+If the Windows Tauri library test loader fails before running tests, embed the
+same desktop manifest into a temporary copy of the generated test executable
+using the Windows SDK `mt.exe`, then run the `file_drop_preview_api` filter on
+that copy. A Common Controls-only manifest cannot exercise layered children.
+
 For staged application-update cache and signature behavior, use
 `cargo test -p openbitfun-desktop --lib api::update_api::tests`.
 For peer system-info response compatibility, run

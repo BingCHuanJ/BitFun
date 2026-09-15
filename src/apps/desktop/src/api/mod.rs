@@ -27,6 +27,7 @@ pub mod editor_ai_api;
 pub mod event_coalescer;
 pub mod external_hooks_api;
 pub mod external_sources_api;
+pub mod file_drop_preview_api;
 pub mod git_agent_api;
 pub mod git_api;
 pub mod html_preview_api;

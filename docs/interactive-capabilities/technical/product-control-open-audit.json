@@ -734,6 +734,7 @@
       "evidence": [
         "command:get_clipboard_files",
         "command:resolve_browser_dropped_file_paths",
+        "command:set_file_drop_preview_target",
         "command:upload_image_contexts",
         "source:src/web-ui/src/flow_chat/utils/externalFileIntake.ts#buildExternalFileContexts",
         "source:src/web-ui/src/flow_chat/utils/externalFileIntake.test.ts#buildExternalFileContexts",

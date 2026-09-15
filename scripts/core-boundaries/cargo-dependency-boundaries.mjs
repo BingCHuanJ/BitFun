@@ -553,7 +553,9 @@ const THIRD_PARTY_CAPABILITY_PROFILES = new Map([
         optional: true,
         useDefaultFeatures: false,
       })],
-      ['openbitfun-desktop', dependencyProfile(['jpeg', 'png'], {
+      // Desktop owns bounded controller-local drag thumbnail decoding.
+      // Keep only its raster input formats and PNG/JPEG output codecs.
+      ['openbitfun-desktop', dependencyProfile(['bmp', 'gif', 'jpeg', 'png', 'webp'], {
         useDefaultFeatures: false,
       })],
       ['openbitfun-miniapp-market-service', dependencyProfile(['jpeg', 'png', 'webp'], {
