@@ -84,6 +84,7 @@ export interface MarketBrowseRequest {
 }
 
 export interface MarketMe {
+  email?: string;
   user: MarketUserSummary;
   isAdmin: boolean;
 }

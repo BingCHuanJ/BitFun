@@ -122,6 +122,8 @@ struct MarketConfigResponse {
 #[serde(rename_all = "camelCase")]
 struct MeResponse {
     user: MarketUserSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
     is_admin: bool,
 }
 
@@ -657,6 +659,7 @@ fn identity_response(state: &MarketState, auth: &RequestAuth) -> Response {
     let mut response = Json(MeResponse {
         is_admin: state.auth.is_admin(&auth.user),
         user: auth.user.profile.clone(),
+        email: auth.user.email.clone(),
     })
     .into_response();
     response

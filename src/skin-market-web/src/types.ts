@@ -9,6 +9,7 @@ export interface AppearanceMarketUser {
 }
 
 export interface SharedMarketAccount {
+  email?: string;
   user: AppearanceMarketUser;
   isAdmin: boolean;
 }

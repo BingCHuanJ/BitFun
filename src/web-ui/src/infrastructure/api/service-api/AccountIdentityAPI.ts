@@ -9,6 +9,7 @@ export interface MarketUserSummary {
 }
 
 export interface MarketMe {
+  email?: string;
   user: MarketUserSummary;
   isAdmin: boolean;
 }

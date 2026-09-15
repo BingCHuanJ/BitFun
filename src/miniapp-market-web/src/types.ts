@@ -143,6 +143,7 @@ export interface CursorPage<T> {
 }
 
 export interface Me {
+  email?: string;
   user: MarketUser;
   isAdmin: boolean;
 }

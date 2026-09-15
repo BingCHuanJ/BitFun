@@ -59,6 +59,9 @@ impl From<MarketTokenPair> for StoredMarketCredentials {
 #[serde(rename_all = "camelCase")]
 pub struct MarketMe {
     pub user: GitHubUser,
+    /// Verified email is private account metadata, never a public owner name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
     pub is_admin: bool,
 }
 
@@ -349,5 +352,24 @@ fn local_error(code: impl Into<String>, message: impl Into<String>) -> MarketCli
 impl std::fmt::Debug for MarketTokenPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AccountTokenPair").finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::MarketMe;
+
+    #[test]
+    fn verified_email_is_optional_and_survives_host_projection() {
+        let legacy = r#"{"user":{"githubId":42,"login":"alice","avatarUrl":""},"isAdmin":false}"#;
+        let github: MarketMe = serde_json::from_str(legacy).unwrap();
+        assert!(github.email.is_none());
+        assert_eq!(github.user.identity_id().as_deref(), Some("42"));
+        let email = r#"{"user":{"githubId":0,"accountId":"email-7","login":"user-internal","avatarUrl":""},"email":"alice@example.com","isAdmin":false}"#;
+        let account: MarketMe = serde_json::from_str(email).unwrap();
+        let projected = serde_json::to_value(&account).unwrap();
+        assert_eq!(projected["email"], "alice@example.com");
+        assert_eq!(account.user.identity_id().as_deref(), Some("email-7"));
+        assert_eq!(account.user.login, "user-internal");
     }
 }

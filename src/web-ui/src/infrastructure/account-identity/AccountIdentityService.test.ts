@@ -131,3 +131,16 @@ describe('AccountIdentityService', () => {
   });
 
 });
+
+it('refreshes verified email metadata without changing the account or device routing identity', async () => {
+  const { api, service, syncPort } = setup();
+  activeServices.push(service);
+  const existing = { user: { githubId: 0, accountId: 'email-7', login: 'user-internal', avatarUrl: '' }, isAdmin: false };
+  api.me.mockResolvedValue(existing);
+  await service.initialize();
+  const previousEvents = syncPort.published.length;
+  api.me.mockResolvedValue({ ...existing, email: 'alice@example.com' });
+  await service.refresh();
+  expect(service.getSnapshot().me).toMatchObject({ email: 'alice@example.com', user: existing.user });
+  expect(syncPort.published).toHaveLength(previousEvents);
+});

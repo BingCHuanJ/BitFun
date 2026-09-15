@@ -495,6 +495,9 @@ mod tests {
             .unwrap();
         assert_ne!(github.internal_id, user.internal_id);
         assert_eq!(user.profile.github_id, 0);
+        assert_eq!(user.email.as_deref(), Some("alice@example.com"));
+        assert_eq!(github.email, None);
+        assert!(!user.profile.login.contains('@'));
         assert!(user.profile.identity_id().unwrap().starts_with("email-"));
         assert!(!service.is_admin(&user));
         let poll = service
@@ -513,6 +516,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(token_user.internal_id, user.internal_id);
+        assert_eq!(token_user.email, user.email);
         assert!(service
             .poll_desktop(DesktopAuthPollRequest {
                 transaction_id: start.transaction_id,
@@ -672,6 +676,7 @@ mod tests {
         let target =
             url::Url::parse(&auth.email_browser_redirect(completed).await.unwrap()).unwrap();
         let response = app
+            .clone()
             .oneshot(
                 Request::get(format!("/auth/email/complete?{}", target.query().unwrap()))
                     .body(Body::empty())
@@ -691,6 +696,27 @@ mod tests {
         assert!(cookies.iter().all(|v| !v.contains("Domain=")));
         assert!(cookies.iter().any(|v| v.contains("Path=/skin")));
         assert!(cookies.iter().any(|v| v.contains("Path=/miniapp")));
+        let cookie_header = cookies
+            .iter()
+            .map(|cookie| cookie.split(';').next().unwrap())
+            .collect::<Vec<_>>()
+            .join("; ");
+        let response = app
+            .oneshot(
+                Request::get("/me")
+                    .header(header::COOKIE, cookie_header)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        let profile: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 16384).await.unwrap()).unwrap();
+        assert_eq!(profile["email"], "alice@example.com");
+        assert!(profile["user"].get("email").is_none());
+        assert!(!profile["user"]["login"].as_str().unwrap().contains('@'));
     }
 
     #[test]

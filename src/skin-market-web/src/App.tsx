@@ -35,6 +35,8 @@ export default function App() {
     currentRoute().kind === 'catalog' ? window.location.search : '',
   );
   const [account, setAccount] = useState<SharedMarketAccount>();
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
+  const accountLabel = account?.email ?? account?.user.login ?? '';
   const [accountResolved, setAccountResolved] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountError, setAccountError] = useState<Error>();
@@ -168,8 +170,12 @@ export default function App() {
               </div>
             ) : account ? (
               <div className="account-profile">
-                <img src={account.user.avatarUrl} alt="" width="28" height="28" />
-                <span title={`@${account.user.login}`}>@{account.user.login}</span>
+                <div className="profile-avatar" role="img" aria-label={accountLabel}>
+                  {account.user.avatarUrl && failedAvatar !== account.user.avatarUrl
+                    ? <img src={account.user.avatarUrl} alt="" width="28" height="28" onError={() => setFailedAvatar(account.user.avatarUrl)} />
+                    : accountLabel.trim().charAt(0).toUpperCase() || '?'}
+                </div>
+                <span title={accountLabel}>{account.email ?? `@${account.user.login}`}</span>
                 <button
                   type="button"
                   className="account-signout"

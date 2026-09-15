@@ -17,6 +17,7 @@ pub(crate) struct Database {
 pub(crate) struct AuthenticatedUser {
     pub internal_id: i64,
     pub profile: MarketUserSummary,
+    pub email: Option<String>,
 }
 
 impl Database {
@@ -174,12 +175,13 @@ impl Database {
         &self,
         github_id: i64,
     ) -> MarketResult<Option<AuthenticatedUser>> {
-        let row =
-            sqlx::query("SELECT id, github_id, login, avatar_url FROM users WHERE github_id = ?")
-                .bind(github_id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(MarketError::internal)?;
+        let row = sqlx::query(
+            "SELECT id, github_id, login, avatar_url, NULL AS email FROM users WHERE github_id = ?",
+        )
+        .bind(github_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(MarketError::internal)?;
         Ok(row.map(user_from_row))
     }
 
@@ -210,9 +212,10 @@ impl Database {
         token: &str,
     ) -> MarketResult<Option<(AuthenticatedUser, String, i64)>> {
         let row = sqlx::query(
-            "SELECT u.id, u.github_id, u.login, u.avatar_url, s.csrf_hash, s.expires_at
+            "SELECT u.id, u.github_id, u.login, u.avatar_url, e.email, s.csrf_hash, s.expires_at
              FROM web_sessions s
              JOIN users u ON u.id = s.user_id
+             LEFT JOIN email_identities e ON e.user_id = u.id AND u.github_id IS NULL
              WHERE s.token_hash = ? AND s.expires_at > ?",
         )
         .bind(token_hash(token))
@@ -266,9 +269,10 @@ impl Database {
         token_type: &str,
     ) -> MarketResult<Option<(AuthenticatedUser, String)>> {
         let row = sqlx::query(
-            "SELECT u.id, u.github_id, u.login, u.avatar_url, t.family_id
+            "SELECT u.id, u.github_id, u.login, u.avatar_url, e.email, t.family_id
              FROM api_tokens t
              JOIN users u ON u.id = t.user_id
+             LEFT JOIN email_identities e ON e.user_id = u.id AND u.github_id IS NULL
              WHERE t.token_hash = ? AND t.token_type = ? AND t.expires_at > ?
                AND t.revoked_at IS NULL",
         )
@@ -300,6 +304,7 @@ impl Database {
 fn user_from_row(row: sqlx::sqlite::SqliteRow) -> AuthenticatedUser {
     AuthenticatedUser {
         internal_id: row.get("id"),
+        email: row.get("email"),
         profile: MarketUserSummary {
             account_id: Some(match row.get::<Option<i64>, _>("github_id") {
                 Some(id) => id.to_string(),

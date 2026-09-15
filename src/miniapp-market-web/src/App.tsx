@@ -242,6 +242,9 @@ function Header({
   onLogout: () => Promise<void>;
 }) {
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
+  const accountLabel = me?.email ?? me?.user.login ?? '';
+
   const languageControlRef = useRef<HTMLDivElement>(null);
   const languageTriggerRef = useRef<HTMLButtonElement>(null);
   const activeLocale =
@@ -386,8 +389,12 @@ function Header({
           </button>
           {me ? (
             <div className="profile">
-              <img src={me.user.avatarUrl} alt="" />
-              <span>@{me.user.login}</span>
+              <div className="profile-avatar" role="img" aria-label={accountLabel}>
+                {me.user.avatarUrl && failedAvatar !== me.user.avatarUrl
+                  ? <img src={me.user.avatarUrl} alt="" onError={() => setFailedAvatar(me.user.avatarUrl)} />
+                  : accountLabel.trim().charAt(0).toUpperCase() || '?'}
+              </div>
+              <span title={accountLabel}>{me.email ?? `@${me.user.login}`}</span>
               <button
                 className="icon-button"
                 onClick={() => void onLogout()}
