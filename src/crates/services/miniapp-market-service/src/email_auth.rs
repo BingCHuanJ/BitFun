@@ -8,8 +8,9 @@ use crate::{
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use lettre::{
-    message::Mailbox, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
-    AsyncTransport, Message, Tokio1Executor,
+    message::{header::ContentType, Mailbox},
+    transport::smtp::authentication::Credentials,
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use rand::{rngs::OsRng, Rng};
 use serde::{Deserialize, Serialize};
@@ -66,10 +67,7 @@ impl Mailer {
         }))
     }
     async fn send(&self, email: &str, code: &str) -> MarketResult<()> {
-        let message = Message::builder().from(self.from.clone()).to(email.parse().map_err(|_| invalid_email())?)
-            .subject("OpenBitFun sign-in verification code")
-            .body(format!("Your OpenBitFun verification code is: {code}\n\nIt expires in 10 minutes and can only be used once. Do not share this code.\nIf you did not request it, ignore this email.\n\nOpenBitFun"))
-            .map_err(|_| MarketError::internal("Could not compose verification email"))?;
+        let message = verification_message(self.from.clone(), email, code)?;
         tokio::time::timeout(
             std::time::Duration::from_secs(20),
             self.transport.send(message),
@@ -80,6 +78,16 @@ impl Mailer {
         Ok(())
     }
 }
+fn verification_message(from: Mailbox, email: &str, code: &str) -> MarketResult<Message> {
+    Message::builder()
+        .from(from)
+        .to(email.parse().map_err(|_| invalid_email())?)
+        .subject("OpenBitFun 登录验证码 / Sign-in code")
+        .header(ContentType::TEXT_PLAIN)
+        .body(format!("你的 OpenBitFun 登录验证码是：{code}\n\n验证码 10 分钟内有效，仅可使用一次。请勿向他人透露。\n如非本人操作，请忽略此邮件。\n\nYour OpenBitFun verification code is: {code}\nIt expires in 10 minutes and can only be used once. Do not share this code.\nIf you did not request it, ignore this email.\n\nOpenBitFun"))
+        .map_err(|_| MarketError::internal("Could not compose verification email"))
+}
+
 fn delivery_error() -> MarketError {
     MarketError::service_unavailable(
         "email_delivery_failed",
@@ -674,6 +682,29 @@ mod tests {
         assert!(cookies.iter().all(|v| !v.contains("Domain=")));
         assert!(cookies.iter().any(|v| v.contains("Path=/skin")));
         assert!(cookies.iter().any(|v| v.contains("Path=/miniapp")));
+    }
+
+    #[test]
+    fn verification_email_declares_inline_utf8_text() {
+        let message = verification_message(
+            "OpenBitFun <hello@example.com>".parse().unwrap(),
+            "alice@example.com",
+            "123456",
+        )
+        .unwrap();
+        let raw = String::from_utf8(message.formatted()).unwrap();
+        assert!(raw.contains("Content-Type: text/plain; charset=utf-8\r\n"));
+        assert!(!raw.contains("application/octet-stream"));
+        assert!(!raw.contains("Content-Disposition: attachment"));
+        use base64::Engine;
+        assert!(raw.contains("Content-Transfer-Encoding: base64"));
+        let body = raw.split_once("\r\n\r\n").unwrap().1;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(body.split_whitespace().collect::<String>())
+            .unwrap();
+        let text = String::from_utf8(decoded).unwrap();
+        assert!(text.contains("Your OpenBitFun verification code is: 123456"));
+        assert!(text.contains("你的 OpenBitFun 登录验证码是：123456"));
     }
 
     #[test]
