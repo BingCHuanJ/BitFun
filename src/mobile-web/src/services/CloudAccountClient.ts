@@ -104,7 +104,7 @@ export class CloudAccountClient {
       if (result.status === 'authorized' && result.tokens?.accessToken) return result.tokens.accessToken;
       if (result.status === 'expired' || result.status === 'denied') break;
     }
-    throw new Error(signal.aborted ? 'Sign-in cancelled.' : 'GitHub sign-in expired. Try again.');
+    throw new Error(signal.aborted ? 'Sign-in cancelled.' : 'Sign-in expired. Try again.');
   }
 
   async login(accessToken: string, deviceId: string, browserPrivateKey: Uint8Array): Promise<CloudAccountSession> {

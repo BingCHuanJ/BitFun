@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowRight, ChevronDown, Globe, Github, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { marketApi } from './api';
 import { useLocale } from './i18n';
 
@@ -57,19 +58,31 @@ export function AccountSignIn() {
       window.location.assign(url.href);
     } catch (cause) { showError(cause); setBusy(false); }
   }
-  return <main className="form-page"><section className="auth-gate account-sign-in">
-    <h1>{t('accountSignIn')}</h1><p>{t('emailLoginIntro')}</p>
-    <select aria-label={t('language')} value={locale} onChange={event => setLocale(event.target.value as typeof locale)}>
-      <option value="en-US">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option>
-    </select>
-    {emailEnabled && <form onSubmit={challenge ? verify : send}>
-      <label>{t('emailAddress')}<input type="email" autoComplete="email" required maxLength={254} value={email} disabled={busy || !!challenge} onChange={event => setEmail(event.target.value)} /></label>
-      {challenge && <><p role="status">{t('emailCodeSent')}</p><label>{t('emailCode')}<input autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} required value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} /></label></>}
-      <button className="button primary" type="submit" disabled={busy || !ticket}>{t(challenge ? 'emailVerify' : 'emailSendCode')}</button>
-      {challenge && <><button className="button" type="button" disabled={busy || now < retryAt} onClick={() => void send()}>{t(now < retryAt ? 'emailResendWait' : 'emailResend')}</button><button className="button" type="button" disabled={busy} onClick={() => { setChallenge(''); setCode(''); setError(''); }}>{t('emailChange')}</button></>}
-    </form>}
-    {githubEnabled && <button className="button" disabled={busy || !ticket} onClick={() => void github()}>{t('githubSignIn')}</button>}
-    {!!ticket && !emailEnabled && !githubEnabled && <p>{t('emailUnavailable')}</p>}
-    {error && <p role="alert">{error}</p>}
-  </section></main>;
+  return <main className="account-auth-page"><div className="account-auth-shell">
+    <header className="account-auth-header">
+      <div className="account-auth-brand"><img src="/miniapp/assets/openbitfun-email-app-icon.png" alt="" width="36" height="36" /><span>OpenBitFun</span></div>
+      <div className="account-auth-language"><Globe size={16} aria-hidden="true" />
+        <select aria-label={t('language')} value={locale} onChange={event => setLocale(event.target.value as typeof locale)}>
+          <option value="en-US">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option>
+        </select><ChevronDown size={14} aria-hidden="true" />
+      </div>
+    </header>
+    <section className="account-sign-in" aria-labelledby="account-sign-in-title" aria-busy={busy}>
+      <div className="account-auth-symbol"><KeyRound size={24} aria-hidden="true" /></div>
+      <h1 id="account-sign-in-title">{t('accountSignIn')}</h1><p className="account-auth-intro">{t('emailLoginIntro')}</p>
+      {!ticket && !error && <p role="status">{t('emailResendWait')}</p>}
+      {emailEnabled && <form onSubmit={challenge ? verify : send}>
+        <label htmlFor="sign-in-email">{t('emailAddress')}</label>
+        <div className="account-auth-field"><Mail size={18} aria-hidden="true" /><input id="sign-in-email" type="email" autoComplete="email" placeholder="you@example.com" required maxLength={254} value={email} disabled={busy || !!challenge} onChange={event => setEmail(event.target.value)} /></div>
+        {challenge && <><p className="account-auth-notice" role="status">{t('emailCodeSent')}</p><label htmlFor="sign-in-code">{t('emailCode')}</label><div className="account-auth-field"><KeyRound size={18} aria-hidden="true" /><input id="sign-in-code" className="account-auth-code" autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} required value={code} disabled={busy} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} /></div></>}
+        <button className="account-auth-button account-auth-button--primary" type="submit" disabled={busy || !ticket}>{t(busy ? 'emailResendWait' : challenge ? 'emailVerify' : 'emailSendCode')}<ArrowRight size={18} aria-hidden="true" /></button>
+        {challenge && <div className="account-auth-links"><button type="button" disabled={busy || now < retryAt} onClick={() => void send()}>{t(now < retryAt ? 'emailResendWait' : 'emailResend')}</button><button type="button" disabled={busy} onClick={() => { setChallenge(''); setCode(''); setError(''); }}>{t('emailChange')}</button></div>}
+      </form>}
+      {emailEnabled && githubEnabled && <div className="account-auth-divider"><span>{t('authOr')}</span></div>}
+      {githubEnabled && <button className="account-auth-button" disabled={busy || !ticket} onClick={() => void github()}><Github size={20} aria-hidden="true" />{t('githubSignIn')}</button>}
+      {!!ticket && !emailEnabled && !githubEnabled && <p>{t('emailUnavailable')}</p>}
+      {error && <p className="account-auth-error" role="alert">{error}</p>}
+    </section>
+    <p className="account-auth-footer"><ShieldCheck size={16} aria-hidden="true" />{t('authPrivate')}</p>
+  </div></main>;
 }
