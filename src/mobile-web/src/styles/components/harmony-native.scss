@@ -54,6 +54,8 @@
 }
 
 .remote-home__heading h2 {
+  width: 100%;
+  max-width: none;
   margin: 0;
   color: var(--openbitfun-color-content-primary);
   font-size: var(--openbitfun-type-flow-section-title-font-size);
@@ -343,7 +345,7 @@
 }
 
 .harmony-sidebar__device-row.is-current .harmony-sidebar__row-label {
-  font-weight: var(--openbitfun-type-label-lg-font-weight);
+  font-weight: var(--openbitfun-font-weight-bold);
 }
 
 .harmony-sidebar__status {
@@ -1488,9 +1490,16 @@
   height: 100%;
 }
 
-.harmony-sidebar__device-row .harmony-sidebar__row-label,
-.harmony-sidebar__session-main .harmony-sidebar__row-label {
+.harmony-sidebar__device-row .harmony-sidebar__row-label {
   font-size: var(--openbitfun-type-body-md-font-size);
+}
+
+.harmony-sidebar__session-main .harmony-sidebar__row-label {
+  font-size: var(--openbitfun-type-body-sm-font-size);
+}
+
+.harmony-sidebar__workspace-session.is-current .harmony-sidebar__row-label {
+  font-weight: var(--openbitfun-font-weight-bold);
 }
 
 .harmony-sidebar__device-icon svg,
