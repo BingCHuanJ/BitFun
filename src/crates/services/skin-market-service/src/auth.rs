@@ -26,6 +26,8 @@ pub(crate) struct AuthenticatedIdentity {
 #[serde(rename_all = "camelCase")]
 struct IdentityResponse {
     user: AppearanceMarketUserSummary,
+    #[serde(default)]
+    email: Option<String>,
     is_admin: bool,
 }
 
@@ -117,9 +119,21 @@ impl IdentityVerifier {
                 "The identity service rejected the verification request.",
             ));
         }
-        let identity: IdentityResponse = response.json().await.map_err(|_| {
+        let mut identity: IdentityResponse = response.json().await.map_err(|_| {
             SkinMarketError::unavailable("The identity service returned an invalid response.")
         })?;
+        // Preserve the authority's protocol handle for older relays; only this
+        // marketplace's public author projection uses the verified email.
+        if identity.user.github_id == 0 {
+            if let Some(email) = identity.email.filter(|email| !email.is_empty()) {
+                if email.len() > 254 || email.chars().any(char::is_control) {
+                    return Err(SkinMarketError::unavailable(
+                        "The identity service returned an invalid email.",
+                    ));
+                }
+                identity.user.login = email;
+            }
+        }
         if identity.user.identity_id().is_none()
             || identity.user.login.trim().is_empty()
             || identity.user.login.len() > 254

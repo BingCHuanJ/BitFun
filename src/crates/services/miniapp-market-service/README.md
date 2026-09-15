@@ -193,6 +193,9 @@ then run `cargo test -p openbitfun-miniapp-market-service --lib email_auth::test
 and a real message render check after SMTP/template changes.
 
 Marketplace author labels are public: email accounts display their full verified
-email address in `user.login`, listing owners, and moderation submitters. GitHub
+email address in listing owners and moderation submitters. The authenticated
+`/me` profile keeps its legacy `user.login` protocol handle and exposes the
+verified address separately as `email`; older relays require that handle format.
+Skin uses the separate email for its public author projection. GitHub
 accounts retain their GitHub login. Ownership and authorization use internal IDs,
 never the displayed label; this does not link email and GitHub accounts.

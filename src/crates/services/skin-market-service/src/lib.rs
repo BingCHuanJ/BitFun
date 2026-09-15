@@ -148,7 +148,7 @@ mod tests {
             .unwrap_or_default();
         let (github_id, login, is_admin) = match token {
             "Bearer owner-token" => (41, "owner", false),
-            "Bearer email-token" => (0, "author@example.com", false),
+            "Bearer email-token" => (0, "user-legacy-handle", false),
             "Bearer admin-token" => (42, "admin", true),
             _ => {
                 return (
@@ -166,6 +166,7 @@ mod tests {
                     "login": login,
                     "avatarUrl": "https://example.invalid/avatar"
                 },
+                "email": if github_id == 0 { Some("author@example.com") } else { None },
                 "isAdmin": is_admin
             })),
         )
