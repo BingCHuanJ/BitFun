@@ -2278,3 +2278,69 @@ img {
     justify-content: center;
   }
 }
+
+.search-field > .market-input[data-openbitfun-component='input'] {
+  flex: 1;
+  min-width: 0;
+  block-size: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.market-input[data-openbitfun-component='input'] > input {
+  font: inherit;
+  letter-spacing: inherit;
+  height: auto;
+}
+
+/* Textarea owns a wrapper; keep the native editor filling its form column. */
+.market-textarea[data-openbitfun-component="textarea"] {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+.market-textarea > textarea {
+  min-block-size: 0;
+  letter-spacing: inherit;
+}
+
+/* Keep each surface's control geometry while using shared button semantics. */
+:where([data-openbitfun-component="button"]) {
+  display: inline-block;
+  block-size: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: normal;
+}
+:where([data-openbitfun-component="icon-button"]) {
+  inline-size: auto;
+  block-size: auto;
+}
+[data-openbitfun-component="button"]::before,
+[data-openbitfun-component="icon-button"]::before {
+  content: none;
+}
+/* Rich labels (previews, review cards, icon + text) retain the root layout. */
+[data-openbitfun-component="button"] > [data-openbitfun-part="content"],
+[data-openbitfun-component="button"] > [data-openbitfun-part="content"] > [data-openbitfun-part="label"] {
+  display: contents;
+  white-space: inherit;
+}
+[data-openbitfun-component="icon-button"] > [data-openbitfun-part="icon"] {
+  position: static;
+  inline-size: auto;
+  block-size: auto;
+}
+[data-openbitfun-component="icon-button"] > [data-openbitfun-part="icon"] > svg {
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+.header-actions > [data-openbitfun-component="icon-button"] > [data-openbitfun-part="icon"] > svg {
+  inline-size: 20px;
+  block-size: 20px;
+}

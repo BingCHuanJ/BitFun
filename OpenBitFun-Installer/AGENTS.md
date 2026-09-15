@@ -48,6 +48,7 @@ Use the smallest matching check:
 pnpm run i18n:audit                                                   # resource-only i18n
 pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit
 pnpm --dir OpenBitFun-Installer run type-check                            # frontend i18n/runtime
+pnpm --dir OpenBitFun-Installer run test                                  # frontend control interactions
 cargo check --manifest-path OpenBitFun-Installer/src-tauri/Cargo.toml      # Tauri/Rust changes
 ```
 

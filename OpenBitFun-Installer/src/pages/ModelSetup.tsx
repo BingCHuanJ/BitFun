@@ -297,6 +297,7 @@ export function ModelSetup({ options, setOptions, onSkip, onNext, onTestConnecti
                 value={selectedProviderId}
                 options={providerOptions}
                 placeholder={t('model.selectProvider')}
+                aria-label={t('model.providerLabel')}
                 onValueChange={(value) => handleProviderSelect(String(value))}
               />
             </Field>
@@ -340,6 +341,7 @@ export function ModelSetup({ options, setOptions, onSkip, onNext, onTestConnecti
                       value={template?.baseUrlOptions?.some((option) => option.url === effectiveBaseUrl) ? effectiveBaseUrl : ''}
                       options={baseUrlOptions}
                       placeholder={t('model.baseUrlPlaceholder')}
+                      aria-label={t('model.endpointPreset')}
                       onValueChange={(value) => handleBaseUrlOptionSelect(String(value))}
                     />
                   </Field>
@@ -351,8 +353,9 @@ export function ModelSetup({ options, setOptions, onSkip, onNext, onTestConnecti
                       value={modelSelectionValue}
                       options={modelOptions}
                       placeholder={t('model.modelNameSelectPlaceholder')}
-                      disabled={isFetchingRemoteModels}
-                      onOpenChange={(open) => { if (open && !previewOnly) void fetchRemoteModels(); }}
+                      aria-label={t('model.form.modelSelection')}
+                      aria-busy={isFetchingRemoteModels}
+                      onOpenChange={(open) => { if (open && !previewOnly && !isFetchingRemoteModels) void fetchRemoteModels(); }}
                       onValueChange={(value) => {
                         const next = String(value);
                         if (next === CUSTOM_MODEL_OPTION) {
@@ -413,6 +416,7 @@ export function ModelSetup({ options, setOptions, onSkip, onNext, onTestConnecti
                         value={isCustomProvider ? customFormat : apiFormat}
                         options={formatSelectOptions}
                         placeholder={t('model.form.providerPlaceholder')}
+                        aria-label={t('model.form.provider')}
                         onValueChange={(value) => {
                           const format = value as RequestFormatValue;
                           if (isCustomProvider) setCustomFormat(format);

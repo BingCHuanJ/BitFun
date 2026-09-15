@@ -26,7 +26,8 @@
     "installer:build:only": "node scripts/build-installer.cjs --skip-app-build",
     "installer:build:only:fast": "node scripts/build-installer.cjs --skip-app-build --mode fast",
     "installer:dev": "node scripts/build-installer.cjs --dev",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run src"
   },
   "dependencies": {
     "@openbitfun/theme-openbitfun": "workspace:^",
@@ -46,6 +47,8 @@
     "@vitejs/plugin-react": "^4.6.0",
     "terser": "^5.46.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.0",
+    "jsdom": "^29.0.1"
   }
 }

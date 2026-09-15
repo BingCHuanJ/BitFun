@@ -26,6 +26,7 @@ The server generates variants lazily, stores them beside the content-addressed
 original, and serves public variants with immutable cache headers.
 
 ```bash
+pnpm --dir design-system run build:packages # First run or after shared theme/UI changes
 pnpm --dir src/skin-market-web dev
 pnpm --dir src/skin-market-web type-check
 pnpm --dir src/skin-market-web test

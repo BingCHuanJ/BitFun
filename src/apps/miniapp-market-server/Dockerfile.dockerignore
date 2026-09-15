@@ -11,6 +11,9 @@
 
 !design-system/
 !design-system/LICENSE
+!design-system/tsconfig.base.json
+!design-system/packages/ui/
+!design-system/packages/ui/**
 !design-system/packages/
 !design-system/packages/design-tokens/
 !design-system/packages/design-tokens/package.json
