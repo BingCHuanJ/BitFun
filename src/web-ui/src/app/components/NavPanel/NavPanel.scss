@@ -2236,9 +2236,9 @@ $_section-header-height: 22px;
   &::after {
     content: '';
     position: absolute;
-    left: 0;
+    left: var(--openbitfun-space-2);
+    right: var(--openbitfun-space-2);
     bottom: 0;
-    width: 100vw;
     border-bottom: 1px solid;
     @include shell-surfaces.sidebar-hairline-color;
     pointer-events: none;
