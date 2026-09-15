@@ -568,7 +568,7 @@ mod tests {
         assert_eq!(user.profile.github_id, 0);
         assert_eq!(user.email.as_deref(), Some("alice@example.com"));
         assert_eq!(github.email, None);
-        assert!(!user.profile.login.contains('@'));
+        assert_eq!(user.profile.login, "alice@example.com");
         assert!(user.profile.identity_id().unwrap().starts_with("email-"));
         assert!(!service.is_admin(&user));
         let poll = service
@@ -1009,7 +1009,7 @@ mod tests {
             serde_json::from_slice(&to_bytes(response.into_body(), 16384).await.unwrap()).unwrap();
         assert_eq!(profile["email"], "alice@example.com");
         assert!(profile["user"].get("email").is_none());
-        assert!(!profile["user"]["login"].as_str().unwrap().contains('@'));
+        assert_eq!(profile["user"]["login"], "alice@example.com");
     }
 
     #[test]

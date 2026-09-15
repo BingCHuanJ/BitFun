@@ -334,7 +334,7 @@ async fn list_listings(
         "SELECT l.id AS listing_id, l.slug, r.id AS release_id, r.release_number,
                 r.metadata_json, r.package_sha256, r.package_size,
                 r.review_bundle_hash, r.published_at,
-                u.id AS owner_identity_id, u.github_id, u.login, u.avatar_url,
+                u.id AS owner_identity_id, u.github_id, COALESCE((SELECT email FROM email_identities WHERE user_id = u.id AND u.github_id IS NULL), u.login) AS login, u.avatar_url,
                 COALESCE((SELECT AVG(value) FROM ratings WHERE listing_id = l.id), 0.0) AS rating_average,
                 (SELECT COUNT(*) FROM ratings WHERE listing_id = l.id) AS rating_count,
                 (SELECT COUNT(*) FROM favorites WHERE listing_id = l.id) AS favorite_count,
@@ -1363,7 +1363,7 @@ async fn listing_detail_by_slug(
         "SELECT l.id AS listing_id, l.slug, r.id AS release_id, r.release_number,
                 r.metadata_json, r.package_sha256, r.package_size,
                 r.review_bundle_hash, r.published_at,
-                u.id AS owner_identity_id, u.github_id, u.login, u.avatar_url,
+                u.id AS owner_identity_id, u.github_id, COALESCE((SELECT email FROM email_identities WHERE user_id = u.id AND u.github_id IS NULL), u.login) AS login, u.avatar_url,
                 COALESCE((SELECT AVG(value) FROM ratings WHERE listing_id = l.id), 0.0) AS rating_average,
                 (SELECT COUNT(*) FROM ratings WHERE listing_id = l.id) AS rating_count,
                 (SELECT COUNT(*) FROM favorites WHERE listing_id = l.id) AS favorite_count,
@@ -1465,7 +1465,7 @@ async fn admin_submission_by_id(
                 s.package_size AS package_size, s.rejection_reason AS rejection_reason,
                 s.created_at AS created_at, s.updated_at AS updated_at,
                 s.owner_user_id AS owner_user_id, s.submitted_at AS submitted_at,
-                u.github_id AS submitter_github_id, u.login AS submitter_login,
+                u.github_id AS submitter_github_id, COALESCE((SELECT email FROM email_identities WHERE user_id = u.id AND u.github_id IS NULL), u.login) AS submitter_login,
                 u.avatar_url AS submitter_avatar_url
          FROM submissions s
          JOIN users u ON u.id = s.owner_user_id
@@ -1590,7 +1590,7 @@ async fn list_admin_submission_summaries(
                 s.package_size AS package_size, s.rejection_reason AS rejection_reason,
                 s.created_at AS created_at, s.updated_at AS updated_at,
                 s.owner_user_id AS owner_user_id, s.submitted_at AS submitted_at,
-                u.github_id AS submitter_github_id, u.login AS submitter_login,
+                u.github_id AS submitter_github_id, COALESCE((SELECT email FROM email_identities WHERE user_id = u.id AND u.github_id IS NULL), u.login) AS submitter_login,
                 u.avatar_url AS submitter_avatar_url
          FROM submissions s
          JOIN users u ON u.id = s.owner_user_id
@@ -2707,6 +2707,148 @@ mod tests {
                 .await
                 .unwrap(),
             original_owner.internal_id,
+        );
+    }
+
+    #[tokio::test]
+    async fn email_owner_can_upload_submit_and_publish_with_public_email() {
+        use std::io::{Cursor, Write};
+        let temporary = tempfile::tempdir().unwrap();
+        let config = MarketConfig {
+            bind: "127.0.0.1:0".parse().unwrap(),
+            public_base_url: "https://market.openbitfun.com/miniapp".to_string(),
+            database_path: temporary.path().join("market.sqlite"),
+            artifact_dir: temporary.path().join("artifacts"),
+            web_dir: temporary.path().join("web"),
+            github_callback_url: None,
+            github_client_id: Some("client-id".to_string()),
+            github_client_secret: Some("client-secret".to_string()),
+            session_secret: "test-session-secret-at-least-24".to_string(),
+            admin_github_ids: HashSet::from([24753352]),
+            public_browse: true,
+            web_submissions_enabled: false,
+        };
+        let db = Database::open(&config.database_path).await.unwrap();
+        let artifacts = ArtifactStore::open(config.artifact_dir.clone())
+            .await
+            .unwrap();
+        let auth = AuthService::new(config.clone(), db.clone()).unwrap();
+        let state = Arc::new(MarketState {
+            config,
+            db: db.clone(),
+            artifacts,
+            auth,
+        });
+
+        let owner_id = sqlx::query("INSERT INTO users(github_id, login, avatar_url, created_at, updated_at) VALUES(NULL, 'user-legacy', '', 0, 0)")
+            .execute(db.pool()).await.unwrap().last_insert_rowid();
+        sqlx::query("INSERT INTO email_identities(email, user_id, verified_at) VALUES('author@example.com', ?, 0)")
+            .bind(owner_id).execute(db.pool()).await.unwrap();
+        db.create_api_token(
+            owner_id,
+            "email-token",
+            "access",
+            "email-family",
+            (Utc::now() + chrono::Duration::hours(1)).timestamp(),
+        )
+        .await
+        .unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer email-token"),
+        );
+        let draft = serde_json::from_value(serde_json::json!({
+            "slug":"email-owner-app", "releaseNumber":1, "name":"Email App",
+            "description":"A safe email account submission.", "icon":"box", "category":"developer",
+            "tags":["test"], "minOpenBitFunVersion":"1.0.0", "changelog":"Initial release",
+            "license":{"spdxExpression":"MIT"}
+        }))
+        .unwrap();
+        let submission = create_submission(State(state.clone()), headers.clone(), Json(draft))
+            .await
+            .unwrap()
+            .0;
+        let id = submission.submission_id;
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (path, content) in [
+            (
+                "meta.json",
+                r#"{"name":"Email App","description":"Safe test app","icon":"box","category":"developer","tags":[],"version":1,"permissions":{"node":{"enabled":false}}}"#,
+            ),
+            ("source/index.html", "<html><body>Test</body></html>"),
+            ("source/style.css", "body { margin: 0; }"),
+            ("source/ui.js", "document.body.dataset.ready = '1';"),
+            ("source/worker.js", "module.exports = {};"),
+            ("source/esm_dependencies.json", "[]"),
+        ] {
+            archive
+                .start_file(path, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(content.as_bytes()).unwrap();
+        }
+        let package = archive.finish().unwrap().into_inner();
+        upload_submission_package(
+            State(state.clone()),
+            headers.clone(),
+            Path(id.clone()),
+            Bytes::from(package),
+        )
+        .await
+        .unwrap();
+        let mut screenshot = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgba8(800, 400)
+            .write_to(&mut screenshot, image::ImageFormat::Png)
+            .unwrap();
+        upload_submission_screenshot(
+            State(state.clone()),
+            headers.clone(),
+            Path((id.clone(), 0)),
+            Bytes::from(screenshot.into_inner()),
+        )
+        .await
+        .unwrap();
+        let submitted = submit_submission(State(state.clone()), headers.clone(), Path(id.clone()))
+            .await
+            .unwrap()
+            .0;
+        assert_eq!(submitted.status, MarketSubmissionStatus::Submitted);
+        let review = admin_submission_by_id(state.as_ref(), &id).await.unwrap();
+        assert_eq!(review.submitter.login, "author@example.com");
+        assert_eq!(review.submitter.github_id, 0);
+        let admin = db.upsert_github_user(24753352, "admin", "").await.unwrap();
+        approve_submission(state.as_ref(), &admin, &id)
+            .await
+            .unwrap();
+        let detail = listing_detail_by_slug(state.as_ref(), "email-owner-app", owner_id)
+            .await
+            .unwrap();
+        assert_eq!(detail.summary.owner.login, "author@example.com");
+        assert_eq!(detail.summary.owner.github_id, 0);
+        use tower::ServiceExt;
+        let downloaded = api_router(state.clone())
+            .oneshot(
+                Request::builder()
+                    .uri("/listings/email-owner-app/releases/1/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(downloaded.status(), StatusCode::OK);
+        let authenticated = state.auth.require_auth(&headers).await.unwrap();
+        assert!(!state.auth.is_admin(&authenticated.user));
+        assert_eq!(
+            validate_listing_ownership_and_release(
+                state.as_ref(),
+                &authenticated.user,
+                Some(&detail.summary.listing_id),
+                "email-owner-app",
+                2
+            )
+            .await
+            .unwrap(),
+            Some(detail.summary.listing_id)
         );
     }
 

@@ -145,7 +145,7 @@
       "customizing": "定制中",
       "local": "本地",
       "version": "v{{version}}",
-      "marketMeta": "作者 @{{owner}} · 评分 {{rating}} · {{downloads}} 次下载",
+      "marketMeta": "作者 {{owner}} · 评分 {{rating}} · {{downloads}} 次下载",
       "localMeta": "位于此设备",
       "viewDetails": "查看“{{name}}”详情",
       "showcaseAlt": "{{name}} 展示图",
@@ -173,7 +173,7 @@
     "detail": {
       "loading": "加载详情…",
       "reviewed": "人工审核",
-      "by": "作者 @{{owner}}",
+      "by": "作者 {{owner}}",
       "install": "安装",
       "update": "更新",
       "installed": "已安装",

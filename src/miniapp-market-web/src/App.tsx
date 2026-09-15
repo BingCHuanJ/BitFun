@@ -649,7 +649,7 @@ function AppCard({
           <div>
             <h2>{localized.name}</h2>
             <p className="owner">
-              {t('by')} @{app.owner.login}
+              {t('by')} {app.owner.githubId > 0 ? `@${app.owner.login}` : app.owner.login}
             </p>
           </div>
         </div>
@@ -763,7 +763,7 @@ function DetailPage({
             <div>
               <h1>{localized.name}</h1>
               <p className="detail-owner">
-                <span>@{app.owner.login}</span>
+                <span>{app.owner.githubId > 0 ? `@${app.owner.login}` : app.owner.login}</span>
                 <span>{t('version')} {app.latestRelease}</span>
               </p>
             </div>
@@ -1322,7 +1322,7 @@ function AdminPage({
                   <span>v{item.releaseNumber}</span>
                 </small>
                 <small className="review-submission-meta">
-                  <span>{item.submitter ? `@${item.submitter.login}` : '—'}</span>
+                  <span>{item.submitter ? (item.submitter.githubId > 0 ? `@${item.submitter.login}` : item.submitter.login) : '—'}</span>
                   <span>
                     {item.submittedAt == null
                       ? '—'
@@ -1356,7 +1356,7 @@ function AdminPage({
               <div className="review-evidence-grid">
                 <Fact
                   label={t('submitterLabel')}
-                  value={selected.submitter ? `@${selected.submitter.login}` : '—'}
+                  value={selected.submitter ? (selected.submitter.githubId > 0 ? `@${selected.submitter.login}` : selected.submitter.login) : '—'}
                 />
                 <Fact
                   label={t('submittedAtLabel')}
