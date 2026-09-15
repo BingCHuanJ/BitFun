@@ -319,7 +319,7 @@ impl AuthService {
         self.login_flow(&request.ticket).await?;
         let now = Utc::now().timestamp();
         let id = random_token(24);
-        let code = format!("{:06}", OsRng.gen_range(0..1_000_000u32));
+        let code = format!("{:08}", OsRng.gen_range(0..100_000_000u32));
         let mut tx = self
             .db
             .pool()
@@ -350,7 +350,7 @@ impl AuthService {
         &self,
         request: EmailVerifyRequest,
     ) -> MarketResult<CompletedOAuth> {
-        if request.code.len() != 6 || !request.code.bytes().all(|b| b.is_ascii_digit()) {
+        if request.code.len() != 8 || !request.code.bytes().all(|b| b.is_ascii_digit()) {
             return Err(invalid_code());
         }
         let flow = self.login_flow(&request.ticket).await?;
@@ -608,7 +608,11 @@ mod tests {
             .verify_email_code(verify(&b, &id, &code))
             .await
             .is_err());
-        let wrong = if code == "000000" { "111111" } else { "000000" };
+        let wrong = if code == "00000000" {
+            "11111111"
+        } else {
+            "00000000"
+        };
         for _ in 0..5 {
             assert!(service
                 .verify_email_code(verify(&a, &id, wrong))
@@ -626,11 +630,57 @@ mod tests {
         assert_eq!(count.0, 0);
     }
     #[tokio::test]
+    async fn only_eight_digits_are_issued_and_accepted_including_leading_zeroes() {
+        let (_dir, service) = setup().await;
+        for expected in ["00000000", "01234567", "99999999"] {
+            let ticket = service.start_web_login("/miniapp/").await.unwrap();
+            let (id, generated) = code(&service, &ticket, &format!("{expected}@example.com")).await;
+            assert_eq!(generated.len(), 8);
+            assert!(generated.bytes().all(|byte| byte.is_ascii_digit()));
+            // Verify edge values without relying on random generation to produce them.
+            sqlx::query("UPDATE email_challenges SET code_hash = ? WHERE id = ?")
+                .bind(code_digest(&service.config.session_secret, &id, expected))
+                .bind(&id)
+                .execute(service.db.pool())
+                .await
+                .unwrap();
+            for malformed in [
+                "12345",
+                "123456",
+                "1234567",
+                "123456789",
+                "abcdefgh",
+                "１２３４５６７８",
+            ] {
+                assert!(service
+                    .verify_email_code(verify(&ticket, &id, malformed))
+                    .await
+                    .is_err());
+            }
+            // Shorter prefixes are never accepted as an equivalent code.
+            if expected.len() > 6 {
+                assert!(service
+                    .verify_email_code(verify(&ticket, &id, &expected[..6]))
+                    .await
+                    .is_err());
+            }
+            service
+                .verify_email_code(verify(&ticket, &id, expected))
+                .await
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
     async fn concurrent_wrong_codes_share_a_persistent_attempt_budget() {
         let (dir, service) = setup().await;
         let ticket = service.start_web_login("/miniapp/").await.unwrap();
         let (id, code) = code(&service, &ticket, "alice@example.com").await;
-        let wrong = if code == "000000" { "111111" } else { "000000" };
+        let wrong = if code == "00000000" {
+            "11111111"
+        } else {
+            "00000000"
+        };
         for _ in 0..4 {
             assert_eq!(
                 service
