@@ -96,6 +96,14 @@ The `devtools` Cargo feature exists for debugging UI/UX in the desktop app. When
 
 ## Verification
 
+For macOS microphone signing metadata, run
+`plutil -lint src/apps/desktop/Info.plist src/apps/desktop/Entitlements.plist`
+and `node --test scripts/ci/verify-macos-microphone.test.mjs` on macOS.
+For metadata-only changes, these focused checks replace the Rust build/test commands below.
+Before distributing, run `bash scripts/ci/verify-macos-microphone.sh <signed-app-bundle>`
+(also required by the release signing verification), then verify microphone consent
+and recording in the signed app on macOS. Ad-hoc fixture tests do not prove TCC behavior.
+
 ```bash
 cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 ```
