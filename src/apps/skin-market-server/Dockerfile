@@ -41,6 +41,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock ./
+COPY third_party/eioc/ third_party/eioc/
 COPY src/ src/
 
 RUN --mount=type=cache,id=openbitfun-skin-market-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
