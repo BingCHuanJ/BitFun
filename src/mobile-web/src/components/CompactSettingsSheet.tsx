@@ -32,6 +32,7 @@ interface CompactSettingsSheetProps {
   isDark: boolean;
   onClose: () => void;
   onDisconnectRequest: () => void;
+  onOpenDevices?: () => void;
   onSelectDevice: (device: SettingsDevice) => void;
   onToggleTheme: () => void;
   open: boolean;
@@ -55,6 +56,7 @@ export default function CompactSettingsSheet({
   isDark,
   onClose,
   onDisconnectRequest,
+  onOpenDevices,
   onSelectDevice,
   onToggleTheme,
   open,
@@ -84,6 +86,12 @@ export default function CompactSettingsSheet({
           </span>
           {accountLabel && <MobileBadge className="harmony-sidebar__verified" tone="success">{t('settings.signedIn')}</MobileBadge>}
         </MobileCard>
+
+        {onOpenDevices && (
+          <MobileButton appearance="plain" block onClick={onOpenDevices} aria-label={t('devices.title')}>
+            {t('devices.title')}
+          </MobileButton>
+        )}
 
         <h3>{t('settings.generalSection')}</h3>
         <MobileCard padding="none" className="harmony-sidebar__settings-card">
