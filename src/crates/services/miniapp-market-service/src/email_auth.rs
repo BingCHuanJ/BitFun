@@ -626,6 +626,101 @@ mod tests {
         assert_eq!(count.0, 0);
     }
     #[tokio::test]
+    async fn concurrent_wrong_codes_share_a_persistent_attempt_budget() {
+        let (dir, service) = setup().await;
+        let ticket = service.start_web_login("/miniapp/").await.unwrap();
+        let (id, code) = code(&service, &ticket, "alice@example.com").await;
+        let wrong = if code == "000000" { "111111" } else { "000000" };
+        for _ in 0..4 {
+            assert_eq!(
+                service
+                    .verify_email_code(verify(&ticket, &id, wrong))
+                    .await
+                    .unwrap_err()
+                    .code,
+                invalid_code().code
+            );
+        }
+        // Reopen the database as a restarted process, then race for the final attempt.
+        let restarted = AuthService::new(
+            service.config.clone(),
+            Database::open(&dir.path().join("db")).await.unwrap(),
+        )
+        .unwrap();
+        let (a, b, c) = tokio::join!(
+            service.verify_email_code(verify(&ticket, &id, wrong)),
+            restarted.verify_email_code(verify(&ticket, &id, wrong)),
+            restarted.verify_email_code(verify(&ticket, &id, wrong)),
+        );
+        for result in [a, b, c] {
+            assert_eq!(result.unwrap_err().code, invalid_code().code);
+        }
+        let attempts: i64 =
+            sqlx::query_scalar("SELECT attempts FROM email_challenges WHERE id = ?")
+                .bind(&id)
+                .fetch_one(restarted.db.pool())
+                .await
+                .unwrap();
+        assert_eq!(attempts, 5);
+        assert!(restarted
+            .verify_email_code(verify(&ticket, &id, &code))
+            .await
+            .is_err());
+        let sessions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM web_sessions")
+            .fetch_one(restarted.db.pool())
+            .await
+            .unwrap();
+        assert_eq!(sessions, 0);
+    }
+
+    #[tokio::test]
+    async fn new_flows_and_concurrent_sends_cannot_reset_address_quota() {
+        let (_dir, service) = setup().await;
+        let a = service.start_web_login("/miniapp/").await.unwrap();
+        let b = service.start_web_login("/skin/").await.unwrap();
+        let send = |ticket: &str| EmailSendRequest {
+            ticket: ticket.into(),
+            email: "ALICE@example.com".into(),
+            locale: None,
+        };
+        let (first, second) = tokio::join!(
+            service.prepare_email_code(send(&a)),
+            service.prepare_email_code(send(&b)),
+        );
+        assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
+        assert_eq!(
+            first.err().or(second.err()).unwrap().code,
+            "email_rate_limit"
+        );
+        for _ in 1..10 {
+            sqlx::query("UPDATE email_challenges SET created_at = created_at - 61")
+                .execute(service.db.pool())
+                .await
+                .unwrap();
+            let ticket = service.start_web_login("/miniapp/").await.unwrap();
+            service.prepare_email_code(send(&ticket)).await.unwrap();
+        }
+        sqlx::query("UPDATE email_challenges SET created_at = created_at - 61")
+            .execute(service.db.pool())
+            .await
+            .unwrap();
+        let ticket = service.start_web_login("/miniapp/").await.unwrap();
+        assert_eq!(
+            service
+                .prepare_email_code(send(&ticket))
+                .await
+                .unwrap_err()
+                .code,
+            "email_rate_limit"
+        );
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM email_challenges")
+            .fetch_one(service.db.pool())
+            .await
+            .unwrap();
+        assert_eq!(count, 10);
+    }
+
+    #[tokio::test]
     async fn rate_limits_persist_and_expired_codes_fail() {
         let (dir, service) = setup().await;
         let a = service.start_web_login("/miniapp/").await.unwrap();
