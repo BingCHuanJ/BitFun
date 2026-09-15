@@ -132,20 +132,20 @@
     color: var(--openbitfun-color-content-muted);
   }
 
-  &__chip-grid,
-  &__token-grid {
+  &__chip-grid {
     display: flex;
     flex-wrap: wrap;
     gap: var(--openbitfun-space-2);
   }
 
-  &__tooltip-trigger {
-    display: inline-flex;
-    max-width: 100%;
+  &__token-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: var(--openbitfun-space-2);
   }
 
   &__token {
-    max-width: min(240px, 100%);
+    max-width: 100%;
   }
 
   &__model-select {

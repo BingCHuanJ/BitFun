@@ -62,6 +62,9 @@ importers:
       '@openbitfun/theme-openbitfun':
         specifier: workspace:^
         version: link:../design-system/packages/theme-openbitfun
+      '@openbitfun/ui':
+        specifier: workspace:^
+        version: link:../design-system/packages/ui
       '@tauri-apps/api':
         specifier: 2.11.1
         version: 2.11.1

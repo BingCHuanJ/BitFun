@@ -34,6 +34,7 @@ below for PR scope.
 ```bash
 pnpm --dir OpenBitFun-Installer run installer:dev
 pnpm --dir OpenBitFun-Installer run tauri:dev
+pnpm --dir OpenBitFun-Installer run tauri:preview    # native UI only; no installation
 pnpm --dir OpenBitFun-Installer run type-check
 pnpm --dir OpenBitFun-Installer run build            # React build / CI reproduction
 pnpm --dir OpenBitFun-Installer run installer:build  # packaging only
@@ -48,6 +49,12 @@ pnpm run i18n:audit                                                   # resource
 pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit
 pnpm --dir OpenBitFun-Installer run type-check                            # frontend i18n/runtime
 cargo check --manifest-path OpenBitFun-Installer/src-tauri/Cargo.toml      # Tauri/Rust changes
+```
+
+For the native `--preview` command boundary, use the focused policy tests:
+
+```bash
+cargo test --manifest-path OpenBitFun-Installer/src-tauri/Cargo.toml --lib preview::tests
 ```
 
 For installer payload validation and the independent Data Migrator boundary, run:

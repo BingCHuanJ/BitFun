@@ -5,6 +5,10 @@
   "type": "module",
   "description": "OpenBitFun Custom Installer - Modern branded installation experience",
   "scripts": {
+    "prepare:design-system": "pnpm --dir ../design-system run build:packages",
+    "predev": "pnpm run prepare:design-system",
+    "prebuild": "pnpm run prepare:design-system",
+    "pretype-check": "pnpm run prepare:design-system",
     "sync:model-i18n": "node scripts/sync-model-i18n.cjs",
     "sync:theme-i18n": "node scripts/sync-theme-i18n.cjs",
     "sync:i18n": "pnpm run sync:model-i18n && pnpm run sync:theme-i18n",
@@ -12,6 +16,7 @@
     "build": "pnpm run sync:i18n && tsc && vite build",
     "preview": "vite preview",
     "tauri:dev": "pnpm run sync:i18n && tauri dev",
+    "tauri:preview": "tauri dev -- -- --preview",
     "tauri:build": "pnpm run sync:i18n && tauri build",
     "tauri:build:fast": "pnpm run sync:i18n && tauri build -- --profile release-fast",
     "tauri:build:exe": "pnpm run sync:i18n && tauri build --no-bundle",
@@ -25,6 +30,7 @@
   },
   "dependencies": {
     "@openbitfun/theme-openbitfun": "workspace:^",
+    "@openbitfun/ui": "workspace:^",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-dialog": "2.7.3",
     "i18next": "^25.8.0",
