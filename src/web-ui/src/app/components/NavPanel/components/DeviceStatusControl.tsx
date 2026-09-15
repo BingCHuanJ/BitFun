@@ -79,9 +79,11 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
     accountId: number; localId: string; devices: AccountDeviceInfo[];
   } | null>(null);
   const [switchingDevice, setSwitchingDevice] = useState(false);
+  const [returningLocal, setReturningLocal] = useState(false);
   const switchingRef = useRef(false);
+  const activePeerId = peerContext?.peerMode.active ? peerContext.peerMode.deviceId : null;
   const [previewId, setPreviewId] = useState<string | null>(null);
-  useEffect(() => { setPreviewId(null); }, [open, accountId, peerContext?.peerMode.active ? peerContext.peerMode.deviceId : null]);
+  useEffect(() => { setPreviewId(null); }, [open, accountId, activePeerId]);
 
   useEffect(() => {
     if (!open || accountId === undefined) { setSwitchTargets(null); return; }
@@ -160,7 +162,6 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
   const previewIndex = Math.max(0, availableTargets?.devices.findIndex(
     device => device.device_id === (previewTarget?.device_id ?? currentId),
   ) ?? 0);
-  const [returningLocal, setReturningLocal] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const popoverLayout = useAnchoredPopoverPosition({
