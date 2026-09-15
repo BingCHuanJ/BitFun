@@ -22,6 +22,7 @@ COPY design-system/tooling/token-engine/ design-system/tooling/token-engine/
 COPY design-system/packages/design-tokens/ design-system/packages/design-tokens/
 COPY design-system/packages/theme-openbitfun/ design-system/packages/theme-openbitfun/
 COPY src/miniapp-market-web/ src/miniapp-market-web/
+COPY src/shared/i18n/contract/locales.json src/shared/i18n/contract/locales.json
 RUN pnpm --dir design-system/packages/design-tokens build \
     && pnpm --dir design-system/packages/theme-openbitfun build \
     && pnpm --dir design-system/packages/ui build \

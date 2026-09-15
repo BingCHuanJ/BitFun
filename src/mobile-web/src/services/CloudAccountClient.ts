@@ -91,6 +91,7 @@ export class CloudAccountClient {
     if (!((url.origin === 'https://github.com' && url.pathname === '/login/oauth/authorize') || (url.origin === 'https://auth.openbitfun.com' && url.pathname === '/sign-in')) || url.username || url.password) {
       throw new Error('Untrusted account authorization URL.');
     }
+    if (url.origin === 'https://auth.openbitfun.com') url.searchParams.set('locale', (typeof document === 'undefined' ? 'en-US' : document.documentElement.lang || 'en-US'));
     if (signal.aborted) throw new Error('Sign-in cancelled.');
     popup.location.href = url.href;
     while (!signal.aborted && Date.now() < start.expiresAt * 1000) {

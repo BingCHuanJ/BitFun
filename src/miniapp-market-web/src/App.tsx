@@ -98,7 +98,7 @@ function App() {
 function GitHubIdentityPage({ complete }: { complete: boolean }) {
   const { t } = useLocale();
   useTheme();
-  useEffect(() => { document.title = `OpenBitFun · ${t('signIn')}`; }, [t]);
+  useEffect(() => { document.title = `OpenBitFun · ${t(complete ? 'authComplete' : 'signIn')}`; }, [complete, t]);
   return <IconContext.Provider value={{ size: 24, weight: 'regular' }}>
     {complete ? <DesktopComplete t={t} /> : <AccountSignIn />}
   </IconContext.Provider>;

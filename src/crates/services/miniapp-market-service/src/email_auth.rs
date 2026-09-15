@@ -69,8 +69,8 @@ impl Mailer {
             from,
         }))
     }
-    async fn send(&self, email: &str, code: &str) -> MarketResult<()> {
-        let message = verification_message(self.from.clone(), email, code)?;
+    async fn send(&self, email: &str, code: &str, locale: &str) -> MarketResult<()> {
+        let message = verification_message(self.from.clone(), email, code, locale)?;
         tokio::time::timeout(
             std::time::Duration::from_secs(20),
             self.transport.send(message),
@@ -81,19 +81,59 @@ impl Mailer {
         Ok(())
     }
 }
-fn verification_message(from: Mailbox, email: &str, code: &str) -> MarketResult<Message> {
+fn verification_message(
+    from: Mailbox,
+    email: &str,
+    code: &str,
+    requested_locale: &str,
+) -> MarketResult<Message> {
+    static COPY: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
+        serde_json::from_str(include_str!("email/locales.json")).expect("valid email translations")
+    });
+    let locale = if COPY.get(requested_locale).is_some() {
+        requested_locale
+    } else {
+        "en-US"
+    };
+    let copy = COPY[locale].as_object().expect("email locale object");
+    let mut html = include_str!("email/sign-in.html").replace("{{locale}}", locale);
+    for (key, value) in copy {
+        html = html.replace(
+            &format!("{{{{{key}}}}}"),
+            value.as_str().expect("email translation"),
+        );
+    }
+    let html = html.replace("{{code}}", code);
+    let plain = copy["plain"]
+        .as_str()
+        .expect("plain email translation")
+        .replace("{{code}}", code);
     Message::builder()
         .from(from)
         .to(email.parse().map_err(|_| invalid_email())?)
-        .subject("OpenBitFun 登录验证码 / Sign-in code")
-        .multipart(MultiPart::alternative()
-            .singlepart(SinglePart::plain(format!("你的 OpenBitFun 登录验证码是：{code}\n\n验证码 10 分钟内有效，仅可使用一次。请勿向他人透露。\n如非本人操作，请忽略此邮件。\n\nYour OpenBitFun verification code is: {code}\nIt expires in 10 minutes and can only be used once. Do not share this code.\nIf you did not request it, ignore this email.\n\nOpenBitFun")))
-            .multipart(MultiPart::related()
-                .singlepart(SinglePart::builder().header(ContentType::TEXT_HTML).header(ContentTransferEncoding::Base64).body(include_str!("email/sign-in.html").replace("{{code}}", code)))
-                .singlepart(Attachment::new_inline("openbitfun-app-icon".into()).body(
-                    include_bytes!("email/app-icon.png").to_vec(),
-                    ContentType::parse("image/png").expect("valid PNG MIME type"),
-                ))))
+        .subject(copy["subject"].as_str().expect("email subject"))
+        .multipart(
+            MultiPart::alternative()
+                .singlepart(
+                    SinglePart::builder()
+                        .header(ContentType::TEXT_PLAIN)
+                        .header(ContentTransferEncoding::Base64)
+                        .body(plain),
+                )
+                .multipart(
+                    MultiPart::related()
+                        .singlepart(
+                            SinglePart::builder()
+                                .header(ContentType::TEXT_HTML)
+                                .header(ContentTransferEncoding::Base64)
+                                .body(html),
+                        )
+                        .singlepart(Attachment::new_inline("openbitfun-app-icon".into()).body(
+                            include_bytes!("email/app-icon.png").to_vec(),
+                            ContentType::parse("image/png").expect("valid PNG MIME type"),
+                        )),
+                ),
+        )
         .map_err(|_| MarketError::internal("Could not compose verification email"))
 }
 
@@ -151,6 +191,8 @@ pub(crate) struct LoginRequest {
 pub(crate) struct EmailSendRequest {
     pub ticket: String,
     pub email: String,
+    #[serde(default)]
+    pub locale: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -228,9 +270,10 @@ impl AuthService {
                 "Email sign-in is unavailable on this server.",
             )
         })?;
+        let locale = request.locale.clone().unwrap_or_else(|| "en-US".into());
         let (sent, code) = self.prepare_email_code(request).await?;
         // Failure consumes the code; quota remains charged even on delivery failure.
-        if let Err(error) = mailer.send(&sent.1, &code).await {
+        if let Err(error) = mailer.send(&sent.1, &code, &locale).await {
             sqlx::query("UPDATE email_challenges SET consumed_at = ? WHERE id = ?")
                 .bind(Utc::now().timestamp())
                 .bind(&sent.0.challenge_id)
@@ -435,6 +478,7 @@ mod tests {
             .prepare_email_code(EmailSendRequest {
                 ticket: ticket.into(),
                 email: email.into(),
+                locale: None,
             })
             .await
             .unwrap();
@@ -568,7 +612,8 @@ mod tests {
             reopened
                 .prepare_email_code(EmailSendRequest {
                     ticket: a.clone(),
-                    email: "ALICE@example.com".into()
+                    email: "ALICE@example.com".into(),
+                    locale: None
                 })
                 .await
                 .unwrap_err()
@@ -725,6 +770,7 @@ mod tests {
             "OpenBitFun <hello@example.com>".parse().unwrap(),
             "alice@example.com",
             "123456",
+            "en-US",
         )
         .unwrap();
         let raw = String::from_utf8(message.formatted()).unwrap();
@@ -752,7 +798,7 @@ mod tests {
         };
         let plain = String::from_utf8(decode_part("text/plain;")).unwrap();
         assert!(plain.contains("Your OpenBitFun verification code is: 123456"));
-        assert!(plain.contains("你的 OpenBitFun 登录验证码是：123456"));
+        assert!(plain.is_ascii());
         let html = String::from_utf8(decode_part("text/html;")).unwrap();
         assert!(html.contains("src=\"cid:openbitfun-app-icon\""));
         assert!(!html.contains("src=\"https://"));
@@ -763,6 +809,76 @@ mod tests {
         assert!(html.contains(">123456</div>"));
         assert!(!html.contains("{{code}}"));
         assert!(!html.contains("<script"));
+    }
+
+    #[test]
+    fn email_locale_is_optional_for_older_clients() {
+        let legacy: EmailSendRequest =
+            serde_json::from_str(r#"{"ticket":"test","email":"a@example.com"}"#).unwrap();
+        assert!(legacy.locale.is_none());
+        let current: EmailSendRequest =
+            serde_json::from_str(r#"{"ticket":"test","email":"a@example.com","locale":"en-US"}"#)
+                .unwrap();
+        assert_eq!(current.locale.as_deref(), Some("en-US"));
+    }
+
+    #[test]
+    fn email_translations_have_matching_keys_and_render_every_locale() {
+        let translations: serde_json::Value =
+            serde_json::from_str(include_str!("email/locales.json")).unwrap();
+        let expected: Vec<_> = translations["en-US"].as_object().unwrap().keys().collect();
+        for locale in ["en-US", "zh-CN", "zh-TW"] {
+            assert_eq!(
+                translations[locale]
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            let message = verification_message(
+                "OpenBitFun <hello@example.com>".parse().unwrap(),
+                "a@example.com",
+                "654321",
+                locale,
+            )
+            .unwrap();
+            let raw = String::from_utf8(message.formatted()).unwrap();
+            use base64::Engine;
+            let part = raw
+                .split("Content-Type: ")
+                .find(|p| p.starts_with("text/html;"))
+                .unwrap();
+            let encoded = part
+                .split_once("\r\n\r\n")
+                .unwrap()
+                .1
+                .split("\r\n--")
+                .next()
+                .unwrap();
+            let html = String::from_utf8(
+                base64::engine::general_purpose::STANDARD
+                    .decode(encoded.split_whitespace().collect::<String>())
+                    .unwrap(),
+            )
+            .unwrap();
+            assert!(html.contains(&format!("lang=\"{locale}\"")));
+            assert!(html.contains(translations[locale]["heading"].as_str().unwrap()));
+            assert!(!html.contains("{{"));
+            if locale == "en-US" {
+                assert!(!html.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)));
+            }
+        }
+        let unknown = verification_message(
+            "OpenBitFun <hello@example.com>".parse().unwrap(),
+            "a@example.com",
+            "654321",
+            "unknown",
+        )
+        .unwrap();
+        assert!(String::from_utf8(unknown.formatted())
+            .unwrap()
+            .contains("Subject: OpenBitFun sign-in code"));
     }
 
     #[test]

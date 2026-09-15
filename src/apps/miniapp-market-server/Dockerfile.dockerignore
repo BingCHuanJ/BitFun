@@ -45,6 +45,7 @@
 !src/**/src/**
 !src/crates/services/miniapp-market-service/migrations/**
 !src/miniapp-market-web/**
+!src/shared/i18n/contract/locales.json
 
 **/node_modules
 **/dist

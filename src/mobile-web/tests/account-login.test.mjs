@@ -169,7 +169,7 @@ test('authorization follows the central GitHub OAuth URL and rejects lookalike d
       const result = new CloudAccountClient('https://remote.openbitfun.com/v/1.0.1').authorize(popup, new AbortController().signal);
       if (authorizationUrl === 'https://github.com/login/oauth/authorize?state=test' || authorizationUrl === 'https://auth.openbitfun.com/sign-in#ticket=test') {
         assert.equal(await result, 'verified');
-        assert.equal(popup.location.href, authorizationUrl);
+        assert.equal(popup.location.href, authorizationUrl.startsWith('https://auth.openbitfun.com') ? authorizationUrl.replace('/sign-in#', '/sign-in?locale=en-US#') : authorizationUrl);
         assert.equal(polls, 1);
       } else {
         await assert.rejects(result, /Untrusted/);

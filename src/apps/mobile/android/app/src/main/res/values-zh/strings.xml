@@ -33,7 +33,7 @@
     <string name="account_signing_in">正在登录…</string>
     <string name="account_profile_title">个人资料</string>
     <string name="account_openbitfun_account">OpenBitFun 账号</string>
-    <string name="account_signed_in_body">当前连接已通过账号 %1$s 验证。密码不会保存到手机。</string>
+    <string name="account_signed_in_body">当前连接已通过账号 %1$s 验证。</string>
     <string name="account_connect">连接</string>
     <string name="account_device_current_control">当前控制</string>
     <string name="account_profile_details">资料</string>
@@ -55,8 +55,8 @@
     <string name="connect_account_devices_available">账号设备</string>
     <string name="connect_account_devices_scan">扫描二维码连接</string>
     <string name="account_device_controlling">当前控制 · %1$s</string>
-    <string name="account_invalid_credentials">请输入有效的用户名和密码。</string>
-    <string name="account_authentication">用户名或密码被拒绝。</string>
+    <string name="account_invalid_credentials">登录信息无效，请重新登录。</string>
+    <string name="account_authentication">登录状态已失效，请重新使用邮箱或 GitHub 登录。</string>
     <string name="account_rate_limited">登录尝试过多，请稍后再试。</string>
     <string name="account_relay_unavailable">登录服务暂时不可用，请稍后重试。</string>
     <string name="account_network">暂时无法连接，请检查网络后重试。</string>

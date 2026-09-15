@@ -69,7 +69,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const marketApi = {
   startLogin: (returnTo: string) => request<{ ticket: string; emailEnabled: boolean; githubEnabled: boolean }>('/auth/login/start', { method: 'POST', body: JSON.stringify({ returnTo }) }),
   loginGithub: (ticket: string) => request<{ authorizationUrl: string }>('/auth/login/github', { method: 'POST', body: JSON.stringify({ ticket }) }),
-  sendEmailCode: (ticket: string, email: string) => request<{ challengeId: string; retryAfterSeconds: number }>('/auth/email/send', { method: 'POST', body: JSON.stringify({ ticket, email }) }),
+  sendEmailCode: (ticket: string, email: string, locale: string = 'en-US') => request<{ challengeId: string; retryAfterSeconds: number }>('/auth/email/send', { method: 'POST', body: JSON.stringify({ ticket, email, locale }) }),
   verifyEmailCode: (ticket: string, challengeId: string, code: string) => request<{ redirectUrl: string }>('/auth/email/verify', { method: 'POST', body: JSON.stringify({ ticket, challengeId, code }) }),
   config: () => request<MarketConfig>('/config'),
   me: () => request<Me>('/me'),
@@ -141,7 +141,7 @@ export const marketApi = {
 };
 
 export function loginUrl(returnTo = window.location.pathname): string {
-  return `https://auth.openbitfun.com/sign-in?returnTo=${encodeURIComponent(returnTo)}`;
+  return `https://auth.openbitfun.com/sign-in?locale=${encodeURIComponent((typeof document === 'undefined' ? 'en-US' : document.documentElement.lang || 'en-US'))}&returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 export function downloadUrl(slug: string, release: number): string {

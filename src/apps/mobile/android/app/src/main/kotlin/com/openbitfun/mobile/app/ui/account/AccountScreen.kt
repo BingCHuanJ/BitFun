@@ -105,7 +105,13 @@ internal fun AccountLoginPage(
     openAuthorization: ((String) -> Unit)? = null,
 ) {
     val busy = state is AccountUiState.SigningIn || state is AccountUiState.Authorizing
-    val authorizationUrl = (state as? AccountUiState.Authorizing)?.authorizationUrl
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].toLanguageTag()
+    val authorizationUrl = (state as? AccountUiState.Authorizing)?.authorizationUrl?.let { value ->
+        val uri = android.net.Uri.parse(value)
+        if (uri.scheme == "https" && uri.host == "auth.openbitfun.com") {
+            uri.buildUpon().appendQueryParameter("locale", locale).build().toString()
+        } else value
+    }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     var launchedAuthorizationUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var launchFailed by rememberSaveable(authorizationUrl) { mutableStateOf(false) }

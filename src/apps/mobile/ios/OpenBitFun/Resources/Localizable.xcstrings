@@ -1886,7 +1886,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your sign-in is no longer valid. Enter the account and password again."
+            "value": "Your sign-in has expired. Sign in again with email or GitHub."
           }
         }
       }
@@ -2246,7 +2246,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Incorrect account or password"
+            "value": "Sign-in details are invalid. Please sign in again."
           }
         }
       }

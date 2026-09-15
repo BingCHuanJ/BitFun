@@ -271,7 +271,11 @@ export class AccountIdentityService {
   private async runSignIn(generation: number): Promise<MarketMe> {
     const transaction = await this.dependencies.api.authStart();
     this.ensureCurrentAuth(generation);
-    await this.dependencies.openExternal(transaction.authorizationUrl);
+    const authorizationUrl = new URL(transaction.authorizationUrl);
+    if (authorizationUrl.origin === 'https://auth.openbitfun.com' && typeof document !== 'undefined') {
+      authorizationUrl.searchParams.set('locale', document.documentElement.lang || 'en-US');
+    }
+    await this.dependencies.openExternal(authorizationUrl.href);
     const deadline = transaction.expiresAt * 1000;
     while (this.dependencies.now() < deadline) {
       await this.dependencies.sleep(Math.max(1, transaction.pollIntervalSeconds) * 1000);

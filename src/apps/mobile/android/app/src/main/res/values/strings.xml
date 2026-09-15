@@ -34,7 +34,7 @@
     <string name="account_signing_in">Signing in…</string>
     <string name="account_profile_title">Profile</string>
     <string name="account_openbitfun_account">OpenBitFun account</string>
-    <string name="account_signed_in_body">This connection is verified by account %1$s. Your password is not stored on this phone.</string>
+    <string name="account_signed_in_body">This connection is verified by account %1$s.</string>
     <string name="account_connect">Connect</string>
     <string name="account_device_current_control">Controlling</string>
     <string name="account_profile_details">Details</string>
@@ -57,8 +57,8 @@
     <string name="connect_account_devices_scan">Scan QR code to connect</string>
     <!-- The device currently being driven, followed by whether it is reachable. -->
     <string name="account_device_controlling">Controlling · %1$s</string>
-    <string name="account_invalid_credentials">Enter a valid username and password.</string>
-    <string name="account_authentication">The username or password was rejected.</string>
+    <string name="account_invalid_credentials">Sign-in details are invalid. Please sign in again.</string>
+    <string name="account_authentication">Your sign-in has expired. Sign in again with email or GitHub.</string>
     <string name="account_rate_limited">Too many sign-in attempts. Try again later.</string>
     <string name="account_relay_unavailable">Sign-in is temporarily unavailable. Try again later.</string>
     <string name="account_network">Unable to connect. Check your connection and try again.</string>

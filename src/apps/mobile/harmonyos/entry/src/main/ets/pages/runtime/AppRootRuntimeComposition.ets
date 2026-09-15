@@ -653,7 +653,12 @@ export abstract class AppRootRuntimeComposition {
         remoteState: this.remotePageState,
         hooks: {
           deviceId: (): string => this.remoteConnectionController.getDeviceId(),
-          openAuthorization: async (url: string): Promise<boolean> => this.host.openExternalLink ? await this.host.openExternalLink(url) : false,
+          openAuthorization: async (url: string): Promise<boolean> => {
+            const localizedUrl = url.startsWith('https://auth.openbitfun.com/sign-in#')
+              ? url.replace('/sign-in#', `/sign-in?locale=${encodeURIComponent(RemoteI18n.language())}#`)
+              : url;
+            return this.host.openExternalLink ? await this.host.openExternalLink(localizedUrl) : false;
+          },
           remoteAvailable: (): boolean => this.remoteConnectionController.ensureAvailable(),
           invalidatePreview: (): void => this.filePreviewController.invalidate(),
           invalidateRemoteActivity: (): void => this.remoteActivityViewModel.invalidate(),

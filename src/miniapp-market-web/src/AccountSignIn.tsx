@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowRight, ChevronDown, Globe, Github, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { marketApi } from './api';
-import { useLocale } from './i18n';
+import { useLocale, type MessageKey } from './i18n';
 
 export function AccountSignIn() {
   const { t, locale, setLocale } = useLocale();
@@ -12,10 +12,11 @@ export function AccountSignIn() {
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<MessageKey | ''>('');
   const [retryAt, setRetryAt] = useState(0);
   const [now, setNow] = useState(Date.now());
   const initial = useRef<Promise<void> | null>(null);
+  useEffect(() => { document.title = `OpenBitFun · ${t('signIn')}`; }, [t]);
   useEffect(() => {
     // Preserve a desktop ticket across reloads without putting its polling secret in the browser.
     if (!initial.current) initial.current = (async () => {
@@ -30,16 +31,16 @@ export function AccountSignIn() {
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${encodeURIComponent(start.ticket)}`);
         setTicket(start.ticket); setEmailEnabled(start.emailEnabled); setGithubEnabled(start.githubEnabled);
       }
-    })().catch(() => setError(t('emailStartFailed')));
+    })().catch(() => setError('emailStartFailed'));
   }, [t]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const showError = (cause: unknown) => {
     const key = cause && typeof cause === 'object' && 'code' in cause ? cause.code : '';
-    setError(t(key === 'email_rate_limit' ? 'emailRateLimited' : key === 'invalid_email_code' ? 'emailCodeInvalid' : key === 'invalid_email' ? 'emailInvalid' : 'emailStartFailed'));
+    setError(key === 'email_rate_limit' ? 'emailRateLimited' : key === 'invalid_email_code' ? 'emailCodeInvalid' : key === 'invalid_email' ? 'emailInvalid' : 'emailStartFailed');
   };
   async function send(event?: FormEvent) {
     event?.preventDefault(); setBusy(true); setError('');
-    try { const sent = await marketApi.sendEmailCode(ticket, email); setChallenge(sent.challengeId); setCode(''); setRetryAt(Date.now() + sent.retryAfterSeconds * 1000); }
+    try { const sent = await marketApi.sendEmailCode(ticket, email, locale); setChallenge(sent.challengeId); setCode(''); setRetryAt(Date.now() + sent.retryAfterSeconds * 1000); }
     catch (cause) { showError(cause); } finally { setBusy(false); }
   }
   async function verify(event: FormEvent) {
@@ -48,6 +49,7 @@ export function AccountSignIn() {
       const result = await marketApi.verifyEmailCode(ticket, challenge, code);
       const target = new URL(result.redirectUrl, window.location.origin);
       if (![window.location.origin, 'https://auth.openbitfun.com', 'https://market.openbitfun.com'].includes(target.origin)) throw new Error('Untrusted return URL');
+      if (target.origin === 'https://auth.openbitfun.com' && target.pathname === '/complete') target.searchParams.set('locale', locale);
       window.location.assign(target.href);
     } catch (cause) { showError(cause); setBusy(false); }
   }
@@ -70,18 +72,18 @@ export function AccountSignIn() {
     <section className="account-sign-in" aria-labelledby="account-sign-in-title" aria-busy={busy}>
       <div className="account-auth-symbol"><KeyRound size={24} aria-hidden="true" /></div>
       <h1 id="account-sign-in-title">{t('accountSignIn')}</h1><p className="account-auth-intro">{t('emailLoginIntro')}</p>
-      {!ticket && !error && <p role="status">{t('emailResendWait')}</p>}
+      {!ticket && !error && <p role="status">{t('authWorking')}</p>}
       {emailEnabled && <form onSubmit={challenge ? verify : send}>
         <label htmlFor="sign-in-email">{t('emailAddress')}</label>
         <div className="account-auth-field"><Mail size={18} aria-hidden="true" /><input id="sign-in-email" type="email" autoComplete="email" placeholder="you@example.com" required maxLength={254} value={email} disabled={busy || !!challenge} onChange={event => setEmail(event.target.value)} /></div>
         {challenge && <><p className="account-auth-notice" role="status">{t('emailCodeSent')}</p><label htmlFor="sign-in-code">{t('emailCode')}</label><div className="account-auth-field"><KeyRound size={18} aria-hidden="true" /><input id="sign-in-code" className="account-auth-code" autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} required value={code} disabled={busy} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} /></div></>}
-        <button className="account-auth-button account-auth-button--primary" type="submit" disabled={busy || !ticket}>{t(busy ? 'emailResendWait' : challenge ? 'emailVerify' : 'emailSendCode')}<ArrowRight size={18} aria-hidden="true" /></button>
+        <button className="account-auth-button account-auth-button--primary" type="submit" disabled={busy || !ticket}>{t(busy ? 'authWorking' : challenge ? 'emailVerify' : 'emailSendCode')}<ArrowRight size={18} aria-hidden="true" /></button>
         {challenge && <div className="account-auth-links"><button type="button" disabled={busy || now < retryAt} onClick={() => void send()}>{t(now < retryAt ? 'emailResendWait' : 'emailResend')}</button><button type="button" disabled={busy} onClick={() => { setChallenge(''); setCode(''); setError(''); }}>{t('emailChange')}</button></div>}
       </form>}
       {emailEnabled && githubEnabled && <div className="account-auth-divider"><span>{t('authOr')}</span></div>}
       {githubEnabled && <button className="account-auth-button" disabled={busy || !ticket} onClick={() => void github()}><Github size={20} aria-hidden="true" />{t('githubSignIn')}</button>}
       {!!ticket && !emailEnabled && !githubEnabled && <p>{t('emailUnavailable')}</p>}
-      {error && <p className="account-auth-error" role="alert">{error}</p>}
+      {error && <p className="account-auth-error" role="alert">{t(error)}</p>}
     </section>
     <p className="account-auth-footer"><ShieldCheck size={16} aria-hidden="true" />{t('authPrivate')}</p>
   </div></main>;

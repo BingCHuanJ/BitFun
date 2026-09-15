@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import localeContract from '../../shared/i18n/contract/locales.json';
 
 export type Locale = 'en-US' | 'zh-CN' | 'zh-TW';
 
@@ -16,6 +17,7 @@ const messages = {
     emailCodeSent: "Code sent. Check your inbox and spam folder.",
     emailResend: "Resend code",
     emailResendWait: "Please wait before resending",
+    authWorking: "Please wait…",
     emailChange: "Use another email",
     emailInvalid: "Enter a valid email address.",
     emailCodeInvalid: "Incorrect or expired code. Request a new code if needed.",
@@ -190,6 +192,7 @@ const messages = {
     emailCodeSent: "验证码已发送，请检查收件箱和垃圾邮件。",
     emailResend: "重新发送",
     emailResendWait: "请稍后重新发送",
+    authWorking: "请稍候…",
     emailChange: "更换邮箱",
     emailInvalid: "请输入有效的邮箱地址。",
     emailCodeInvalid: "验证码错误或已过期，请重试或重新获取。",
@@ -360,6 +363,7 @@ const messages = {
     emailCodeSent: "驗證碼已傳送，請檢查收件匣和垃圾郵件。",
     emailResend: "重新傳送",
     emailResendWait: "請稍後重新傳送",
+    authWorking: "請稍候…",
     emailChange: "更換信箱",
     emailInvalid: "請輸入有效的電子郵件地址。",
     emailCodeInvalid: "驗證碼錯誤或已過期，請重試或重新取得。",
@@ -521,15 +525,21 @@ const messages = {
 
 export type MessageKey = keyof (typeof messages)['en-US'];
 
-function initialLocale(): Locale {
-  const stored = localStorage.getItem('openbitfun-market-locale');
-  if (stored === 'zh-CN' || stored === 'zh-TW' || stored === 'en-US') return stored;
-  const locale = navigator.language;
-  if (locale.toLowerCase().startsWith('zh-tw') || locale.toLowerCase().startsWith('zh-hk')) {
-    return 'zh-TW';
-  }
-  if (locale.toLowerCase().startsWith('zh')) return 'zh-CN';
-  return 'en-US';
+export function resolveMarketLocale(value: string | null): Locale | undefined {
+  const normalized = value?.trim().replace(/_/g, '-').toLowerCase();
+  if (!normalized) return undefined;
+  const aliases = localeContract.locales.flatMap(locale =>
+    locale.aliases.map(alias => ({ alias: alias.toLowerCase(), locale: locale.id as Locale })),
+  ).sort((left, right) => right.alias.length - left.alias.length);
+  return aliases.find(({ alias }) => normalized === alias || normalized.startsWith(`${alias}-`))?.locale;
+}
+
+export function initialLocale(): Locale {
+  const requested = resolveMarketLocale(new URLSearchParams(window.location.search).get('locale'));
+  if (requested) return requested;
+  let stored: string | null = null;
+  try { stored = localStorage.getItem('openbitfun-market-locale'); } catch { /* Storage can be blocked in an auth popup. */ }
+  return resolveMarketLocale(stored) ?? resolveMarketLocale(navigator.language) ?? localeContract.fallbackLocale as Locale;
 }
 
 export function useLocale() {
@@ -537,11 +547,16 @@ export function useLocale() {
   const t = useCallback((key: MessageKey) => messages[locale][key], [locale]);
   useEffect(() => {
     document.documentElement.lang = locale;
-    localStorage.setItem('openbitfun-market-locale', locale);
+    try { localStorage.setItem('openbitfun-market-locale', locale); } catch { /* Keep the selected language in memory. */ }
   }, [locale]);
   return {
     locale,
-    setLocale: setLocaleState,
+    setLocale: (next: Locale) => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('locale', next);
+      window.history.replaceState(null, '', url);
+      setLocaleState(next);
+    },
     t,
   };
 }
