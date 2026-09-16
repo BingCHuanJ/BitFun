@@ -1,4 +1,7 @@
-import { ChatInputImagePreview } from './ChatInputImagePreview';
+import { ChatInputAttachments } from './ChatInputAttachments';
+import { useExcerptComposerActions } from '../selection/useExcerptComposerActions';
+import { isConversationExcerpt, formatConversationExcerpt } from '@/shared/utils/conversationExcerpt';
+import { withConversationExcerpts } from '../utils/composerPresentation';
 /**
  * Standalone chat input component
  * Separated from bottom bar, supports session-level state awareness
@@ -220,6 +223,8 @@ import {
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { SessionPermissionMode } from '@/infrastructure/api/service-api/AgentAPI';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import { isBtwSessionDraft } from '../utils/modelSelectionTarget';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { useLocalFileDrop } from '@/infrastructure/files/useLocalFileDrop';
 import { useWindowsFileDropPreview } from '@/infrastructure/files/useWindowsFileDropPreview';
@@ -592,6 +597,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [contexts],
   );
   const currentImageCount = imageContexts.length;
+  const hasAttachments = imageContexts.length > 0 || contexts.some(isConversationExcerpt);
   
   const activeSessionState = useActiveSessionState();
   const activeBtwSessionTab = useAgentCanvasStore(state => selectActiveBtwSessionTab(state as any));
@@ -653,6 +659,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
+  const peer = usePeerDeviceModeOptional();
+  const isBtwDraftTarget = isBtwSessionDraft(effectiveTargetSession);
+  const btwDraftSettingsInherited = isBtwDraftTarget && Boolean(peer?.peerMode.active)
+    && peer?.currentPeerCapabilities?.btwInitialModelSelectionV1 !== true;
   const effectiveTargetSessionHasTurns = effectiveTargetSession
     ? !isProjectedSessionEmpty(effectiveTargetSession)
     : false;
@@ -729,9 +739,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const derivedState = useSessionDerivedState(
     effectiveTargetSessionId,
-    inputState.value.trim()
+    inputState.value.trim() || (contexts.some(isConversationExcerpt)
+      ? t('selection.submitAnnotations') : '')
   );
   const currentReviewActivity = useSessionReviewActivity(currentSessionId);
+  const annotationOnlyMessage = contexts.some(context => isConversationExcerpt(context) && context.comment?.trim())
+    ? t('selection.submitAnnotations') : '';
+  const hasSendableInput = Boolean(inputState.value.trim() || annotationOnlyMessage);
+  const focusExcerptComposer = useCallback(() => richTextInputRef.current?.focus(), []);
+  useExcerptComposerActions({ mainSessionId: currentSessionId, targetSessionId: effectiveTargetSessionId,
+    active: isSceneActive && !registration, setInputTarget, focus: focusExcerptComposer });
   // The primary composer owns only the active primary session's requests.
   // Direct child-session requests are answered in BtwSessionPanel, even while
   // this composer is targeting that child, so the same request never has two
@@ -850,8 +867,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
     const hasNewline = inputState.value.includes('\n');
-    const hasImages = imageContexts.length > 0;
-    if (hasNewline || hasImages || showTargetSwitcher) {
+    if (hasNewline || hasAttachments || showTargetSwitcher) {
       setIsMultiLine(true);
       return;
     }
@@ -950,10 +966,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     lockedCapsuleInputWidthRef.current = nextLockedWidth;
     setIsMultiLine(nextIsMultiLine);
-  }, [inputState.value, imageContexts.length, isMultiLine, isNewSessionComposer, measureCapsuleInputWidth, showTargetSwitcher]);
+  }, [inputState.value, hasAttachments, isMultiLine, isNewSessionComposer, measureCapsuleInputWidth, showTargetSwitcher]);
   measureIsMultiLineRef.current = measureIsMultiLine;
 
-  // Re-measure when value or image count changes (handles typing / deleting)
+  // Re-measure when value or attachments change (handles typing / deleting)
   useEffect(() => {
     // Defer one frame so RichTextInput has synced the new value to the contenteditable DOM.
     const rafId = requestAnimationFrame(() => {
@@ -1175,6 +1191,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       sessionMode: effectiveTargetSession?.mode ?? effectiveTargetSession?.config.agentType,
       isAcpTargetSession,
       isSubagentInputTarget,
+      isBtwDraftTarget,
     }),
     [
       effectiveTargetSession?.config.agentType,
@@ -1182,6 +1199,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       isAcpTargetSession,
       isAssistantWorkspace,
       isSubagentInputTarget,
+      isBtwDraftTarget,
     ],
   );
   const globalPermissionMode = permissionModeFromConfig(toolPermissionConfig);
@@ -2352,8 +2370,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     void (async () => {
       try {
+        const permissionSessionId = isBtwDraftTarget
+          ? effectiveTargetSession?.parentSessionId : effectiveTargetSessionId;
+        if (!permissionSessionId) return;
         const response = await agentAPI.getSessionPermissionMode({
-          sessionId: effectiveTargetSessionId,
+          sessionId: permissionSessionId,
           turnId: activePermissionTurnId ?? undefined,
           workspacePath: effectiveTargetSession?.workspacePath,
           remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
@@ -2380,6 +2401,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession?.workspacePath,
     effectiveTargetSession?.remoteConnectionId,
     effectiveTargetSession?.remoteSshHost,
+    effectiveTargetSession?.parentSessionId,
+    isBtwDraftTarget,
     isAcpTargetSession,
   ]);
 
@@ -3311,7 +3334,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       // Image contexts are not represented by inline tag pills inside the
       // editor; they live in a separate thumbnail strip and are removed via
       // their own × button. Skip them when reconciling against editor tags.
-      if (context.type === 'image') return;
+      if (context.type === 'image' || context.type === 'conversation-excerpt') return;
       if (!activeContextIds.has(context.id)) {
         removeContext(context.id);
       }
@@ -4882,9 +4905,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!derivedState) return;
     if (caps.transferInFlight) return;
     if (isInterruptedTurnRecoveryInFlight) return;
+    const submissionScope = getActiveSurfaceScope();
     
     const { sendButtonMode } = derivedState;
-    const draftTrimmed = (messageOverride ?? inputState.value).trim();
+    const draftTrimmed = (messageOverride ?? (inputState.value.trim() || annotationOnlyMessage)).trim();
 
     // While generating, an empty control in `cancel` mode means stop. If the user has typed a follow-up,
     // never treat this path as cancel — that would call cancel_dialog_turn and abort the current round early.
@@ -4901,14 +4925,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       await transition(SessionExecutionEvent.RESET);
     }
     
-    if (!draftTrimmed) return;
+    if (!draftTrimmed) {
+      if (contexts.some(isConversationExcerpt)) notificationService.warning(t('selection.questionRequired'));
+      return;
+    }
     
     const originalMessage = draftTrimmed;
     const submissionSessionId = effectiveTargetSessionId;
     const submittedContexts = [...contexts];
-    const composerPresentation = messageOverride === undefined
-      ? richTextInputRef.current?.getComposerPresentation?.() ?? null
-      : null;
+    const composerPresentation = withConversationExcerpts(messageOverride === undefined
+      ? richTextInputRef.current?.getComposerPresentation?.() ?? null : null, submittedContexts, draftTrimmed);
     const persistedComposerPresentation = hasComposerPresentationReferences(composerPresentation)
       ? composerPresentation
       : null;
@@ -4919,9 +4945,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         : originalMessage,
     );
     const message = expandedMessage || (persistedComposerPresentation
-      ? 'Use the referenced session transcript as context.'
+      ? annotationOnlyMessage || 'Use the referenced session transcript as context.'
       : expandedMessage);
-    const messageCharCount = getCharacterCount(message);
+    const messageCharCount = getCharacterCount([message,
+      ...submittedContexts.filter(isConversationExcerpt).map(formatConversationExcerpt)].join('\n'));
     // Voice transcripts are always message content; they must not accidentally execute local commands.
     const promptSlashCommandsEnabled =
       !isAcpInputSession &&
@@ -4940,6 +4967,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     )) {
       return;
     }
+    if (!submissionScope.isCurrent()) return;
 
     if (promptSlashCommandsEnabled && caps.ops.has('btw') && isSlashCommand(message, '/btw')) {
       // When idle, /btw can be sent via the normal send button.
@@ -5031,7 +5059,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!modelAvailability.canSend) return;
 
     const confirmed = await confirmPromptCacheGuardIfNeeded();
-    if (!confirmed) {
+    if (!confirmed || !submissionScope.isCurrent() || effectiveTargetSessionIdRef.current !== submissionSessionId) {
       return;
     }
 
@@ -5053,6 +5081,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const clearedComposerRevision = submissionSessionId
       ? composerMutationRevision(submissionSessionId)
       : 0;
+    const clearedStoredDraft = submissionSessionId
+      ? sessionComposerStore.getState().getDraft(submissionSessionId)
+      : null;
 
     try {
       await submitThroughChatInputRegistration(
@@ -5076,6 +5107,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }),
       );
     } catch (error) {
+      if (!submissionScope.isCurrent()) {
+        // A failed old-host submission may recover only its own untouched draft.
+        const composer = sessionComposerStore.getState();
+        if (submissionSessionId && composer.getDraft(submissionSessionId, submissionScope.surfaceId) === clearedStoredDraft) {
+          composer.setValue(submissionSessionId, originalMessage, submissionScope.surfaceId);
+          composer.setContexts(submissionSessionId, submittedContexts, submissionScope.surfaceId);
+          composer.setPendingLargePastes(submissionSessionId, originalPendingLargePastes, submissionScope.surfaceId);
+        }
+        return;
+      }
       log.error('Failed to send message', { error });
       const recoveryTarget = failedSubmissionRecoveryTarget(
         submissionSessionId,
@@ -5104,6 +5145,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     caps.transferInFlight,
     isInterruptedTurnRecoveryInFlight,
     inputState.value,
+    annotationOnlyMessage,
     derivedState,
     dispatchInput,
     handleCancelCurrentTask,
@@ -5543,7 +5585,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       if (derivedState?.isProcessing) {
-        if (!inputState.value.trim()) return;
+        if (!hasSendableInput) return;
         void handleSendOrCancel();
         return;
       }
@@ -5551,7 +5593,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       handleSendOrCancel();
     }
     
-  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, slashCommandState, getActiveSlashPickerItems, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, getRichTextTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
+  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, slashCommandState, getActiveSlashPickerItems, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, getRichTextTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, hasSendableInput, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -5806,13 +5848,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </div>
             </Tooltip>
           </span>
-          <span className="openbitfun-chat-input__send-action" data-openbitfun-component="chat-input" data-openbitfun-part="sendButton" data-openbitfun-action="send" data-openbitfun-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight || !modelAvailability.canSend ? 'disabled' : undefined}>
+          <span className="openbitfun-chat-input__send-action" data-openbitfun-component="chat-input" data-openbitfun-part="sendButton" data-openbitfun-action="send" data-openbitfun-state={!hasSendableInput || isModelSwitching || isModeChangePending || caps.transferInFlight || !modelAvailability.canSend ? 'disabled' : undefined}>
             <Tooltip content={t('input.sendShortcut')}>
               <ChatComposerActionButton
                 aria-label={t('input.sendShortcut')}
                 className="openbitfun-chat-input__send-button"
                 onClick={() => void handleSendOrCancel()}
-                disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight || !modelAvailability.canSend}
+                disabled={!hasSendableInput || isModelSwitching || isModeChangePending || caps.transferInFlight || !modelAvailability.canSend}
                 data-testid="chat-input-send-btn"
                 icon={<Icon name="arrow-up" size="lg" />}
                 variant="primary"
@@ -5824,13 +5866,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     
     return (
-      <span className="openbitfun-chat-input__send-action" data-openbitfun-component="chat-input" data-openbitfun-part="sendButton" data-openbitfun-action="send" data-openbitfun-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight || !modelAvailability.canSend ? 'disabled' : undefined}>
+      <span className="openbitfun-chat-input__send-action" data-openbitfun-component="chat-input" data-openbitfun-part="sendButton" data-openbitfun-action="send" data-openbitfun-state={!hasSendableInput || isModelSwitching || isModeChangePending || caps.transferInFlight || !modelAvailability.canSend ? 'disabled' : undefined}>
         <Tooltip content={t('input.sendShortcut')}>
           <ChatComposerActionButton
             aria-label={t('input.sendShortcut')}
             className="openbitfun-chat-input__send-button"
             onClick={() => void handleSendOrCancel()}
-            disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight || !modelAvailability.canSend}
+            disabled={!hasSendableInput || isModelSwitching || isModeChangePending || caps.transferInFlight || !modelAvailability.canSend}
             data-testid="chat-input-send-btn"
             icon={<Icon name="arrow-up" size="lg" />}
             variant="primary"
@@ -5869,6 +5911,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             }
           : {
               mode: permissionMode,
+              disabled: isBtwDraftTarget,
               saving: permissionModeSaving,
               scopeLabel: t('chatInput.permissionMode.sessionScope'),
               overridden: permissionModeOverridden,
@@ -6035,39 +6078,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </div>
             )}
             <div ref={inputAreaAnchorRef} className="openbitfun-chat-input__input-area" data-openbitfun-component="chat-input" data-openbitfun-part="area">
-              {imageContexts.length > 0 && (
-                <div
-                  className="openbitfun-chat-input__image-strip"
-                  data-openbitfun-component="chat-input"
-                  data-openbitfun-part="imageStrip"
-                  data-testid="chat-input-image-strip"
-                >
-                  {imageContexts.map(image => {
-                    return (
-                      <div data-openbitfun-component="chat-input" data-openbitfun-part="image"
-                        key={image.id}
-                        className="openbitfun-chat-input__image-chip"
-                        title={image.imageName}
-                      >
-                        <ChatInputImagePreview image={image} surfaceEpoch={deviceSurfaceScope.epoch} />
-                        <button
-                          type="button"
-                          className="openbitfun-chat-input__image-chip-remove"
-                          data-openbitfun-component="chat-input"
-                          data-openbitfun-part="imageRemove"
-                          aria-label={t('input.removeImage')}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeContext(image.id);
-                          }}
-                        >
-                          <Icon name="xmark" size="xs" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <ChatInputAttachments key={effectiveTargetSessionId ?? 'empty'} contexts={contexts}
+                surfaceEpoch={deviceSurfaceScope.epoch} onRemove={removeContext}
+                onUpdate={(id, comment) => useContextStore.getState().updateContext(id, { comment })} />
               {showPlaceholder && (
                 <span className="openbitfun-chat-input__placeholder" data-openbitfun-component="chat-input" data-openbitfun-part="placeholder" aria-hidden>
                   {t('input.placeholder')}
@@ -6628,8 +6641,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     onAvailabilityChange={setModelAvailability}
                     externalSelection={dispatchModelSelection}
                     modeDefaultModelId={targetModeInfo?.model}
-                    persistSharedModeDefault={Boolean(targetModeInfo && targetModeInfo.source !== 'external')}
-                    disabled={isInterruptedTurnRecoveryInFlight}
+                    persistSharedModeDefault={!isBtwDraftTarget && Boolean(targetModeInfo && targetModeInfo.source !== 'external')}
+                    disabled={isInterruptedTurnRecoveryInFlight || btwDraftSettingsInherited}
+                    disabledReason={btwDraftSettingsInherited ? t('selection.inheritedSettings') : undefined}
                     reasoningTriggerPresentation="label"
                   />
                   </div>

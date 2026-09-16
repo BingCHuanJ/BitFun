@@ -68,6 +68,8 @@ import { createBackgroundCommandOutputTab, createReviewPlatformPullRequestDetail
 import { isAcpFlowSession } from '../../utils/acpSession';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
+import { FlowChatSelectionBar } from '../../selection/FlowChatSelectionBar';
+import { ConversationExcerptSourceProvider } from '../../selection/ConversationExcerptSources';
 import { hasActiveSessionLineageDescendants } from '../../utils/sessionLineage';
 import {
   findDialogTurn,
@@ -2603,16 +2605,21 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
   return (
     <FlowChatContext.Provider value={contextValue}>
+      <ConversationExcerptSourceProvider sessionId={activeSession?.sessionId} active={isViewportActive}>
       <FlowChatVolatileContext.Provider value={volatileContextValue}>
       <div
         ref={chatScopeRef}
         className={`modern-flowchat-container flow-chat-typography ${className}`}
         data-shortcut-scope="chat"
         data-testid="flowchat-container"
+        data-flowchat-selection-root={activeSession?.sessionId ?? ''}
+        tabIndex={-1}
         data-session-id={activeSession?.sessionId ?? ''}
         data-openbitfun-component="modern-flow-chat"
         data-openbitfun-part="root"
       >
+        <FlowChatSelectionBar rootRef={chatScopeRef} sessionId={activeSession?.sessionId} active={isViewportActive}
+          onSelectionIntent={() => virtualListRef.current?.notifyUserSelectionIntent()} />
         <FlowChatHeader
           visible={virtualItems.length > 0}
           sessionId={activeSession?.sessionId}
@@ -2757,6 +2764,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         </div>
       </div>
       </FlowChatVolatileContext.Provider>
+      </ConversationExcerptSourceProvider>
     </FlowChatContext.Provider>
   );
 };

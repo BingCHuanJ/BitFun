@@ -42,6 +42,7 @@ export interface PeerHostCapabilities {
   readonly idempotentDialogSubmit: boolean;
   /** Only true after explicit negotiation; older hosts need the upload API. */
   readonly inlineImageAttachmentsV1?: boolean;
+  readonly btwInitialModelSelectionV1?: boolean;
   readonly targetedSessionRollback: boolean;
   readonly tokenUsageStatistics: boolean;
   /** MiniApp Agent runs accept immutable virtual context-file snapshots. */
@@ -162,6 +163,7 @@ interface PeerModePingResult {
 const NO_CAPABILITIES: PeerHostCapabilities = {
   idempotentDialogSubmit: false,
   inlineImageAttachmentsV1: false,
+  btwInitialModelSelectionV1: false,
   targetedSessionRollback: false,
   tokenUsageStatistics: false,
   miniAppAgentContextFilesV1: false,
@@ -496,6 +498,7 @@ export class PeerConnectionManager {
     return {
       idempotentDialogSubmit: caps?.idempotent_dialog_submit === true,
       inlineImageAttachmentsV1: caps?.inline_image_attachments_v1 === true,
+      btwInitialModelSelectionV1: caps?.btw_initial_model_selection_v1 === true,
       targetedSessionRollback: caps?.targeted_session_rollback === true,
       tokenUsageStatistics: caps?.token_usage_statistics === true,
       miniAppAgentContextFilesV1: caps?.miniapp_agent_context_files_v1 === true,
@@ -729,6 +732,7 @@ function capabilitiesEqual(
 ): boolean {
   return a.idempotentDialogSubmit === b.idempotentDialogSubmit &&
     a.inlineImageAttachmentsV1 === b.inlineImageAttachmentsV1 &&
+    a.btwInitialModelSelectionV1 === b.btwInitialModelSelectionV1 &&
     a.targetedSessionRollback === b.targetedSessionRollback &&
     a.tokenUsageStatistics === b.tokenUsageStatistics &&
     a.miniAppAgentContextFilesV1 === b.miniAppAgentContextFilesV1 &&

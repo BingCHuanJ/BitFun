@@ -10,6 +10,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { useModernFlowChatStore, type VirtualItem } from '../../store/modernFlowChatStore';
 import { flowChatManager } from '../../services/FlowChatManager';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import {
   FLOWCHAT_FOCUS_ITEM_EVENT,
   type FlowChatFocusItemRequest,
@@ -77,9 +78,21 @@ export function useFlowChatNavigation({
   }, [onExpandExploreGroup, onNavigateToFocusTurn, virtualItems]);
 
   useEffect(() => {
+    let excerptGeneration = 0;
+    let disposed = false;
+    const cancelExcerpt = () => { excerptGeneration++; };
+    window.addEventListener('wheel', cancelExcerpt, { passive: true });
+    window.addEventListener('pointerdown', cancelExcerpt);
+    window.addEventListener('keydown', cancelExcerpt);
     const unsubscribe = globalEventBus.on<FlowChatFocusItemRequest>(FLOWCHAT_FOCUS_ITEM_EVENT, async (request) => {
       const { sessionId, itemId } = request;
       if (!sessionId) return;
+      if (request.embedded) return;
+      const scope = getActiveSurfaceScope();
+      if (request.surfaceEpoch !== undefined && request.surfaceEpoch !== scope.epoch) return;
+      const generation = ++excerptGeneration;
+      const isCurrent = () => !disposed && generation === excerptGeneration && scope.isCurrent()
+        && flowChatStore.getState().activeSessionId === sessionId;
 
       if (activeSessionId !== sessionId) {
         try {
@@ -96,6 +109,36 @@ export function useFlowChatNavigation({
       }, 1500);
       if (!ready) {
         log.warn('FlowChat focus target did not become active before timeout', { sessionId });
+        if (request.excerpt && isCurrent()) request.onUnavailable?.();
+        return;
+      }
+
+      if (request.excerpt) {
+        if (!isCurrent()) return;
+        const excerpt = request.excerpt;
+        const fragment = excerpt.fragments[0];
+        const findIndex = () => fragment.flowItemId
+          ? resolveFlowChatFocusTarget(request, virtualItemsRef.current, flowChatStore.getState().sessions.get(sessionId)).resolvedVirtualIndex
+          : virtualItemsRef.current.findIndex(item => item.type === 'user-message' && item.turnId === fragment.turnId);
+        try {
+          if ((findIndex() ?? -1) < 0) await onNavigateToFocusTurnRef.current?.(request);
+        } catch (error) {
+          log.warn('Failed to load the selected excerpt source', { sessionId, error });
+          if (isCurrent()) request.onUnavailable?.();
+          return;
+        }
+        const found = await waitForCondition(() => {
+          if (!isCurrent()) return true;
+          const index = findIndex();
+          if (index === undefined || index < 0 || !virtualListRef.current) return false;
+          const target = resolveFlowChatFocusTarget(request, virtualItemsRef.current, flowChatStore.getState().sessions.get(sessionId));
+          if (target.expandExploreGroupId) onExpandExploreGroupRef.current?.(target.expandExploreGroupId);
+          virtualListRef.current?.scrollToSearchMatch({ virtualItemIndex: index, query: fragment.text,
+            flowItemId: fragment.flowItemId, excerpt, isCurrent,
+            onUnavailable: () => { if (isCurrent()) request.onUnavailable?.(); } });
+          return true;
+        }, 2000);
+        if (!found && isCurrent()) request.onUnavailable?.();
         return;
       }
 
@@ -193,6 +236,12 @@ export function useFlowChatNavigation({
       tryFocus();
     });
 
-    return unsubscribe;
+    return () => {
+      disposed = true;
+      unsubscribe();
+      window.removeEventListener('wheel', cancelExcerpt);
+      window.removeEventListener('pointerdown', cancelExcerpt);
+      window.removeEventListener('keydown', cancelExcerpt);
+    };
   }, [activeSessionId, virtualListRef]);
 }

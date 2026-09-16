@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { Composer, ComposerToolbar, IconButton, Icon } from '@openbitfun/ui';
 import { useImeOwnedKeyGuard } from '@/flow_chat/hooks/useImeOwnedKeyGuard';
 import type { ContextItem } from '@/shared/types/context';
+import { ConversationExcerptAttachments } from '../../selection/ConversationExcerptAttachments';
 import { ChatContextPicker } from '../ChatContextPicker';
 import {
   RichTextInput,
@@ -11,6 +12,7 @@ import {
 } from '../RichTextInput';
 import {
   composerPresentationContexts,
+  withConversationExcerpts,
   type ComposerPresentation,
 } from '../../utils/composerPresentation';
 
@@ -71,8 +73,8 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
   }, [presentation]);
 
   const capturePresentation = useCallback(() => (
-    editorRef.current?.getComposerPresentation?.() ?? presentation
-  ), [presentation]);
+    withConversationExcerpts(editorRef.current?.getComposerPresentation?.() ?? presentation, contexts, value)
+  ), [contexts, presentation, value]);
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit) return;
@@ -174,6 +176,9 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
         data-openbitfun-product-component="user-message-edit-composer"
         data-openbitfun-product-part="input"
       >
+        <ConversationExcerptAttachments contexts={contexts} onRemove={handleRemoveContext}
+          onUpdate={(id, comment) => setContexts(current => current.map(context =>
+            context.id === id && context.type === 'conversation-excerpt' ? { ...context, comment } : context))} />
         <RichTextInput
           ref={editorRef}
           value={value}
