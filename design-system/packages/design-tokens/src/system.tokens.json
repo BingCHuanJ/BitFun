@@ -716,6 +716,18 @@
     "overflowText": {
       "fadeExtent": { "$value": "{space.4}" }
     },
+    "empty": {
+      "$description": "Shared empty-state media geometry. Callers select a semantic size and do not size artwork directly.",
+      "gap": { "$value": "10px" },
+      "paddingBlock": { "$value": "{space.8}" },
+      "paddingInline": { "$value": "{space.4}" },
+      "mediaSizeSm": { "$value": "{control.icon.sizeLg}" },
+      "mediaSizeMd": { "$value": "{control.height.sm}" },
+      "mediaSizeLg": { "$value": "{control.height.md}" },
+      "iconSizeSm": { "$value": "{control.icon.sizeLg}" },
+      "iconSizeMd": { "$value": "{control.height.sm}" },
+      "iconSizeLg": { "$value": "{control.height.md}" }
+    },
     "field": {
       "rootGap": { "$value": "{space.2}" },
       "horizontalGap": { "$value": "{space.5}" },

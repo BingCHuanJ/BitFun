@@ -800,7 +800,7 @@ const SkillsScene: React.FC = () => {
                 <Empty
                   className="skills-discover__state"
                   role="alert"
-                  icon={<Icon glyph={Package} size="lg" />}
+                  icon={<Icon glyph={Package} />}
                   description={market.marketError}
                   actions={<Button variant="outline" size="sm" onClick={() => void market.refresh()}>{t('list.retry')}</Button>}
                   data-openbitfun-scene="skills"
@@ -811,7 +811,7 @@ const SkillsScene: React.FC = () => {
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length === 0 && (
                 <Empty
                   className="skills-discover__state"
-                  icon={<Icon glyph={Package} size="lg" />}
+                  icon={<Icon glyph={Package} />}
                   description={marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}
                   data-testid="skill-list-empty"
                   data-openbitfun-scene="skills"

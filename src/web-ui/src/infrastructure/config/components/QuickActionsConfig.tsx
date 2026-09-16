@@ -1,5 +1,6 @@
 import { OverflowText,
   Button,
+  Empty,
   Icon,
   IconButton,
   Input,
@@ -417,18 +418,21 @@ const QuickActionsConfig: React.FC = () => {
           <div data-openbitfun-component="quick-actions-config" data-openbitfun-part="list" className="quick-actions-config__list">
             {customActions.length === 0 ? (
               <div data-openbitfun-component="quick-actions-config" data-openbitfun-part="empty" data-openbitfun-state="empty" className="quick-actions-config__empty">
-                <Zap size={20} className="quick-actions-config__empty-icon" />
-                <p>{t('sections.custom.empty')}</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setModalTarget(null)}
-                  disabled={saving}
-                  leadingIcon={<Icon name="plus" size="sm" />}
-                >
-
-                  {t('add.button')}
-                </Button>
+                <Empty
+                  icon={<Zap aria-hidden />}
+                  description={t('sections.custom.empty')}
+                  actions={(
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setModalTarget(null)}
+                      disabled={saving}
+                      leadingIcon={<Icon name="plus" size="sm" />}
+                    >
+                      {t('add.button')}
+                    </Button>
+                  )}
+                />
               </div>
             ) : (
               customActions.map(action => (
