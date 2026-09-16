@@ -45,6 +45,18 @@ test("search height preserves the compact reference and follows other density sc
   assert.equal(value("space.component.inline", "compact"), "10px");
 });
 
+test("Empty media geometry owns semantic artwork sizes", () => {
+  assert.equal(tokens["layout.empty.gap"], "10px");
+  assert.equal(tokens["layout.empty.paddingBlock"], "32px");
+  assert.equal(tokens["layout.empty.paddingInline"], "16px");
+  assert.equal(tokens["layout.empty.mediaSizeSm"], "24px");
+  assert.equal(tokens["layout.empty.mediaSizeMd"], "32px");
+  assert.equal(tokens["layout.empty.mediaSizeLg"], "40px");
+  assert.equal(tokens["layout.empty.iconSizeSm"], "24px");
+  assert.equal(tokens["layout.empty.iconSizeMd"], "32px");
+  assert.equal(tokens["layout.empty.iconSizeLg"], "40px");
+});
+
 test("Switch geometry preserves the compact reference contract", () => {
   assert.equal(tokens["control.switch.trackWidth"], "28px");
   assert.equal(tokens["control.switch.trackHeight"], "16px");
