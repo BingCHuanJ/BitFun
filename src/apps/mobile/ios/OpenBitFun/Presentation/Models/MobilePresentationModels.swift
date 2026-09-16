@@ -401,7 +401,6 @@ struct MobileDeviceDirectoryEntry: Identifiable, Equatable {
     let id: String
     let name: String
     let online: Bool
-    let expanded: Bool
     let status: String
     let error: String?
     let workspaces: [MobileWorkspaceGroup]

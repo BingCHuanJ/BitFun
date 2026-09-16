@@ -163,7 +163,6 @@ extension MobileAppModel {
                 id: deviceKey,
                 name: entry.deviceName,
                 online: entry.online,
-                expanded: entry.expanded,
                 status: entry.status.name,
                 error: entry.error?.name,
                 workspaces: workspaces,
@@ -178,9 +177,8 @@ extension MobileAppModel {
         }
     }
 
-    func toggleDeviceDirectory(_ device: MobileDeviceDirectoryEntry) {
-
-        coreAdapter?.toggleDeviceDirectory(device.id, expanded: !device.expanded)
+    func loadDeviceDirectory(_ device: MobileDeviceDirectoryEntry) {
+        coreAdapter?.loadDeviceDirectory(device.id)
     }
 
     func retryDeviceDirectory(_ device: MobileDeviceDirectoryEntry) {

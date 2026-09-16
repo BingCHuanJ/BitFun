@@ -48,6 +48,7 @@ extension MobileAppModel {
         guard remoteExpectedDeviceKey != targetKey else { return }
         invalidateTargetScopedFileTransfers()
         remoteTargetEpoch &+= 1
+        accountSelectedDeviceID = device.id
         remoteExpectedDeviceKey = "account:\(device.id)"
         remoteInitialSessionReady = false
         remoteInitialWorkspaceReady = false
@@ -248,6 +249,9 @@ extension MobileAppModel {
                 )
             }
             accountDirectoryGeneration = coreAdapter?.syncDeviceDirectory(accountDevices) ?? (accountDirectoryGeneration &+ 1)
+            if let selectedID = ready.selectedDeviceId {
+                coreAdapter?.loadDeviceDirectory(selectedID)
+            }
             if let link = pendingDeviceLink {
                 pendingDeviceLink = nil
                 submitPairing(url: link)

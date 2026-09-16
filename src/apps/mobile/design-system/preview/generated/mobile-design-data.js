@@ -386,6 +386,65 @@ export const mobileTokens = {
 export const mobileComponents = {
   "version": 1,
   "components": {
+    "shell_header_alignment": {
+      "purpose": "Keep sidebar search and conversation menu controls on one horizontal centerline.",
+      "anatomy": [
+        "sidebar_header",
+        "conversation_header"
+      ],
+      "states": [
+        "drawer_open",
+        "drawer_closed",
+        "wide",
+        "with_subtitle",
+        "without_subtitle"
+      ],
+      "tokens": [
+        "conversation_header_height"
+      ],
+      "platformNotes": "Both signed-in header rows use conversationHeaderHeight from the same safe-area origin, without a sidebar-only top inset. Preserve this height when a subtitle appears or disappears. Anchor drawer content scaling vertically at half the header height so reveal animation cannot shift its control centerline."
+    },
+    "sidebar_device_selector": {
+      "purpose": "Select one remote device and show its workspace panel below the device list, matching mobile web.",
+      "anatomy": [
+        "device_icon",
+        "device_name",
+        "connection_indicator",
+        "selected_workspace_panel"
+      ],
+      "states": [
+        "selected",
+        "online",
+        "offline",
+        "loading"
+      ],
+      "tokens": [
+        "soft",
+        "ink",
+        "muted",
+        "status_success"
+      ],
+      "platformNotes": "Device rows have no disclosure chevron. Re-selecting the current device does not collapse its workspaces or restart a healthy connection. Use a soft selected surface and normal ink for device identity; only the separate status indicator expresses reachability. Do not add a connection status text row or recovery banner below the device. Automatic reconnect stays quiet; tapping the selected failed or disconnected device retries the connection. Workspace disclosure remains independent and survives refresh and device switching. Compact and wide layouts use the same selection semantics."
+    },
+    "sidebar_tools_footer": {
+      "purpose": "Open controlled-device tools without creating a chat; keep settings separately reachable.",
+      "anatomy": [
+        "tools_icon_and_label",
+        "flexible_gap",
+        "settings_button"
+      ],
+      "states": [
+        "enabled",
+        "disabled",
+        "pressed"
+      ],
+      "tokens": [
+        "card",
+        "line",
+        "ink"
+      ],
+      "platformNotes": "Use Tools / 工具 for both the sidebar entry and destination title. Render a native wrench-and-screwdriver symbol (or the existing platform vector) in a 24-unit slot, 8-unit label gap, 15-unit medium text, 14-unit horizontal padding and a minimum 104 by 48 pill. Keep the 48-unit settings action separate. Use a quiet surface and outline without raised shadows. Compact and wide sidebars reuse a pure footer component with state and callbacks; create-session validation must not affect tools appearance."
+    },
     "circle_control": {
       "purpose": "A compact navigation or overflow control with a full-size touch target.",
       "anatomy": [
@@ -1054,7 +1113,7 @@ export const mobileComponents = {
       "platformNotes": "A layout with C staggered slide motion. Mark never animates. Per-glyph entry: 180ms + index*55ms, 800ms cubic ease-out, 38px slide with 5px settling overshoot. Exit is 650ms, 30px left. Respect reduced motion and stop work offscreen. Retain real account/scan routing; only show MiniApps on hosts that implement them. Safe-area insets remain native."
     },
     "startup_brand_reveal": {
-      "purpose": "Provides a short desktop-inspired identity transition on cold launch without waiting for network or account loading.",
+      "purpose": "Provides a desktop-inspired identity transition on the first normal launch of an installation without waiting for network or account loading.",
       "anatomy": [
         "theme_background",
         "bouncing_brand_dot",
@@ -1062,7 +1121,8 @@ export const mobileComponents = {
         "desktop_contour_brand_mark"
       ],
       "states": [
-        "cold_start",
+        "first_launch",
+        "already_shown",
         "reduced_motion",
         "backgrounded"
       ],
@@ -1072,7 +1132,7 @@ export const mobileComponents = {
         "brand_dot",
         "startup_brand"
       ],
-      "platformNotes": "Native cold-start overlay on HarmonyOS, Android and iOS; 6800ms timeline independent of network readiness. A cyan dot hops ahead of ten 42-unit letters with subtle letter bounce. At normalized text time 0.70–0.86 it arcs back to the dotless i, settling at 7.35 units diameter with one fading halo. Text time is min(progress / 0.65 * 0.9, 0.9). Logo expands from 0.65 to 1 with a small overshoot during progress 0.66–0.85 as the word moves down 42 units. Use a centered 280×240 stage, scaled down for narrow windows, 92-unit contour mark on Android/iOS and a 156vp mark on HarmonyOS, with platform-native soft sans typography. HarmonyOS positions the mark at (62, -34) to preserve separation from the settled wordmark. Fade the overlay over the last 3%. Reserve full glyph slots; no layout changes during reveal. Remove on completion or background and do not replay on activity recreation/foreground. Skip for reduced motion. Notification onboarding follows completion. The dedicated brand_dot token preserves identity independently of action/status colors."
+      "platformNotes": "Native first-launch-only overlay on HarmonyOS, Android and iOS. Claim a persisted installation-local flag before playback; account changes, process restarts and upgrades do not reset it. Design previews do not consume it. Existing installs without the flag show it once after upgrade; 6800ms timeline independent of network readiness. A cyan dot hops ahead of ten 42-unit letters with subtle letter bounce. At normalized text time 0.70–0.86 it arcs back to the dotless i, settling at 7.35 units diameter with one fading halo. Text time is min(progress / 0.65 * 0.9, 0.9). Logo expands from 0.65 to 1 with a small overshoot during progress 0.66–0.85 as the word moves down 42 units. Use a centered 280×240 stage, scaled down for narrow windows, 92-unit contour mark on Android/iOS and a 156vp mark on HarmonyOS, with platform-native soft sans typography. HarmonyOS positions the mark at (62, -34) to preserve separation from the settled wordmark. Fade the overlay over the last 3%. Reserve full glyph slots; no layout changes during reveal. Remove on completion or background and do not replay on activity recreation/foreground. Skip for reduced motion. Notification onboarding follows completion. The dedicated brand_dot token preserves identity independently of action/status colors."
     },
     "permission_request_panel": {
       "purpose": "Answers an independent runtime permission request below the conversation header, outside the transcript, matching mobile-web.",

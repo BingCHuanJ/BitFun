@@ -256,20 +256,17 @@ export class DeviceDirectoryViewModel {
       if (existing) {
         existing.deviceName = device.deviceName || existing.deviceName;
         if (existing.online && !online) {
-          existing.expanded = false;
           this.inFlight.delete(device.deviceId);
           if (existing.status === 'loading') existing.status = 'idle';
         }
         existing.online = online;
         return existing;
       }
-      const isActive = device.deviceId === activeId && online;
       const created = emptyDeviceDirectoryEntry(
         device.deviceId,
         device.deviceName || device.deviceId,
         online
       );
-      created.expanded = isActive;
       return created;
     });
     this.state.replace(next);
@@ -277,10 +274,10 @@ export class DeviceDirectoryViewModel {
       (this.state.selectedDeviceId === activeId && activeId.length > 0 && activeConnected)) {
       return;
     }
-    // A live control target is transport state, not a user selection in the
-    // directory. Expanding it here made a freshly signed-in sidebar show a
-    // workspace loader before the user had chosen any device.
-    this.state.select('');
+    // Restore the persisted control target without selecting a different device
+    // merely because it happens to be online.
+    this.state.select(activeId);
+
   }
 
   async hydrateKnownDevices(): Promise<void> {
@@ -295,7 +292,7 @@ export class DeviceDirectoryViewModel {
     const entry = this.state.find(target);
     if (!entry) {
       // A QR-paired desktop is projected into the sidebar without belonging to
-      // the account directory. It is still a real selectable disclosure row
+      // the account directory. It is still a real selectable device row
       // while its control link is live; accepting only directory entries made
       // that row render normally but ignore every tap.
       if (target.length > 0 && target === this.hooks.activeDeviceId().trim() &&

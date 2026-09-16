@@ -25,7 +25,6 @@ export class DeviceDirectoryEntry {
   @Trace deviceId: string = '';
   @Trace deviceName: string = '';
   @Trace online: boolean = false;
-  @Trace expanded: boolean = false;
   @Trace status: DeviceDirectoryStatus = 'idle';
   @Trace errorText: string = '';
   @Trace workspaces: RecentWorkspaceEntry[] = [];
@@ -59,15 +58,6 @@ export class DeviceDirectoryState {
 
   select(deviceId: string): void {
     this.selectedDeviceId = deviceId.trim();
-  }
-
-  /** Collapses the disclosed device without changing the live control target. */
-  collapseIfSelected(deviceId: string): boolean {
-    if (this.selectedDeviceId !== deviceId.trim()) {
-      return false;
-    }
-    this.selectedDeviceId = '';
-    return true;
   }
 
   find(deviceId: string): DeviceDirectoryEntry | undefined {
