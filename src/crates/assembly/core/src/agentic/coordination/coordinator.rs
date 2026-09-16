@@ -10877,6 +10877,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         image_contexts: Option<Vec<ImageContextData>>,
         parent_dialog_turn_id: Option<&str>,
         parent_turn_index: Option<usize>,
+        user_message_metadata: Option<serde_json::Value>,
+        initial_model_selection: Option<openbitfun_runtime_ports::AgentSessionModelSelection>,
     ) -> OpenBitFunResult<String> {
         if request_id.trim().is_empty() {
             return Err(OpenBitFunError::Validation(
@@ -10910,7 +10912,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
 
-        if let Some(model_id) = model_id
+        if let Some(selection) = initial_model_selection {
+            self.update_session_model_selection(
+                child_session_id,
+                &selection.model_id,
+                selection.reasoning_preset.as_deref(),
+            )
+            .await?;
+        } else if let Some(model_id) = model_id
             .map(str::trim)
             .filter(|model_id| !model_id.is_empty())
         {
@@ -10920,10 +10929,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         let turn_id = format!("btw-turn-{}", request_id.trim());
-        let mut user_message_metadata = serde_json::json!({
-            "kind": "btw",
-            "parentSessionId": parent_session_id,
-        });
+        let mut user_message_metadata = user_message_metadata
+            .filter(serde_json::Value::is_object)
+            .unwrap_or_else(|| serde_json::json!({}));
+        user_message_metadata["kind"] = serde_json::json!("btw");
+        user_message_metadata["parentSessionId"] = serde_json::json!(parent_session_id);
         if let Some(images) = image_contexts.as_ref().filter(|images| !images.is_empty()) {
             user_message_metadata["images"] = serde_json::Value::Array(
                 images

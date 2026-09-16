@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { withConversationExcerptFallback } from '@/shared/utils/conversationExcerpt';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { RotateCcw, Loader2 } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
@@ -88,7 +89,7 @@ function buildPresentationRerunPayload(presentation: ComposerPresentation): {
 
   return {
     message: contextSection ? `${contextSection}\n\n${modelText}` : modelText,
-    displayMessage: composerPresentationToEditorText(presentation),
+    displayMessage: withConversationExcerptFallback(composerPresentationToEditorText(presentation), composerPresentationContexts(presentation)),
     userMessageMetadata: {
       composerPresentation: presentation,
       ...(sessionReferences.length > 0 ? { sessionReferences } : {}),

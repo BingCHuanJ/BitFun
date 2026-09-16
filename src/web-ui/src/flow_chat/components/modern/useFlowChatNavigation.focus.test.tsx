@@ -3,6 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConversationExcerptContext } from '@/shared/types/context';
 
 /*
  * The two properties this file exists for, both measured from a usage-report
@@ -18,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   resolveFlowChatFocusTarget: vi.fn(),
   switchChatSession: vi.fn(),
+  navigateToFocusTurn: vi.fn(),
   activeSessionId: 'session-1' as string | undefined,
 }));
 
@@ -25,7 +27,7 @@ vi.mock('../../services/FlowChatManager', () => ({
   flowChatManager: { switchChatSession: mocks.switchChatSession },
 }));
 vi.mock('../../store/FlowChatStore', () => ({
-  flowChatStore: { getState: () => ({ sessions: new Map() }) },
+  flowChatStore: { getState: () => ({ sessions: new Map(), activeSessionId: mocks.activeSessionId }) },
 }));
 vi.mock('../../store/modernFlowChatStore', () => ({
   useModernFlowChatStore: {
@@ -52,12 +54,19 @@ if (typeof CSS.escape !== 'function') {
 }
 
 const FOCUS_ITEM_ID = 'call_00_zknuBLUKP7Y6JTioDI5Z8386';
+const excerpt: ConversationExcerptContext = {
+  id: 'excerpt-1', timestamp: 1, type: 'conversation-excerpt',
+  source: { surfaceId: 'local', sessionId: 'session-1', sessionName: 'Session' },
+  fragments: [{ turnId: 'turn-1', flowItemId: FOCUS_ITEM_ID, text: 'quote', start: 7, end: 12,
+    prefix: 'source ', suffix: '' }],
+};
 
 function Harness({ listRef }: { listRef: React.RefObject<any> }) {
   useFlowChatNavigation({
     activeSessionId: 'session-1',
     virtualItems: [],
     virtualListRef: listRef,
+    onNavigateToFocusTurn: mocks.navigateToFocusTurn,
   });
   return null;
 }
@@ -78,11 +87,12 @@ describe('useFlowChatNavigation focus placement', () => {
     return element;
   }
 
-  async function dispatchFocusRequest() {
+  async function dispatchFocusRequest(extra: Record<string, unknown> = {}) {
     await act(async () => {
       globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, {
         sessionId: 'session-1',
         itemId: FOCUS_ITEM_ID,
+        ...extra,
       });
       // Let the handler's own awaits resolve, without granting it a frame.
       await Promise.resolve();
@@ -93,10 +103,11 @@ describe('useFlowChatNavigation focus placement', () => {
 
   beforeEach(() => {
     mocks.activeSessionId = 'session-1';
+    mocks.navigateToFocusTurn.mockResolvedValue(false);
     mocks.resolveFlowChatFocusTarget.mockReturnValue({ preferTurnNavigation: false });
     scrollIntoView = vi.fn();
     focusFlowItem = vi.fn(() => true);
-    listRef = { current: { focusFlowItem, navigateToTurn: vi.fn(), scrollToIndex: vi.fn(), scrollToTurn: vi.fn() } };
+    listRef = { current: { focusFlowItem, navigateToTurn: vi.fn(), scrollToIndex: vi.fn(), scrollToTurn: vi.fn(), scrollToSearchMatch: vi.fn() } };
     frames = [];
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
       frames.push(callback);
@@ -143,5 +154,25 @@ describe('useFlowChatNavigation focus placement', () => {
     await act(async () => { frames.shift()?.(16); });
 
     expect(focusFlowItem).toHaveBeenCalledWith(FOCUS_ITEM_ID);
+  });
+
+  it('delegates exact excerpts to the text navigator and cancels on reader intent', async () => {
+    mocks.resolveFlowChatFocusTarget.mockReturnValue({ resolvedVirtualIndex: 0 });
+    await dispatchFocusRequest({ excerpt });
+    const target = listRef.current.scrollToSearchMatch.mock.calls[0][0];
+    expect(target).toMatchObject({ virtualItemIndex: 0, excerpt });
+    expect(listRef.current.scrollToIndex).not.toHaveBeenCalled();
+    expect(focusFlowItem).not.toHaveBeenCalled();
+    expect(target.isCurrent()).toBe(true);
+    window.dispatchEvent(new Event('wheel'));
+    expect(target.isCurrent()).toBe(false);
+  });
+
+  it('reports a source history failure without leaving an unhandled request', async () => {
+    mocks.navigateToFocusTurn.mockRejectedValueOnce(new Error('source unavailable'));
+    const onUnavailable = vi.fn();
+    await dispatchFocusRequest({ excerpt, onUnavailable });
+    expect(onUnavailable).toHaveBeenCalledOnce();
+    expect(listRef.current.scrollToSearchMatch).not.toHaveBeenCalled();
   });
 });

@@ -223,6 +223,40 @@ package.
 - `VirtualItemRenderer.tsx` + `.scss`
 - `VirtualMessageList.tsx`
 
+## Annotation markers
+
+The shared conversation-excerpt inventory projects sent presentation metadata,
+pending-queue attachments and device-scoped composer drafts into indexes keyed by
+source session and Turn. Each transcript consumes its own stable index; embedded panes do not select the parent
+transcript. Draft removal clears pending marks, and sent metadata retains their
+numbers. The number is additive presentation metadata, never annotation identity;
+legacy excerpts without it remain readable. New numbers follow the loaded session
+family's saved, queued and pending annotations, not a cross-controller global counter.
+
+`ConversationExcerptMarkers` paints numbered superscripts at each selected text
+fragment's trailing caret in a row-local overlay. Selections in the same block keep
+separate anchors, and wrapping follows the caret's current line. It validates the
+frozen text anchor, omits hidden/clipped endpoints, observes only
+mounted rows and releases observers on unmount. It changes neither transcript text
+nor row keys, row height, or scroll position. Images and individual annotation tiles
+share the composer attachment strip. Source superscripts and composer attachments
+open `ConversationExcerptDialog`; creation shares its compact editor content.
+Both modes show one ellipsized, quoted source line, with both quote marks outside
+the clipped text so the closing quote remains visible. Pending annotations use an
+unlabelled textarea with an accessible name. Sent-message entries always view
+their persisted comment as plain text in a bounded ScrollArea, even when a pending
+copy has the same annotation ID. Viewing has only source navigation and the
+Dialog close control; it exposes neither an editor nor a save/re-add action.
+
+Editing a pending annotation updates its owning draft and visible attachment;
+queued edits update the frozen prompt, display fallback and presentation together.
+Sending or unsupported legacy queue payloads remain intact and report why editing
+is unavailable. A source mark becomes read-only once it no longer has a pending
+owner, and a stale editor cannot create a follow-up after its owner disappears.
+Locate uses the existing viewport navigation owner, and explicitly saves changed
+draft text before closing. Device activation fences apply to both writes and
+navigation.
+
 ## Transcript row columns
 
 Thinking, Explore, ambient tool summaries and the runtime-status footer use

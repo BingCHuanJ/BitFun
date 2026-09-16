@@ -93,6 +93,9 @@ import {
   traceViewportRepeating,
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import { noteFlowListCommit } from '@/infrastructure/diagnostics/flowChatTailFollowDiagnostics';
+import type { ConversationExcerptContext } from '@/shared/types/context';
+import { findExcerptSource, resolveExcerptRange } from '../../selection/flowChatSelection';
+import { highlightExcerptRange } from '../../selection/locateConversationExcerpt';
 import './VirtualMessageList.scss';
 
 const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
@@ -156,16 +159,22 @@ export interface HistoryWindowBoundaryIntentOptions {
   cancelViewportPresentationCommit?: () => void;
 }
 
+export interface FlowChatTextNavigationTarget {
+  virtualItemIndex: number;
+  query: string;
+  flowItemId?: string;
+  occurrenceIndex?: number;
+  expandableIds?: readonly string[];
+  excerpt?: ConversationExcerptContext;
+  onUnavailable?: () => void;
+  isCurrent?: () => boolean;
+}
+
 export interface VirtualMessageListRef {
   scrollToTurn: (turnIndex: number) => void;
   scrollToIndex: (index: number) => void;
-  scrollToSearchMatch: (target: {
-    virtualItemIndex: number;
-    query: string;
-    flowItemId?: string;
-    occurrenceIndex?: number;
-    expandableIds?: readonly string[];
-  }) => void;
+  scrollToSearchMatch: (target: FlowChatTextNavigationTarget) => void;
+  notifyUserSelectionIntent: () => void;
   clearSearchMatch: () => void;
   scrollToPhysicalBottom: () => void;
   scrollToTurnEnd: (turnId: string) => boolean;
@@ -2054,13 +2063,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     virtualizer.cancelAim();
   }, [virtualizer]);
 
-  const scrollToSearchMatch = useCallback((target: {
-    virtualItemIndex: number;
-    query: string;
-    flowItemId?: string;
-    occurrenceIndex?: number;
-    expandableIds?: readonly string[];
-  }) => {
+  const scrollToSearchMatch = useCallback((target: FlowChatTextNavigationTarget) => {
     clearSearchMatch();
     exitFollowOutput('scroll-to-index');
     setNavigatedTurn(virtualItems[target.virtualItemIndex]?.turnId ?? null);
@@ -2080,12 +2083,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     });
     const resolve = () => {
       if (searchNavigationRequestIdRef.current !== requestId) return;
+      if (target.isCurrent && !target.isCurrent()) { virtualizer.cancelAim(); return; }
       attempts += 1;
       const retry = (reason: string) => {
         if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) requestAnimationFrame(resolve);
         else {
           if (materializing) virtualizer.cancelAim();
           traceSkipped(reason);
+          target.onUnavailable?.();
         }
       };
       const scroller = scrollerElementRef.current;
@@ -2121,14 +2126,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           return;
         }
       }
-      const root = getFlowChatSearchTextRoot(wrapper, target.flowItemId);
+      const root = target.excerpt
+        ? findExcerptSource(wrapper, target.excerpt.fragments[0])
+        : getFlowChatSearchTextRoot(wrapper, target.flowItemId);
       if (!root) {
         retry('source-not-mounted');
         return;
       }
-      const ranges = findFlowChatSearchTextRanges(root, target.query);
+      const ranges = target.excerpt ? [] : findFlowChatSearchTextRanges(root, target.query);
       const rangeIndex = Math.min(target.occurrenceIndex ?? 0, Math.max(0, ranges.length - 1));
-      const range = ranges[rangeIndex] ?? null;
+      const range = target.excerpt ? resolveExcerptRange(root, target.excerpt.fragments[0]) : ranges[rangeIndex] ?? null;
       // Use the same first painted line as the passive current-line marker.
       const rangeRect = range && Array.from(range.getClientRects())
         .find(rect => rect.width > 0 && rect.height > 0);
@@ -2149,6 +2156,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         if (materializing) virtualizer.cancelAim();
         traceSkipped('no-readable-area');
         return;
+      }
+      if (target.excerpt && range) {
+        const clear = highlightExcerptRange(range);
+        window.setTimeout(clear, 1800);
       }
       if (rangeRect.top >= readableTop && rangeRect.bottom <= readableBottom) {
         if (materializing) virtualizer.cancelAim();
@@ -2494,6 +2505,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollToTurn,
     scrollToIndex,
     scrollToSearchMatch,
+    notifyUserSelectionIntent: notifyUserScrollIntent,
     clearSearchMatch,
     scrollToPhysicalBottom,
     scrollToTurnEnd,
@@ -2509,6 +2521,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }), [
     captureViewportSnapshot,
     clearSearchMatch,
+    notifyUserScrollIntent,
     focusFlowItem,
     isTurnRenderedInViewport,
     isTurnTextRenderedInViewport,

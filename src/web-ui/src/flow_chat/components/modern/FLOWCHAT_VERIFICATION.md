@@ -16,6 +16,11 @@ each missing what the other had.
 
 | Test | Contract it holds |
 |---|---|
+| `../../selection/conversationExcerptInventory.test.ts` | source session/device isolation, draft/queue removal, sent-number retention, stable snapshots during streaming |
+| `../../selection/conversationExcerptMarkerPosition.test.ts` | text endpoint coordinates, wrapping and nested clipping; geometry contracts only, not visual acceptance |
+| `../ChatInputAttachments.test.tsx` | shared image/annotation strip, pending editing/removal, read-only sent snapshots with no write controls/shortcuts, one-line source quote, locate, keyboard containment and stale-device rejection |
+| `../../selection/conversationExcerptEditing.test.ts` | draft/visible/queue ownership, preserved prompt context and attachments, legacy payload handling, sending guards and sent snapshots with no edit capability |
+| `../../services/flow-chat-manager/PendingQueueModule.test.ts` | persisted payload edits preserve queue order/identity, images and device isolation; sending entries reject edits |
 | `../../../infrastructure/markdown/useStreamingTextReveal.test.tsx` | appended-glyph-only fading, independent batch clocks and renderers, history/remount stability, stream completion and reduced motion |
 | `UserMessageItem.test.tsx` | sent and reloaded MCP references, mixed reference capsules, failed-message presentation, and message actions |
 | `modelRoundItemMemo.test.ts` | settled rows refresh continuation labels and tool grouping hints without invalidating equivalent hints |
@@ -38,12 +43,35 @@ each missing what the other had.
 | `FlowChatTurnRail.test.tsx` | single-marker emphasis, neighboring hover fan, independent keyboard focus, reduced motion, and rail navigation |
 | `useFlowChatSearch.test.ts` | exact matching-block decoration, occurrence counting, and search navigation state |
 | `flowChatSearchDom.test.ts` | concrete text ranges and independent highlight ownership across rows and panes |
+| `../../selection/flowChatSelection.test.ts` | Markdown selection boundaries, source isolation, repeated text anchors, and changed sources |
+| `../../selection/FlowChatSelectionBar.test.tsx` | annotation Dialog focus containment and return, frozen excerpts during scroll/resize, and comment submission |
+| `../../selection/useExcerptComposerActions.test.tsx` | main/side draft routing, focus after activation, ordinary child ownership, and stale surface rejection |
+| `../../../shared/utils/conversationExcerpt.test.ts` | quote deduplication, source-data framing, and legacy/additive presentation metadata |
 | `flowChatSearchPresentation.test.ts` | visible source highlighting and single-line marker geometry, wrapping, scrolling, and clipping |
 | `FlowChatHeader.test.tsx` | shared SearchField composition, result controls, input identity while expanding, native-view occlusion declaration for session overview, and the default active-only Agent tree toggle |
 | `SessionTreePopover.test.tsx` | Agent selection/cancellation/deletion menus, type-only metadata, active branch filtering with ancestor retention, restoring all agents, and the active empty state |
 | `../../services/deleteSessionTreeBranch.test.ts` | Unloaded descendant deletion in child-first order, remote location forwarding, failure retention, and device surface guards |
 
 ## Manual
+
+For text selection, check the floating toolbar and right-click actions in the
+native WebView; keyboard selection, Tab, Escape, and Ctrl/Cmd+Alt+B; both main
+and ordinary side transcripts; multiline Markdown/code; dark/light and forced
+colors; narrow AuxPane layouts; long virtualized history; and switching targets
+with existing drafts. Remote workspace and desktop-peer sends, older-host quote
+fallbacks, disconnect recovery, and CLI-peer/dispatch unsupported states require
+separate real-host checks. Unit fixtures are not evidence of those scenarios.
+Annotation editing, draft management, and sent annotations use the public Dialog
+anatomy. Check initial focus after the context menu closes, Tab containment,
+Escape/cancel focus return, one-line quote truncation, and save-and-locate from
+pending source marks and composer attachments without losing the comment. Sent
+annotations must display the sent comment without input/save controls and retain
+source navigation, including when a same-ID draft exists in the composer.
+The first ordinary side question forks the parent on send. Model and reasoning
+choices stay in its draft until that request; its Agent mode is inherited.
+Its permission control reads the parent and becomes editable after submission.
+Peers advertise `btw_initial_model_selection_v1` before showing those draft
+settings as editable. Older hosts retain inherited settings and readable quotes.
 
 **Agents must not perform UI interaction verification.** Report these as pending
 unless a human confirms them. They are grouped so that adding a check to one
