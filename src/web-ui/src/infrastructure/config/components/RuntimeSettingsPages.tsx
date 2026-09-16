@@ -13,6 +13,7 @@ import { OverflowText,
   Dialog,
   DialogBody,
   DialogClose,
+  DialogFooter,
   DialogHeader,
   DialogHeading,
   DialogTitle,
@@ -1727,7 +1728,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
             </DialogHeading>
             <DialogClose />
           </DialogHeader>
-          <DialogBody inset="none">
+          <DialogBody>
           <div className="openbitfun-debug-config__modal-body" data-openbitfun-component="runtime-settings" data-openbitfun-part="restartModal">
             <p>{t('browserControl.restartModal.description', { browser: browserRestartPrompt?.browserKind || browserKind })}</p>
             <p>{t('browserControl.restartModal.warning')}</p>
@@ -1735,7 +1736,13 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
               <p className="openbitfun-runtime-settings__hint">{browserRestartPrompt.message}</p>
             ) : null}
           </div>
-          <div className="openbitfun-debug-config__modal-footer" data-openbitfun-component="runtime-settings" data-openbitfun-part="modalFooter">
+          </DialogBody>
+          <DialogFooter
+            separator
+            className="openbitfun-debug-config__modal-footer"
+            data-openbitfun-component="runtime-settings"
+            data-openbitfun-part="modalFooter"
+          >
             <Button
               variant="fill"
               size="sm"
@@ -1754,8 +1761,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 ? t('browserControl.restartModal.restarting')
                 : t('browserControl.restartModal.confirm')}
             </Button>
-          </div>
-                  </DialogBody>
+          </DialogFooter>
         </Dialog>
 
           </>
