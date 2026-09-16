@@ -494,7 +494,7 @@
     <string name="workspace_sort_modified_desc">修改时间：最新优先</string>
     <string name="workspace_sort_modified_asc">修改时间：最早优先</string>
     <string name="workspace_actions">工作区操作</string>
-    <string name="device_tools">设备工具</string>
+    <string name="device_tools">工具</string>
 
     <string name="plan_title">计划</string>
     <string name="plan_view">查看计划</string>

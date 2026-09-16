@@ -72,7 +72,6 @@ public data class DeviceDirectoryEntry public constructor(
     public val deviceId: String,
     public val deviceName: String,
     public val online: Boolean,
-    public val expanded: Boolean,
     public val status: DeviceDirectoryStatus,
     public val error: DeviceDirectoryFailure?,
     public val workspaces: List<RecentWorkspace>,
@@ -81,18 +80,6 @@ public data class DeviceDirectoryEntry public constructor(
     public val catalogSource: WorkspaceCatalogSource?,
     public val recentWorkspaces: List<RecentWorkspace>,
 ) {
-    public constructor(deviceId: String, deviceName: String, online: Boolean, expanded: Boolean, status: DeviceDirectoryStatus, error: DeviceDirectoryFailure?, workspaces: List<RecentWorkspace>, sessions: List<RemoteSession>, workspaceDirectory: List<WorkspaceDirectoryEntry>) : this(deviceId, deviceName, online, expanded, status, error, workspaces, sessions, workspaceDirectory, null, workspaces)
-    public constructor(
-        deviceId: String,
-        deviceName: String,
-        online: Boolean,
-        expanded: Boolean,
-        status: DeviceDirectoryStatus,
-        error: DeviceDirectoryFailure?,
-        workspaces: List<RecentWorkspace>,
-        sessions: List<RemoteSession>,
-    ) : this(deviceId, deviceName, online, expanded, status, error, workspaces, sessions, emptyList())
-
     public fun sessionsForWorkspace(path: String, remoteConnectionId: String?, remoteSshHost: String?): List<RemoteSession> {
         val identity = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost)
         return sessions.filter { it.belongsTo(identity, workspaces.map { row -> row.identity() }) }
@@ -106,23 +93,18 @@ public data class DeviceDirectoryEntry public constructor(
     }
 
     public companion object {
-        private fun normalizeWorkspacePath(path: String): String {
-            val trimmed = path.trim()
-            val normalized = trimmed.trimEnd('/')
-            return normalized.ifEmpty { trimmed }
-        }
-
         public fun empty(deviceId: String, deviceName: String, online: Boolean): DeviceDirectoryEntry =
             DeviceDirectoryEntry(
                 deviceId = deviceId,
                 deviceName = deviceName,
                 online = online,
-                expanded = false,
                 status = DeviceDirectoryStatus.IDLE,
                 error = null,
                 workspaces = emptyList(),
                 sessions = emptyList(),
                 workspaceDirectory = emptyList(),
+                catalogSource = null,
+                recentWorkspaces = emptyList(),
             )
     }
 }
@@ -155,14 +137,6 @@ public sealed interface DeviceDirectoryIntent {
     ) : DeviceDirectoryIntent
 
     public data class Load public constructor(
-        public val deviceId: String,
-    ) : DeviceDirectoryIntent
-
-    public data class Expand public constructor(
-        public val deviceId: String,
-    ) : DeviceDirectoryIntent
-
-    public data class Collapse public constructor(
         public val deviceId: String,
     ) : DeviceDirectoryIntent
 

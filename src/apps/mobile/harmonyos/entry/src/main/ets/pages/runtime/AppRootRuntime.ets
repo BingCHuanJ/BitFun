@@ -252,11 +252,9 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   async selectDirectoryDevice(deviceId: string): Promise<void> {
     const selectionVersion = ++this.directorySelectionVersion;
-    // Selecting an already disclosed device is a local collapse. The remote
-    // control target remains connected; only its workspace tree is hidden.
-    // Bumping the version first also prevents an earlier async selection from
-    // reopening the row after this second tap.
-    if (this.deviceDirectoryState.collapseIfSelected(deviceId)) {
+    // Re-selecting the current context never hides its workspace panel.
+    if (this.deviceDirectoryState.selectedDeviceId === deviceId &&
+      this.isConnectedDirectoryTarget(deviceId)) {
       return;
     }
     await this.deviceDirectoryViewModel.selectDevice(deviceId);
@@ -276,8 +274,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
       if (this.appShellState.wideLayout) {
         await this.enterRemoteSurfaceWide();
       } else {
-        // A device row is also the disclosure control for its workspaces. Keep
-        // the compact drawer visible so selecting it can reveal that content;
+        // Keep the compact drawer visible to show the selected workspace panel;
         // entering Remote from any other compact entry point still dismisses
         // the drawer through the method's default behavior.
         await this.enterRemoteSurfaceCompact(false);

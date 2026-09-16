@@ -1,8 +1,9 @@
+import { SidebarToolsFooter } from './SidebarToolsFooter';
 import { SavedRuntimeConnection } from '../../model/RemoteModels';
 import { WorkspaceToolsIntent } from '../state/WorkspaceToolsState';
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, PAGE_BG, PAGE_BG_FADE, SHADOW_FAINT, SHADOW_SUBTLE, SOFT, SUBTLE, TRANSPARENT } from './Theme';
+import { CARD, INK, LINE, PAGE_BG, PAGE_BG_FADE, SHADOW_FAINT, SOFT, SUBTLE, TRANSPARENT } from './Theme';
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SidebarGlyph } from './SidebarGlyphs';
 import { SidebarConnectionActionPolicy } from '../policy/SidebarConnectionActionPolicy';
@@ -239,50 +240,11 @@ export struct AppSidebar {
 
   @Builder
   private PrimaryNavigationFooter() {
-    Row() {
-      Button() {
-        Row({ space: 8 }) {
-          SidebarGlyph({ kind: 'edit' })
-          Text(RemoteI18n.t('workspaceTools.title'))
-            .fontSize(MobileDesignTypography.titleMedium.size)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(INK)
-        }
-      }
-      .constraintSize({ minWidth: 128, maxWidth: 180 })
-      .height(44)
-      .padding({ left: 14, right: 14 })
-      .backgroundColor(CARD)
-      .border({ width: 0.5, color: LINE })
-      .borderRadius(22)
-      .shadow({ radius: 24, color: SHADOW_SUBTLE, offsetY: 7 })
-      .enabled(this.connectionState === 'connected')
-      .opacity(this.connectionState === 'connected' ? 1 : 0.45)
-      .accessibilityText(RemoteI18n.t('workspaceTools.title'))
-      .stateEffect(true)
-      .onClick(() => { this.requestDeviceTools(); })
-
-      Blank()
-
-      Button() {
-        SidebarGlyph({ kind: 'settings' })
-      }
-        .width(44)
-        .height(44)
-        .padding(0)
-        .backgroundColor(CARD)
-        .borderRadius(22)
-        .shadow({ radius: 24, color: SHADOW_SUBTLE, offsetY: 7 })
-        .stateEffect(true)
-        .onClick(() => {
-          this.onOpenSettings();
-        })
-    }
-    .width('100%')
-    .height(56)
-    .padding({ left: 12 })
-    .alignItems(VerticalAlign.Center)
-    .zIndex(2)
+    SidebarToolsFooter({
+      toolsEnabled: this.connectionState === 'connected',
+      onOpenTools: () => this.requestDeviceTools(),
+      onOpenSettings: () => this.onOpenSettings()
+    })
   }
 
   @Builder

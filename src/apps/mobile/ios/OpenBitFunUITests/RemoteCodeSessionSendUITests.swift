@@ -1489,14 +1489,19 @@ final class RemoteHomeLiveUITests: XCTestCase {
         waitForExpectations(timeout: 30)
         let drawer = XCTAttachment(screenshot: app.screenshot()); drawer.name = "LiveSelectedDeviceSidebar"; drawer.lifetime = .keepAlways; add(drawer)
         if ProcessInfo.processInfo.environment["OPENBITFUN_LIVE_HEALTH_OUTAGE"] == "1" {
-            let retry = app.buttons["sidebar.retryConnection"]
-            XCTAssertFalse(retry.exists)
+            let connectedValue = device.value as? String
+            XCTAssertNotNil(connectedValue)
             print("LIVE_HEALTH_READY_FOR_HOST_PAUSE")
-            XCTAssertTrue(retry.waitForExistence(timeout: 90))
+            expectation(for: NSPredicate { object, _ in
+                (object as? XCUIElement)?.value as? String != connectedValue
+            }, evaluatedWith: device)
+            waitForExpectations(timeout: 90)
             XCTAssertTrue(device.exists, "A lost host must not remove the selected device.")
             let outage = XCTAttachment(screenshot: app.screenshot())
             outage.name = "LiveHostUnavailableSidebar"; outage.lifetime = .keepAlways; add(outage)
-            expectation(for: NSPredicate { object, _ in !(object as? XCUIElement ?? retry).exists }, evaluatedWith: retry)
+            expectation(for: NSPredicate { object, _ in
+                (object as? XCUIElement)?.value as? String == connectedValue
+            }, evaluatedWith: device)
             waitForExpectations(timeout: 90)
             XCTAssertTrue(device.exists)
             let recovered = XCTAttachment(screenshot: app.screenshot())

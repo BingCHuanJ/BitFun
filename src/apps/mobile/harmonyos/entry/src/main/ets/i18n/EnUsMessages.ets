@@ -17,7 +17,7 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['workspaceTools.selectLocation', 'Select a location'],
   ['workspaceTools.runtimeLocal', 'This runtime'],
   ['workspaceTools.download', 'Download'],
-  ['workspaceTools.title', 'Device tools'],
+  ['workspaceTools.title', 'Tools'],
   ['workspaceTools.files', 'Files'],
   ['workspaceTools.selectTerminal', 'Select an existing terminal'],
   ['workspaceTools.terminal', 'Terminal'],

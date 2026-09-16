@@ -509,7 +509,7 @@
     <string name="workspace_sort_modified_asc">Oldest first</string>
     <string name="workspace_terminal">Terminal</string>
     <string name="workspace_actions">Workspace actions</string>
-    <string name="device_tools">Device tools</string>
+    <string name="device_tools">Tools</string>
 
     <string name="plan_title">Plan</string>
     <string name="plan_view">View plan</string>

@@ -34,6 +34,26 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class DeviceDirectoryStoreTest {
     @Test
+    fun workspaceDisclosureSurvivesRefreshAndOfflineRoundTrip() = runTest {
+        val store = DeviceDirectoryStore.create(this, FakeDeviceStoreFactory(mutableMapOf("a" to FakeDeviceTransport("a"))))
+        store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
+        advanceUntilIdle()
+        store.dispatch(DeviceDirectoryIntent.SetWorkspaceExpanded("a", "/repo-a", true))
+        advanceUntilIdle()
+        for (online in listOf(true, false, true)) {
+            store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", online))))
+            val entry = store.state.value.device("a")!!
+            assertTrue(entry.workspaceDirectory.single().expanded)
+        }
+        store.dispatch(DeviceDirectoryIntent.SetWorkspaceExpanded("a", "/repo-a", false))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
+        advanceUntilIdle()
+        assertFalse(store.state.value.device("a")!!.workspaceDirectory.single().expanded)
+        store.stop()
+    }
+
+    @Test
     fun devicesLoadIndependentlyAndOneFailureDoesNotClearOthers() = runTest {
         val transports = mutableMapOf(
             "a" to FakeDeviceTransport("a"),
@@ -83,7 +103,7 @@ class DeviceDirectoryStoreTest {
         val cache = MemoryDirectorySessions()
         val store = DeviceDirectoryStore.create(this, CachedDeviceStoreFactory(transport, cache, history))
         store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
-        store.dispatch(DeviceDirectoryIntent.Expand("a"))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
         advanceUntilIdle()
         store.dispatch(DeviceDirectoryIntent.SetWorkspaceExpanded("a", "/repo-a", true))
         advanceUntilIdle()
@@ -99,7 +119,7 @@ class DeviceDirectoryStoreTest {
         assertEquals(listOf("s-a"), ready.sessions.map { it.id })
         assertTrue(history.byDevice.getValue("a").any { it.path == "/repo-a" })
         store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", false))))
-        store.dispatch(DeviceDirectoryIntent.Expand("a"))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
         assertTrue(store.state.value.device("a")!!.workspaces.isEmpty())
         assertEquals(listOf("s-a"), store.state.value.device("a")!!.sessions.map { it.id })
         store.stop()
@@ -114,7 +134,7 @@ class DeviceDirectoryStoreTest {
         val sessions = MemoryDirectorySessions()
         val store = DeviceDirectoryStore.create(this, CachedDeviceStoreFactory(transport, sessions, MemoryDirectoryWorkspaces()))
         store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
-        store.dispatch(DeviceDirectoryIntent.Expand("a")); advanceUntilIdle()
+        store.dispatch(DeviceDirectoryIntent.Load("a")); advanceUntilIdle()
         val gateA = CompletableDeferred<Unit>(); val gateB = CompletableDeferred<Unit>()
         transport.sessionGateByConnection["ssh-a"] = gateA
         transport.sessionGateByConnection["ssh-b"] = gateB
@@ -157,30 +177,25 @@ class DeviceDirectoryStoreTest {
     }
 
     @Test
-    fun expandPreservesCachedDataWithoutRefetching() = runTest {
+    fun loadingReadyDirectoryPreservesDataWithoutRefetching() = runTest {
         val transport = FakeDeviceTransport("a")
         val store = DeviceDirectoryStore.create(this, FakeDeviceStoreFactory(mutableMapOf("a" to transport)))
 
         store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
-        store.dispatch(DeviceDirectoryIntent.Expand("a"))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
         advanceUntilIdle()
 
         val first = store.state.value.device("a")!!
-        assertTrue(first.expanded)
         assertEquals(DeviceDirectoryStatus.READY, first.status)
         assertTrue(first.sessions.isEmpty())
         val listSessionsBefore = transport.commands.count { it.cmd == "list_sessions" }
         assertEquals(0, listSessionsBefore)
 
-        store.dispatch(DeviceDirectoryIntent.Collapse("a"))
-        assertFalse(store.state.value.device("a")!!.expanded)
-
-        // Re-expanding a ready device keeps the cache instead of re-fetching.
-        store.dispatch(DeviceDirectoryIntent.Expand("a"))
+        // Revisiting a ready device keeps its data instead of re-fetching.
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
         advanceUntilIdle()
 
         val again = store.state.value.device("a")!!
-        assertTrue(again.expanded)
         assertEquals(DeviceDirectoryStatus.READY, again.status)
         assertTrue(again.sessions.isEmpty())
         assertEquals(listSessionsBefore, transport.commands.count { it.cmd == "list_sessions" })

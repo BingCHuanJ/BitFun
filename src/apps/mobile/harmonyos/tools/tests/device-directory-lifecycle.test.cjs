@@ -177,3 +177,14 @@ test('old account manual refresh cannot fail or release replacement refresh', as
   current.resolve(); await second;
   assert.equal(f.state.refreshing, false);
 });
+
+
+test('directory restores the active target and refresh preserves an explicit selection', () => {
+  const f = fixture();
+  f.active('desktop');
+  f.vm.syncDevices([{ deviceId: 'desktop', online: true }, { deviceId: 'other', online: true }]);
+  assert.equal(f.state.selectedDeviceId, 'desktop');
+  f.state.select('other');
+  f.vm.syncDevices([{ deviceId: 'desktop', online: true }, { deviceId: 'other', online: false }]);
+  assert.equal(f.state.selectedDeviceId, 'other');
+});

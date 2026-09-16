@@ -44,8 +44,6 @@ public class DeviceDirectoryStore internal constructor(
         when (intent) {
             is DeviceDirectoryIntent.Sync -> sync(intent.devices)
             is DeviceDirectoryIntent.Load -> load(intent.deviceId)
-            is DeviceDirectoryIntent.Expand -> expand(intent.deviceId)
-            is DeviceDirectoryIntent.Collapse -> collapse(intent.deviceId)
             is DeviceDirectoryIntent.Retry -> retry(intent.deviceId)
             is DeviceDirectoryIntent.SetWorkspaceExpanded -> setWorkspaceExpanded(
                 intent.deviceId,
@@ -144,9 +142,11 @@ public class DeviceDirectoryStore internal constructor(
                 existing.copy(
                     deviceName = device.deviceName,
                     online = device.online,
-                    expanded = if (device.online) existing.expanded else false,
-                    workspaceDirectory = if (device.online) existing.workspaceDirectory else
-                        existing.workspaceDirectory.map { it.copy(expanded = false) },
+                    workspaceDirectory = existing.workspaceDirectory.map { workspace ->
+                        if (!device.online && workspace.status == WorkspaceDirectoryStatus.LOADING) {
+                            workspace.copy(status = WorkspaceDirectoryStatus.IDLE)
+                        } else workspace
+                    },
                     status = if (device.online) {
                         existing.status
                     } else if (existing.workspaces.isNotEmpty() || existing.sessions.isNotEmpty()) {
@@ -187,41 +187,18 @@ public class DeviceDirectoryStore internal constructor(
         startLoad(id, slot, entry)
     }
 
-    private fun expand(deviceId: String) {
-        val id = deviceId.trim()
-        if (id.isEmpty()) return
-        val entry = devices[id] ?: return
-        for ((otherId, other) in devices) {
-            devices[otherId] = other.copy(expanded = otherId == id)
-        }
-        publish()
-        if (entry.status == DeviceDirectoryStatus.READY) return
-        if (entry.online) load(id)
-    }
-
-    private fun collapse(deviceId: String) {
-        val id = deviceId.trim()
-        if (id.isEmpty()) return
-        val entry = devices[id] ?: return
-        devices[id] = entry.copy(expanded = false)
-        publish()
-    }
-
     private fun retry(deviceId: String) {
         val id = deviceId.trim()
         if (id.isEmpty()) return
         val entry = devices[id] ?: return
         if (!entry.online) return
         if (loads[id]?.isActive == true) return
-        val expanded = entry.copy(expanded = true)
-        devices[id] = expanded
-        publish()
         val slot = slotFor(id)
         if (slot == null) {
             setEntry(id) { it.copy(status = DeviceDirectoryStatus.FAILED, error = DeviceDirectoryFailure.NOT_SIGNED_IN) }
             return
         }
-        startLoad(id, slot, expanded)
+        startLoad(id, slot, entry)
     }
 
     private fun setWorkspaceExpanded(deviceId: String, identity: RemoteWorkspaceIdentity, expanded: Boolean) {
@@ -349,7 +326,7 @@ public class DeviceDirectoryStore internal constructor(
                 // after a newer generation has already started.
                 val current = devices[id]
                 if (isCurrent(id, generation) && current?.status == DeviceDirectoryStatus.LOADING) {
-                    devices[id] = previous.copy(expanded = current.expanded)
+                    devices[id] = previous.copy(workspaceDirectory = current.workspaceDirectory)
                     publish()
                 }
                 throw cancelled

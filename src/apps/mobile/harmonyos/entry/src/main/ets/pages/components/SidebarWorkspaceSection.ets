@@ -16,12 +16,9 @@ import {
   SettingsSheetKind
 } from '../policy/SettingsPlacementPolicy';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
-import { STATUS_SUCCESS, STATUS_DANGER, INK, MUTED, SUBTLE } from './Theme';
+import { STATUS_SUCCESS, STATUS_DANGER, INK, MUTED, SUBTLE, SOFT, TRANSPARENT } from './Theme';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
-import {
-  SidebarChevronIcon,
-  SidebarDeviceIcon
-} from './SidebarNavigationIcons';
+import { SidebarDeviceIcon } from './SidebarNavigationIcons';
 import { SidebarWorkspacePicker } from './SidebarWorkspacePicker';
 import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresenter';
 import { RemoteUiState } from '../../services/RemoteUiState';
@@ -95,10 +92,6 @@ export struct SidebarWorkspaceSection {
       if (this.deviceEntries().length > 0) {
         ForEach(this.visibleDeviceEntries(), (entry: DeviceDirectoryEntry) => {
           this.DeviceRow(entry)
-          if (this.isActiveDevice(entry.deviceId) &&
-            (this.connectionState === 'reconnecting' || this.connectionState === 'failed' || this.connectionState === 'disconnected')) {
-            this.ConnectionRecoveryRow()
-          }
         }, (entry: DeviceDirectoryEntry): string => this.deviceKey(entry))
         if (this.visibleDeviceCount < this.deviceEntries().length) {
           this.MoreDevicesRow()
@@ -164,13 +157,13 @@ export struct SidebarWorkspaceSection {
       SidebarDeviceIcon({
         deviceName: entry.deviceName,
         iconSize: 24,
-        tint: entry.online ? INK : SUBTLE
+        tint: INK
       })
         .hitTestBehavior(HitTestMode.None)
       Text(entry.deviceName)
         .fontSize(MobileDesignTypography.bodyMedium.size)
-        .fontWeight(entry.deviceId.length > 0 && this.controlTargetDeviceId.trim() === entry.deviceId ? FontWeight.Bold : FontWeight.Regular)
-        .fontColor(entry.online ? INK : SUBTLE)
+        .fontWeight(this.isSelected(entry) ? FontWeight.Bold : FontWeight.Regular)
+        .fontColor(INK)
         .layoutWeight(1)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -190,31 +183,28 @@ export struct SidebarWorkspaceSection {
           .borderRadius(4)
           .hitTestBehavior(HitTestMode.None)
       }
-      Stack({ alignContent: Alignment.Center }) {
-        SidebarChevronIcon({
-          expanded: this.isSelected(entry),
-          iconSize: 14,
-          tint: entry.online ? INK : SUBTLE
-        })
-          .hitTestBehavior(HitTestMode.None)
-      }
-      .width(20)
-      .height(24)
-      .hitTestBehavior(HitTestMode.None)
     }
     .width('100%')
     .height(52)
     .padding({ left: 8, right: 4 })
     .alignItems(VerticalAlign.Center)
-    .opacity(entry.online ? 1 : 0.58)
+    .backgroundColor(this.isSelected(entry) ? SOFT : TRANSPARENT)
+    .borderRadius(10)
     .accessibilityText(`${entry.deviceName}, ${this.isActiveDevice(entry.deviceId) ? ConnectionStatusPresenter.label(this.connectionState) :
       RemoteI18n.t(entry.online ? 'sidebar.deviceOnline' : 'sidebar.deviceOffline')}`)
-    .enabled(this.canUseDevice(entry))
+    .enabled(this.canUseDevice(entry) || this.canRetryDevice(entry))
     .onClick(() => {
-      if (this.canUseDevice(entry)) {
+      if (this.canRetryDevice(entry)) {
+        this.onReconnect();
+      } else if (this.canUseDevice(entry)) {
         this.onSelectDevice(entry.deviceId);
       }
     })
+  }
+
+  private canRetryDevice(entry: DeviceDirectoryEntry): boolean {
+    return this.isActiveDevice(entry.deviceId) &&
+      (this.connectionState === 'failed' || this.connectionState === 'disconnected');
   }
 
   private deviceHealthColor(entry: DeviceDirectoryEntry): ResourceColor {
@@ -222,23 +212,6 @@ export struct SidebarWorkspaceSection {
     if (this.connectionState === 'connected') return STATUS_SUCCESS;
     if (this.connectionState === 'failed' || this.connectionState === 'disconnected') return STATUS_DANGER;
     return MUTED;
-  }
-
-  @Builder
-  private ConnectionRecoveryRow() {
-    Row() {
-      Text(ConnectionStatusPresenter.label(this.connectionState))
-        .fontSize(MobileDesignTypography.labelSmall.size)
-        .fontColor(MUTED)
-        .layoutWeight(1)
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(17).fontColor([MUTED])
-      }
-      .width(44).height(44)
-      .accessibilityText(RemoteI18n.t('common.retry'))
-      .onClick(() => this.onReconnect())
-    }
-    .width('100%').height(44).padding({ left: 10, right: 6 })
   }
 
   @Builder
@@ -290,7 +263,6 @@ export struct SidebarWorkspaceSection {
         selectedSessionId: this.selectedSessionIdFor(entry),
         runningSessionId: this.isActiveDevice(entry.deviceId) ? this.runningSessionId : '',
         query: this.query,
-        showHeader: false,
         isActive: this.isActiveDevice(entry.deviceId),
         supportsHarnessProfiles: this.supportsHarnessProfiles,
         onRetry: () => {

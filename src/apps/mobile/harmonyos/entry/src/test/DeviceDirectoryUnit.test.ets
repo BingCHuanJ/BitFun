@@ -185,13 +185,13 @@ export default function deviceDirectoryUnitTest() {
   });
 
   describe('DeviceDirectoryState', () => {
-    it('collapses only the device that is currently disclosed', 0, () => {
+    it('reselects a device without clearing the workspace selection', 0, () => {
       const state = new DeviceDirectoryState();
       state.select('desk-a');
-      expect(state.collapseIfSelected('desk-b')).assertFalse();
+      state.select('desk-a');
       expect(state.selectedDeviceId).assertEqual('desk-a');
-      expect(state.collapseIfSelected('desk-a')).assertTrue();
-      expect(state.selectedDeviceId).assertEqual('');
+      state.select('desk-b');
+      expect(state.selectedDeviceId).assertEqual('desk-b');
     });
   });
 
@@ -284,7 +284,7 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-other', deviceName: 'Other', online: false }
       ]);
       expect(state.find('desk-live')?.online).assertTrue();
-      expect(state.selectedDeviceId).assertEqual('');
+      expect(state.selectedDeviceId).assertEqual('desk-live');
       // The override must not outlive the link it is based on, or a device that
       // really did go away keeps a lit row forever.
       expect(state.find('desk-other')?.online).assertFalse();
@@ -293,7 +293,7 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-live', deviceName: 'Studio', online: false }
       ]);
       expect(state.find('desk-live')?.online).assertFalse();
-      expect(state.selectedDeviceId).assertEqual('');
+      expect(state.selectedDeviceId).assertEqual('desk-live');
     });
 
     it('keeps an explicit device selection across syncDevices', 0, async () => {
@@ -315,7 +315,7 @@ export default function deviceDirectoryUnitTest() {
       ]);
       expect(state.workspaceExpanded('desk-other', '/workspace/project')).assertTrue();
       expect(state.workspaceStatus('desk-other', '/workspace/project/')).assertEqual('loading');
-      expect(state.selectedDeviceId).assertEqual('');
+      expect(state.selectedDeviceId).assertEqual('desk-active');
       await viewModel.selectDevice('desk-other');
       expect(state.selectedDeviceId).assertEqual('desk-other');
       viewModel.syncDevices([

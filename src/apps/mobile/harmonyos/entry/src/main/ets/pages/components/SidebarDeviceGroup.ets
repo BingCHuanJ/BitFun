@@ -22,7 +22,6 @@ import {
   MUTED,
   SOFT,
   STATUS_SUCCESS,
-  SUBTLE,
   TRANSPARENT,
 } from './Theme';
 
@@ -338,10 +337,8 @@ export struct SidebarDeviceGroup {
   @Param selectedSessionId: string = '';
   @Param runningSessionId: string = '';
   @Param query: string = '';
-  @Param showHeader: boolean = false;
   @Param isActive: boolean = false;
   @Param supportsHarnessProfiles: boolean = false;
-  @Event onToggle: () => void = () => {};
   @Event onRetry: () => void = () => {};
   @Event onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onSessionActions: (session: RemoteSession) => void = (_session: RemoteSession) => {};
@@ -356,112 +353,54 @@ export struct SidebarDeviceGroup {
 
   build() {
     Column() {
-      if (this.showHeader) {
-        this.DeviceHeader()
-      }
-      if (this.shouldShowBody()) {
-        if (this.device.status === 'failed') {
-          this.FailedRow()
-        } else if (this.workspaceEntries().length === 0) {
-          if (this.device.status === 'ready') {
-            this.EmptyWorkspaces()
-          } else if (this.device.status === 'cached') {
-            this.EmptyWorkspaces()
-          } else {
-            this.LoadingRow()
-          }
+      if (this.device.status === 'failed') {
+        this.FailedRow()
+      } else if (this.workspaceEntries().length === 0) {
+        if (this.device.status === 'ready') {
+          this.EmptyWorkspaces()
+        } else if (this.device.status === 'cached') {
+          this.EmptyWorkspaces()
         } else {
-          ForEach(this.visibleWorkspaceEntries(), (entry: RecentWorkspaceEntry) => {
-            SidebarWorkspaceGroup({
-              connectionId: entry.remoteConnectionId || '',
-              sshHost: entry.remoteSshHost || '',
-              onWorkspaceTools: this.onWorkspaceTools,
-              deviceId: this.device.deviceId,
-              path: entry.path,
-              name: entry.remoteSshHost?.trim() ? `${entry.name} · ${entry.remoteSshHost.trim()}` : entry.name,
-              sessions: this.sessionsFor(entry),
-              selectedSessionId: this.selectedSessionId,
-              runningSessionId: this.runningSessionId,
-              currentWorkspace: this.isCurrentWorkspace(entry),
-              activeDevice: this.isActive,
-              supportsHarnessProfiles: this.supportsHarnessProfiles,
-              bodyIndent: this.bodyIndent(),
-              expanded: this.directoryState.workspaceExpanded(this.device.deviceId, entry.path, entry.remoteConnectionId, entry.remoteSshHost),
-              loadStatus: this.directoryState.workspaceStatus(this.device.deviceId, entry.path, entry.remoteConnectionId, entry.remoteSshHost),
-              hasLoadedSessions: this.directoryState.workspaceHasLoadedSessions(this.device.deviceId, entry.path, entry.remoteConnectionId, entry.remoteSshHost),
-              onOpenWorkspace: this.onOpenWorkspace,
-              onExpandWorkspace: (path: string): Promise<void> => this.onExpandWorkspace(path, entry.remoteConnectionId, entry.remoteSshHost),
-              onExpandedChange: (path: string, expanded: boolean): void => this.onWorkspaceExpandedChange(path, expanded, entry.remoteConnectionId, entry.remoteSshHost),
-              onCreateInWorkspace: this.onCreateInWorkspace,
-              onOpenSession: this.onOpenSession,
-              onSessionActions: this.onSessionActions
-            })
-          }, (entry: RecentWorkspaceEntry): string =>
-            `${this.device.deviceId}:${remoteWorkspaceKey(entry)}`)
-          if (this.hiddenWorkspaceCount() > 0) {
-            this.MoreWorkspacesRow()
-          }
-          if (this.device.status === 'loading') {
-            this.LoadingRow()
-          }
+          this.LoadingRow()
+        }
+      } else {
+        ForEach(this.visibleWorkspaceEntries(), (entry: RecentWorkspaceEntry) => {
+          SidebarWorkspaceGroup({
+            connectionId: entry.remoteConnectionId || '',
+            sshHost: entry.remoteSshHost || '',
+            onWorkspaceTools: this.onWorkspaceTools,
+            deviceId: this.device.deviceId,
+            path: entry.path,
+            name: entry.remoteSshHost?.trim() ? `${entry.name} · ${entry.remoteSshHost.trim()}` : entry.name,
+            sessions: this.sessionsFor(entry),
+            selectedSessionId: this.selectedSessionId,
+            runningSessionId: this.runningSessionId,
+            currentWorkspace: this.isCurrentWorkspace(entry),
+            activeDevice: this.isActive,
+            supportsHarnessProfiles: this.supportsHarnessProfiles,
+            bodyIndent: 10,
+            expanded: this.directoryState.workspaceExpanded(this.device.deviceId, entry.path, entry.remoteConnectionId, entry.remoteSshHost),
+            loadStatus: this.directoryState.workspaceStatus(this.device.deviceId, entry.path, entry.remoteConnectionId, entry.remoteSshHost),
+            hasLoadedSessions: this.directoryState.workspaceHasLoadedSessions(this.device.deviceId, entry.path, entry.remoteConnectionId, entry.remoteSshHost),
+            onOpenWorkspace: this.onOpenWorkspace,
+            onExpandWorkspace: (path: string): Promise<void> => this.onExpandWorkspace(path, entry.remoteConnectionId, entry.remoteSshHost),
+            onExpandedChange: (path: string, expanded: boolean): void => this.onWorkspaceExpandedChange(path, expanded, entry.remoteConnectionId, entry.remoteSshHost),
+            onCreateInWorkspace: this.onCreateInWorkspace,
+            onOpenSession: this.onOpenSession,
+            onSessionActions: this.onSessionActions
+          })
+        }, (entry: RecentWorkspaceEntry): string =>
+          `${this.device.deviceId}:${remoteWorkspaceKey(entry)}`)
+        if (this.hiddenWorkspaceCount() > 0) {
+          this.MoreWorkspacesRow()
+        }
+        if (this.device.status === 'loading') {
+          this.LoadingRow()
         }
       }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-    .margin({ bottom: this.showHeader ? 8 : 0 })
-  }
-
-  @Builder
-  private DeviceHeader() {
-    Row({ space: 10 }) {
-      SymbolGlyph($r('sys.symbol.desktop'))
-        .fontSize(19)
-        .fontColor([this.device.online ? INK : SUBTLE])
-        .width(21)
-        .height(21)
-        .hitTestBehavior(HitTestMode.None)
-      Text(this.device.deviceName)
-        .fontSize(MobileDesignTypography.bodyMedium.size)
-        .fontWeight(this.isActive ? FontWeight.Bold : FontWeight.Regular)
-        .fontColor(this.device.online ? INK : SUBTLE)
-        .layoutWeight(1)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .wordBreak(WordBreak.BREAK_ALL)
-        .hitTestBehavior(HitTestMode.None)
-      if (!this.device.online) {
-        Text(RemoteI18n.t('sidebar.deviceOffline'))
-          .fontSize(MobileDesignTypography.labelSmall.size)
-          .fontColor(SUBTLE)
-          .hitTestBehavior(HitTestMode.None)
-      }
-      if (this.device.status === 'loading') {
-        LoadingProgress()
-          .width(14)
-          .height(14)
-          .color(MUTED)
-          .hitTestBehavior(HitTestMode.None)
-      }
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph(this.device.expanded ?
-          $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
-          .fontSize(13)
-          .fontColor([MUTED])
-          .hitTestBehavior(HitTestMode.None)
-      }
-      .width(16)
-      .height(16)
-      .hitTestBehavior(HitTestMode.None)
-    }
-    .width('100%')
-    .height(46)
-    .padding({ left: 10, right: 6 })
-    .alignItems(VerticalAlign.Center)
-    .opacity(this.device.online ? 1 : 0.7)
-    .onClick(() => {
-      this.onToggle();
-    })
   }
 
   @Builder
@@ -477,7 +416,7 @@ export struct SidebarDeviceGroup {
     }
     .width('100%')
     .height(40)
-    .padding({ left: this.bodyIndent(), right: 10 })
+    .padding({ left: 10, right: 10 })
     .alignItems(VerticalAlign.Center)
   }
 
@@ -498,7 +437,7 @@ export struct SidebarDeviceGroup {
     }
     .width('100%')
     .height(40)
-    .padding({ left: this.bodyIndent(), right: 10 })
+    .padding({ left: 10, right: 10 })
     .alignItems(VerticalAlign.Center)
   }
 
@@ -508,7 +447,7 @@ export struct SidebarDeviceGroup {
       .fontSize(MobileDesignTypography.bodyMedium.size)
       .fontColor(MUTED)
       .width('100%')
-      .padding({ left: this.bodyIndent(), top: 6, bottom: 6 })
+      .padding({ left: 10, top: 6, bottom: 6 })
   }
 
   @Builder
@@ -523,7 +462,7 @@ export struct SidebarDeviceGroup {
     }
     .width('100%')
     .height(40)
-    .padding({ left: this.bodyIndent() })
+    .padding({ left: 10 })
     .alignItems(VerticalAlign.Center)
     .onClick(() => {
       this.visibleWorkspaceCount = SidebarDirectoryPreviewPolicy.nextVisibleCount(
@@ -531,21 +470,6 @@ export struct SidebarDeviceGroup {
         this.workspaceEntries().length
       );
     })
-  }
-
-  private shouldShowBody(): boolean {
-    if (!this.showHeader) {
-      return true;
-    }
-    if (!this.device.online && this.device.workspaces.length === 0 &&
-      this.recentWorkspaces.length === 0) {
-      return false;
-    }
-    return this.device.expanded;
-  }
-
-  private bodyIndent(): number {
-    return this.showHeader ? 20 : 10;
   }
 
   private projection(): SessionListProjection {

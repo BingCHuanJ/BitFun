@@ -197,10 +197,8 @@ final class MobileCoreAdapter {
         return generation
     }
 
-    func toggleDeviceDirectory(_ deviceID: String, expanded: Bool) {
-        deviceDirectory.dispatch(intent: expanded
-            ? DeviceDirectoryIntentExpand(deviceId: deviceID)
-            : DeviceDirectoryIntentCollapse(deviceId: deviceID))
+    func loadDeviceDirectory(_ deviceID: String) {
+        deviceDirectory.dispatch(intent: DeviceDirectoryIntentLoad(deviceId: deviceID))
     }
 
     func retryDeviceDirectory(_ deviceID: String) {

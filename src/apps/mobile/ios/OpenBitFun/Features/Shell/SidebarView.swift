@@ -54,7 +54,7 @@ struct SidebarView: View {
     private var directoryEntries: [MobileDeviceDirectoryEntry] { model.deviceDirectory }
 
     private var selectedDirectoryEntry: MobileDeviceDirectoryEntry? {
-        directoryEntries.first(where: \.expanded)
+        directoryEntries.first(where: isCurrentDevice)
     }
 
     private var showsPrimaryNavigation: Bool {
@@ -321,26 +321,7 @@ struct SidebarView: View {
 
             ForEach(directoryEntries) { device in
                 directoryDeviceSelector(device)
-                if isCurrentDevice(device), model.connectionPhase != .connected {
-                    HStack {
-                        Text(activeConnectionLabel)
-                            .font(MobileDesignTypography.labelSmall.font)
-                            .foregroundStyle(OpenBitFunTheme.muted)
-                        Spacer(minLength: 0)
-                        Button {
-                            model.retryRemoteConnection()
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(OpenBitFunTheme.muted)
-                                .frame(width: 44, height: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Text(model.localized("重试")))
-                        .accessibilityIdentifier("sidebar.retryConnection")
-                    }
-                    .padding(.leading, 10)
-                }
+
             }
 
             if let selectedDirectoryEntry {
@@ -371,43 +352,20 @@ struct SidebarView: View {
         }
     }
 
-    @ViewBuilder
     private func directoryDeviceSelector(_ device: MobileDeviceDirectoryEntry) -> some View {
-        let expanded = selectedDirectoryEntry?.id == device.id
         let current = isCurrentDevice(device)
-        Button { selectDirectoryDevice(device) } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "desktopcomputer")
-                    .font(.system(size: 18, weight: .regular))
-                    .frame(width: 24, height: 20)
-                Text(device.name)
-                    .font(.system(size: 14, weight: current ? .bold : .regular))
-                    .foregroundStyle(device.online ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                if device.status == "LOADING" {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Circle()
-                        .fill(current ? activeConnectionColor : (device.online ? OpenBitFunTheme.statusSuccess : OpenBitFunTheme.muted))
-                        .frame(width: 8, height: 8)
-                }
-                Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(device.online ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
-                    .frame(width: 20, height: 24)
-            }
-            .padding(.leading, 8)
-            .padding(.trailing, 4)
-            .frame(height: 52)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!device.online)
-        .opacity(device.online ? 1 : 0.58)
-        .accessibilityIdentifier("sidebar.device.\(device.id)")
-        .accessibilityLabel(Text(device.name))
-        .accessibilityValue(Text(current ? activeConnectionLabel : (device.online ? model.localized("在线") : model.localized("离线"))))
+        return SidebarDeviceRow(
+            name: device.name,
+            current: current,
+            enabled: device.online || (current && model.connectionPhase == .disconnected),
+            loading: device.status == "LOADING",
+            statusColor: current ? activeConnectionColor :
+                (device.online ? OpenBitFunTheme.statusSuccess : OpenBitFunTheme.muted),
+            statusLabel: current ? activeConnectionLabel :
+                (device.online ? model.localized("在线") : model.localized("离线")),
+            accessibilityID: "sidebar.device.\(device.id)",
+            onSelect: { selectDirectoryDevice(device) }
+        )
     }
 
     private func isCurrentDevice(_ device: MobileDeviceDirectoryEntry) -> Bool {
@@ -431,15 +389,13 @@ struct SidebarView: View {
     }
 
     private func selectDirectoryDevice(_ device: MobileDeviceDirectoryEntry) {
-        guard device.online else { return }
-        if device.expanded {
-            model.toggleDeviceDirectory(device)
+        if isCurrentDevice(device), model.connectionPhase == .disconnected {
+            model.retryRemoteConnection()
             return
         }
-        if let selected = selectedDirectoryEntry, selected.id != device.id {
-            model.toggleDeviceDirectory(selected)
-        }
-        model.toggleDeviceDirectory(device)
+        guard device.online else { return }
+        model.loadDeviceDirectory(device)
+        guard !isCurrentDevice(device) else { return }
         guard let accountDevice = model.accountDevices.first(where: { $0.id == device.id }) else { return }
         model.selectRemoteDevice(accountDevice, preserveDrawer: true)
     }
@@ -906,46 +862,15 @@ struct SidebarView: View {
     }
 
     private var authenticatedFooter: some View {
-        HStack(spacing: 0) {
-            Button { model.openDeviceTools() } label: { deviceToolsLabel }
-                .buttonStyle(.plain)
-                .disabled(!model.remoteConnected)
-                .accessibilityIdentifier("sidebar.deviceTools")
-            Spacer(minLength: 0)
-            Button { model.settingsOpen = true; model.drawerOpen = false } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 20, weight: .regular))
-                    .frame(width: 24, height: 24)
-                    .frame(width: 44, height: 44)
-                    .background(OpenBitFunTheme.card)
-                    .clipShape(Circle())
-                    .shadow(color: OpenBitFunTheme.shadowSubtle, radius: 12, y: 4)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(model.localized("设置")))
-        }
-        .frame(height: 56)
-        .padding(.leading, 12)
+        SidebarToolsFooter(
+            toolsTitle: model.localized("Device tools"),
+            settingsTitle: model.localized("设置"),
+            toolsEnabled: model.remoteConnected,
+            onOpenTools: { model.openDeviceTools() },
+            onOpenSettings: { model.settingsOpen = true; model.drawerOpen = false }
+        )
     }
 
-    private var deviceToolsLabel: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "folder.badge.gearshape")
-                .font(.system(size: 19, weight: .regular))
-                .frame(width: 24, height: 24)
-            Text(model.localized("Device tools"))
-                .font(.system(size: 15, weight: .medium))
-                .lineLimit(1)
-                .fixedSize()
-        }
-        .foregroundStyle(OpenBitFunTheme.ink)
-        .frame(minWidth: 98, minHeight: 44)
-        .background(OpenBitFunTheme.card)
-        .overlay(Capsule().stroke(OpenBitFunTheme.line, lineWidth: 0.5))
-        .clipShape(Capsule())
-        .shadow(color: OpenBitFunTheme.shadowSubtle, radius: 12, y: 4)
-        .opacity(model.remoteConnected && model.remoteCreateInteraction.canSubmit && !model.remoteCreateSubmitting ? 1 : 0.45)
-    }
 }
 
 private struct RemoteTimeBucket: Identifiable {

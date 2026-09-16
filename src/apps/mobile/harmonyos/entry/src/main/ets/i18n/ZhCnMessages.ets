@@ -17,7 +17,7 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['workspaceTools.selectLocation', '选择位置'],
   ['workspaceTools.runtimeLocal', '受控设备本机'],
   ['workspaceTools.download', '下载'],
-  ['workspaceTools.title', '设备工具'],
+  ['workspaceTools.title', '工具'],
   ['workspaceTools.files', '文件'],
   ['workspaceTools.selectTerminal', '选择已有终端'],
   ['workspaceTools.terminal', '终端'],
