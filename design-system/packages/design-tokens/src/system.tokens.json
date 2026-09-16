@@ -908,7 +908,7 @@
       "headerActionsGap": { "$value": "{space.2}" },
       "footerGap": { "$value": "{space.2}" },
       "footerPaddingBlockStart": { "$value": "{space.2}" },
-      "footerPaddingBlockEnd": { "$value": "{space.5}" },
+      "footerPaddingBlockEnd": { "$value": "{space.6}" },
       "footerPaddingInline": { "$value": "{space.6}" },
       "footerHeight": {
         "$description": "Total visual height of the floating dialog action bar.",

@@ -9,6 +9,7 @@ import { OverflowText,
   Dialog,
   DialogBody,
   DialogClose,
+  DialogFooter,
   DialogHeader,
   DialogHeading,
   DialogTitle,
@@ -174,7 +175,14 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
           <p className="quick-actions-config__modal-hint">{t('modal.promptHint')}</p>
         </div>
 
-        <div data-openbitfun-component="quick-actions-config" data-openbitfun-part="dialogFooter" className="quick-actions-config__modal-footer">
+      </div>
+      </DialogBody>
+      <DialogFooter
+        separator
+        data-openbitfun-component="quick-actions-config"
+        data-openbitfun-part="dialogFooter"
+        className="quick-actions-config__modal-footer"
+      >
           <Button variant="fill" size="sm" onClick={requestClose} disabled={saving}>
             {t('modal.cancel')}
           </Button>
@@ -189,9 +197,7 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
 
             {isEdit ? t('modal.saveEdit') : t('modal.confirmAdd')}
           </Button>
-        </div>
-      </div>
-          </DialogBody>
+      </DialogFooter>
     </Dialog>
   );
 };

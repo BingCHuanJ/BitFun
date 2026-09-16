@@ -354,6 +354,11 @@ test("Dialog tokens preserve the reference surface and chrome contract", async (
   assert.equal(tokens["overlay.dialog.headerPaddingBlockStart"], "24px");
   assert.equal(tokens["overlay.dialog.headerPaddingBlockEnd"], "20px");
   assert.equal(tokens["overlay.dialog.headerPaddingInline"], "24px");
+  assert.equal(tokens["overlay.dialog.footerPaddingBlockEnd"], "24px");
+  assert.equal(
+    tokens["overlay.dialog.footerPaddingBlockEnd"],
+    tokens["overlay.dialog.footerPaddingInline"],
+  );
   assert.equal(systemDocument.overlay.dialog.scrollbarWidth.$value, "{scrollbar.width}");
   assert.equal(tokens["overlay.dialog.scrollbarWidth"], "6px");
   assert.equal(tokens["overlay.dialog.footerBlur"], "blur(10px)");

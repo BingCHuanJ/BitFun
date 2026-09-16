@@ -1118,7 +1118,7 @@ const SkillsScene: React.FC = () => {
           </DialogHeading>
           <DialogClose />
         </DialogHeader>
-        <DialogBody inset="none">
+        <DialogBody>
         <div className="openbitfun-skills-scene__modal-form">
           <Field label={t('form.level.label')} controlWidth="fill">
             <Select
@@ -1190,7 +1190,9 @@ const SkillsScene: React.FC = () => {
             </div>
           ) : null}
 
-          <div className="openbitfun-skills-scene__modal-form-actions">
+        </div>
+        </DialogBody>
+        <DialogFooter separator className="openbitfun-skills-scene__modal-form-actions">
             <Button
               variant="fill"
               size="sm"
@@ -1209,9 +1211,7 @@ const SkillsScene: React.FC = () => {
             >
               {installed.isAdding ? t('form.actions.adding') : t('form.actions.add')}
             </Button>
-          </div>
-        </div>
-              </DialogBody>
+        </DialogFooter>
       </Dialog>
 
       <ConfirmDialog

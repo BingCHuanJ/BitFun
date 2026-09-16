@@ -349,7 +349,7 @@
     --openbitfun-overlay-dialog-footer-fade-extent: var(--openbitfun-space-6);
     --openbitfun-overlay-dialog-footer-gap: var(--openbitfun-space-2);
     --openbitfun-overlay-dialog-footer-height: 68px;
-    --openbitfun-overlay-dialog-footer-padding-block-end: var(--openbitfun-space-5);
+    --openbitfun-overlay-dialog-footer-padding-block-end: var(--openbitfun-space-6);
     --openbitfun-overlay-dialog-footer-padding-block-start: var(--openbitfun-space-2);
     --openbitfun-overlay-dialog-footer-padding-inline: var(--openbitfun-space-6);
     --openbitfun-overlay-dialog-header-actions-gap: var(--openbitfun-space-2);
