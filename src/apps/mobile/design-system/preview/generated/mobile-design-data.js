@@ -386,6 +386,24 @@ export const mobileTokens = {
 export const mobileComponents = {
   "version": 1,
   "components": {
+    "shell_header_alignment": {
+      "purpose": "Keep sidebar search and conversation menu controls on one horizontal centerline.",
+      "anatomy": [
+        "sidebar_header",
+        "conversation_header"
+      ],
+      "states": [
+        "drawer_open",
+        "drawer_closed",
+        "wide",
+        "with_subtitle",
+        "without_subtitle"
+      ],
+      "tokens": [
+        "conversation_header_height"
+      ],
+      "platformNotes": "Both signed-in header rows use conversationHeaderHeight from the same safe-area origin, without a sidebar-only top inset. Preserve this height when a subtitle appears or disappears. Anchor drawer content scaling vertically at half the header height so reveal animation cannot shift its control centerline."
+    },
     "sidebar_device_selector": {
       "purpose": "Select one remote device and show its workspace panel below the device list, matching mobile web.",
       "anatomy": [

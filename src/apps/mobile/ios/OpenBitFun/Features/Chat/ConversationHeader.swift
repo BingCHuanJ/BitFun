@@ -90,9 +90,7 @@ struct ConversationHeader: View {
                 }
             }
             .frame(
-                height: resolvedSubtitle == nil
-                    ? MobileDesignGeometry.conversationHeaderCompactHeight
-                    : MobileDesignGeometry.conversationHeaderHeight
+                height: MobileDesignGeometry.conversationHeaderHeight
             )
             .padding(.horizontal, MobileDesignGeometry.contentGutter)
 

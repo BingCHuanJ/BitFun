@@ -107,7 +107,7 @@ internal fun AppSidebar(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 16.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (signedIn) {

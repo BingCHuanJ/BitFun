@@ -117,7 +117,7 @@ export struct AppSidebar {
     }
     .width('100%')
     .height('100%')
-    .padding({ left: 20, right: 20, top: 4, bottom: 16 })
+    .padding({ left: 20, right: 20, top: 0, bottom: 16 })
     .backgroundColor(PAGE_BG)
   }
 
@@ -180,7 +180,7 @@ export struct AppSidebar {
       }
     }
     .width('100%')
-    .height(50)
+    .height(MobileDesignGeometry.conversationHeaderHeight)
     .alignItems(VerticalAlign.Center)
 
     if (this.showSearch) {

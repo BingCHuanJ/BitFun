@@ -226,7 +226,7 @@ struct MobileShellView: View {
             .scaleEffect(
                 x: !sidebarVisible && model.drawerOpen ? 0.985 : 1,
                 y: !sidebarVisible && model.drawerOpen ? 0.992 : 1,
-                anchor: .leading
+                anchor: UnitPoint(x: 0, y: MobileDesignGeometry.conversationHeaderHeight / 2 / max(1, viewportHeight))
             )
             .offset(x: !sidebarVisible && model.drawerOpen ? compactSidebarWidth : 0)
             .animation(

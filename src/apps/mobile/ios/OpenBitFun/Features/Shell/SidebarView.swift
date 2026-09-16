@@ -83,7 +83,7 @@ struct SidebarView: View {
                 footer.background(OpenBitFunTheme.page)
             }
             .padding(.horizontal, 20)
-            .padding(.top, 4)
+            .padding(.top, 0)
             .padding(.bottom, 16)
             .frame(
                 width: proxy.size.width,
@@ -218,7 +218,7 @@ struct SidebarView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text(model.localized("搜索")))
         }
-        .frame(height: 50)
+        .frame(height: MobileDesignGeometry.conversationHeaderHeight)
     }
 
     private var signedOutHeader: some View {
