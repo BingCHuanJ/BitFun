@@ -161,11 +161,15 @@ group does not renumber the others.
 
 ### The scrollbar
 
-1. Drag the scrollbar to the very bottom. The screen must not be entirely
+1. Expand and collapse a tool card so the transcript alternates between fitting
+   and overflowing the viewport. Message widths and horizontal positions must
+   stay fixed, including with the OS set to always show scrollbars. Repeat in
+   desktop WebKit and Chromium hosts, with both narrow and wide chat panels.
+2. Drag the scrollbar to the very bottom. The screen must not be entirely
    blank: the last Turn and the input clearance stay visible above the
    reservation. Repeat with the composer expanded, which consumes the spacer
    before the three-quarter cap can be exceeded.
-2. Drag the scrollbar, without touching the wheel first, down into the reserved
+3. Drag the scrollbar, without touching the wheel first, down into the reserved
    blank and let go: it must stay there. Then drag it while output streams: the
    transcript must follow the thumb without the frame loop fighting it. A press
    on the thumb that moves nothing must leave the viewport alone.
