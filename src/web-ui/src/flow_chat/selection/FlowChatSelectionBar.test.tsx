@@ -99,7 +99,7 @@ describe('selection annotation dialog lifecycle', () => {
     const surface = await openAnnotation();
     const textarea = enterComment('Keep this note');
     expect(document.activeElement).toBe(textarea);
-    expect(surface.querySelector('[data-openbitfun-product-part="quote"]')?.textContent).toBe('“Selected source text”');
+    expect(surface.querySelector('[data-openbitfun-product-part="quote"]')?.textContent).toBe('Selected source text');
     expect(surface.querySelector('label')).toBeNull();
     expect(textarea.getAttribute('placeholder')).toBeNull();
     act(() => {

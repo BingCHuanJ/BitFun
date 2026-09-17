@@ -42,25 +42,34 @@ describe('UserMessageItem metadata visibility', () => {
     expect(stylesheet).not.toContain('.user-message-item__edit-btn {\n  opacity: 1;');
   });
 
-  it('shows the out-of-bubble timestamp without changing row geometry', () => {
+  it('keeps visible metadata in normal flow on the transcript reading column', () => {
     const stylesheet = readFileSync(
       fileURLToPath(new URL('./UserMessageItem.scss', import.meta.url)),
       'utf8',
     ).replace(/\r\n?/g, '\n');
     const shell = extractBlock(stylesheet, '.user-message-item-shell {');
     const timestamp = extractBlock(stylesheet, '\n.user-message-item__timestamp {');
+    const sharedLayout = readFileSync(
+      fileURLToPath(new URL('../../_transcript-layout.scss', import.meta.url)),
+      'utf8',
+    );
+    const metaLayout = extractBlock(sharedLayout, '@mixin metadata-row {');
 
     expect(timestamp).toContain('opacity: 1;');
     expect(timestamp).toContain('pointer-events: none;');
-    expect(timestamp).toContain('margin-right: auto;');
+    expect(timestamp).toContain('margin-inline-end: auto;');
     const meta = extractBlock(stylesheet, '\n.user-message-item__meta {');
-    expect(meta).toContain('display: flex;');
-    expect(meta).not.toMatch(/position:\s*(absolute|fixed);/);
-    expect(meta).not.toMatch(/(?:^|\n)\s*(?:max-)?height:/);
-    expect(meta).toContain('justify-content: flex-end;');
-    expect(meta).toContain('padding: var(--openbitfun-space-1) 0 0;');
+    expect(metaLayout).toContain('display: flex;');
+    expect(meta + metaLayout).not.toMatch(/position:\s*(absolute|fixed);/);
+    expect(meta + metaLayout).not.toMatch(/(?:^|\n)\s*(?:max-)?height:/);
+    expect(metaLayout).toContain('justify-content: flex-end;');
+    const bubble = extractBlock(stylesheet, '\n.user-message-item {');
+    expect(bubble).toContain('padding: 0.46rem var(--_user-message-padding-inline);');
+    expect(shell).toContain('--_user-message-padding-inline: max(0px, calc(var(--_user-message-radius) - var(--_user-message-border-width)));');
+    expect(bubble).toContain('margin-inline: calc(-1 * var(--_user-message-radius));');
+    expect(meta).toContain('padding-inline: 0;');
+    expect(meta).toContain('padding-block: calc(var(--openbitfun-space-1) / 2) 0;');
     expect(meta).toContain('pointer-events: auto;');
-    expect(stylesheet).toContain('margin: 0;');
     expect(shell).not.toContain('.user-message-item__timestamp');
     expect(shell).not.toContain('&--with-timestamp');
   });

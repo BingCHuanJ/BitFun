@@ -113,7 +113,7 @@ describe('numbered composer attachments', () => {
     expect(textarea.value).toBe('First comment');
     expect(document.activeElement).toBe(textarea);
     const quote = dialog()!.querySelector('[data-openbitfun-product-part="quote"]')!;
-    expect(quote.textContent).toBe(`“${excerpt.fragments[0].text}”`);
+    expect(quote.textContent).toBe(excerpt.fragments[0].text);
     const quoteText = quote.querySelector('[data-openbitfun-product-part="quoteText"]')!;
     expect(quoteText.getAttribute('data-overflow-style')).toBe('ellipsis');
     expect(quoteText.getAttribute('data-overflow-behavior')).toBe('fade');
@@ -150,7 +150,7 @@ describe('numbered composer attachments', () => {
       expect(dialog()!.querySelector('textarea, input, [contenteditable="true"]')).toBeNull();
       const comment = dialog()!.querySelector<HTMLElement>('[data-openbitfun-product-part="comment"]')!;
       expect(comment.textContent).toBe('First comment');
-      expect(dialog()!.querySelector('[data-openbitfun-product-part="quote"]')!.textContent).toBe(`“${excerpt.fragments[0].text}”`);
+      expect(dialog()!.querySelector('[data-openbitfun-product-part="quote"]')!.textContent).toBe(excerpt.fragments[0].text);
       expect([...dialog()!.querySelectorAll('[data-openbitfun-part="footer"] button')].map(button => button.textContent))
         .toEqual(['selection.locate']);
       act(() => comment.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })));
@@ -189,7 +189,7 @@ describe('numbered composer attachments', () => {
     act(() => root.render(<ConversationExcerptPreview excerpt={{ ...excerpt, comment: undefined }} />));
     click(trigger(1));
     expect(dialog()!.querySelector('textarea, input, [data-openbitfun-product-part="comment"]')).toBeNull();
-    expect(dialog()!.querySelector('[data-openbitfun-product-part="quote"]')!.textContent).toBe(`“${excerpt.fragments[0].text}”`);
+    expect(dialog()!.querySelector('[data-openbitfun-product-part="quote"]')!.textContent).toBe(excerpt.fragments[0].text);
     expect(action('selection.locate')).toBeDefined();
   });
 

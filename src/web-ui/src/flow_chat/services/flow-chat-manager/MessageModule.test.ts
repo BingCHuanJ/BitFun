@@ -16,6 +16,7 @@ import {
   useSessionMutationStore,
 } from '../../store/sessionMutationStore';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
+import { consumeSubmittedMessageArrival } from '../submittedMessagePresentation';
 import {
   LOCAL_SURFACE_ID,
   activateSurface,
@@ -871,6 +872,9 @@ describe('MessageModule detached dispatch', () => {
     );
 
     expect(session.dialogTurns).toHaveLength(1);
+    expect(consumeSubmittedMessageArrival(
+      session.sessionId, session.dialogTurns[0].id, session.dialogTurns[0].userMessage.id,
+    )).toBeDefined();
     expect(session.dialogTurns[0]).toMatchObject({
       id: 'dispatch_pending_job-1',
       sessionId: 'dispatch-session',

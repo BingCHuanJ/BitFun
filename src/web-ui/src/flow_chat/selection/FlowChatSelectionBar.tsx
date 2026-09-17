@@ -225,8 +225,9 @@ export function FlowChatSelectionBar({ rootRef, sessionId, parentSessionId, acti
           </ToolbarGroup>
         </Card>, getAppearanceOverlayHost(),
       )}
-      <Dialog ref={editorRef} open={!!selection && editing && active} onOpenChange={clear} size="sm"
+      <Dialog ref={editorRef} open={!!selection && editing && active} onOpenChange={clear} size="sm" className="conversation-excerpt__dialog"
         initialFocusRef={commentRef} restoreFocus={false} data-flowchat-selection-ignore="true"
+        data-openbitfun-product-component="conversation-excerpt" data-openbitfun-product-part="dialog"
         onKeyDown={event => event.stopPropagation()}>
         <DialogHeader>
           <DialogHeading><DialogTitle>{t('selection.annotate')}</DialogTitle></DialogHeading>

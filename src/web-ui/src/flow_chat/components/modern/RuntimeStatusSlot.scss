@@ -1,3 +1,5 @@
+@use '../../transcript-layout' as transcriptLayout;
+
 .runtime-status-slot {
   width: 100%;
   height: 24px;
@@ -45,18 +47,11 @@
   }
 
   &--footer &__content {
+    @include transcriptLayout.content-column;
     width: 100%;
     max-width: 900px;
     margin: 0 auto;
-    padding: 0 var(--openbitfun-control-flow-chat-content-padding-inline);
-    box-sizing: border-box;
-  }
-
-  @media (max-width: 768px) {
-    &--footer &__content {
-      max-width: 100%;
-      padding: 0 var(--openbitfun-control-flow-chat-content-padding-inline-mobile);
-    }
+    padding-block: 0;
   }
 }
 

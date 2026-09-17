@@ -24,6 +24,10 @@ each missing what the other had.
 | `../../services/flow-chat-manager/PendingQueueModule.test.ts` | persisted payload edits preserve queue order/identity, images and device isolation; sending entries reject edits |
 | `../../../infrastructure/markdown/useStreamingTextReveal.test.tsx` | appended-glyph-only fading, independent batch clocks and renderers, history/remount stability, stream completion and reduced motion |
 | `UserMessageItem.test.tsx` | sent and reloaded MCP references, mixed reference capsules, failed-message presentation, and message actions |
+| `UserMessageItemActions.test.ts` | metadata visibility, bubble outsets from the shared reading column, and normal-flow action layout |
+| `../../services/submittedMessagePresentation.test.ts` | explicit-send receipts, one-shot claims, expiry, device activation isolation, and initial status paint delay |
+| `useSubmittedMessageMotion.test.tsx` | submission clock, remount stability, StrictMode, reduced motion, focus, and surface-change cancellation; lifecycle only, not visual acceptance |
+| `RuntimeStatusSlot.test.tsx` | resident status slot identity and removal of a pending submission paint delay when real status clears |
 | `modelRoundItemMemo.test.ts` | settled rows refresh continuation labels and tool grouping hints without invalidating equivalent hints |
 | `flowChatTailFollow.test.ts` | the three-quarter reservation and `hold-tail` geometry |
 | `flowChatCollapseMotion.test.ts` | collapse does not move earlier content |
@@ -120,6 +124,21 @@ group does not renumber the others.
    session with the new last Turn's answer below the fold.
 7. Edit a message and rerun it. There must be one movement, not two — the
    truncation is silent and the rerun's Turn reveals as usual.
+8. A new message gently settles, followed by its timestamp and action group,
+   within about 300ms. A quick reply appears immediately. Scroll the message out
+   and back, switch sessions/devices, or reconnect: settled messages must not
+   replay. Tab to an action during feedback and enable reduced motion: controls
+   must become fully visible immediately. Repeat with attachments and in ordinary
+   side conversations. Local, SSH, and Peer Device sends and detached-dispatch
+   observer projections require separate real-host checks.
+9. Compare user text, its timestamp, reply prose, and completion metadata: their
+   leading edges must match the start of the bubble's straight horizontal border,
+   after its rounded corner. Both action clusters' last icon frames must align
+   with the opposite tangent point. Repeat in a narrow panel,
+   with wrapped text, attachments, failed messages, missing timestamps, and
+   different available actions. Controls must retain their full hit targets and
+   wrap as a cluster without horizontal overflow. These are manual visual checks;
+   source checks and Sass compilation do not establish rendered alignment.
 
 ### Streaming and follow
 
