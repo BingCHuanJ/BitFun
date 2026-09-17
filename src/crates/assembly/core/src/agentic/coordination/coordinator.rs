@@ -16841,6 +16841,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn control_conversation_reset_preserves_history_and_retries_one_selection() {
+        let workspace = tempfile::tempdir().expect("control workspace");
+        let (coordinator, manager) = test_persistent_coordinator();
+        let original = coordinator
+            .select_control_conversation_in_workspace(workspace.path(), None)
+            .await
+            .unwrap();
+        assert_eq!(original.session_id, "openbitfun-control");
+        coordinator
+            .record_voice_exchange(super::super::VoiceExchangeRequest {
+                session_id: original.session_id.clone(),
+                exchange_id: "saved-exchange".into(),
+                user_text: "Keep this record".into(),
+                assistant_text: "Saved".into(),
+            })
+            .await
+            .unwrap();
+        let before = manager
+            .persistence_manager()
+            .load_session_metadata(workspace.path(), &original.session_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let (first, duplicate) = tokio::join!(
+            coordinator.select_control_conversation_in_workspace(
+                workspace.path(),
+                Some(&original.session_id)
+            ),
+            coordinator.select_control_conversation_in_workspace(
+                workspace.path(),
+                Some(&original.session_id)
+            ),
+        );
+        let created = first.unwrap();
+        assert_ne!(created.session_id, original.session_id);
+        assert_eq!(duplicate.unwrap().session_id, created.session_id);
+        assert_eq!(
+            coordinator
+                .select_control_conversation_in_workspace(workspace.path(), None)
+                .await
+                .unwrap()
+                .session_id,
+            created.session_id
+        );
+        let after = manager
+            .persistence_manager()
+            .load_session_metadata(workspace.path(), &original.session_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(before).unwrap(),
+            serde_json::to_value(after).unwrap()
+        );
+        assert!(manager.get_session(&original.session_id).is_some());
+
+        let state_path = workspace.path().join("active.json");
+        tokio::fs::write(&state_path, "unreadable saved selection")
+            .await
+            .unwrap();
+        assert!(coordinator
+            .select_control_conversation_in_workspace(workspace.path(), None)
+            .await
+            .is_err());
+        assert_eq!(
+            tokio::fs::read_to_string(state_path).await.unwrap(),
+            "unreadable saved selection"
+        );
+    }
+
+    #[tokio::test]
     async fn completed_persisted_turn_emits_a_durable_history_fence() {
         let workspace = tempfile::tempdir().expect("workspace");
         let (coordinator, session_manager) = test_persistent_coordinator();
