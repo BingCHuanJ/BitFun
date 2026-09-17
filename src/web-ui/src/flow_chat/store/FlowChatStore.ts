@@ -6725,6 +6725,20 @@ export class FlowChatStore {
     }
   }
 
+  /**
+   * Acknowledge every unread completion at once. Each session still goes through
+   * `clearSessionUnreadCompletion` so persisted receipts and activity
+   * acknowledgements stay identical to clearing them one by one.
+   */
+  public clearAllSessionUnreadCompletions(): number {
+    const unread: string[] = [];
+    for (const session of this.state.sessions.values()) {
+      if (session.hasUnreadCompletion) unread.push(session.sessionId);
+    }
+    for (const sessionId of unread) this.clearSessionUnreadCompletion(sessionId);
+    return unread.length;
+  }
+
   /** Mirror only the summary's read marker, never its state into the Turn model. */
   public applySessionActivityReceipt(summary: SessionActivitySummary): void {
     this.setState(prev => {

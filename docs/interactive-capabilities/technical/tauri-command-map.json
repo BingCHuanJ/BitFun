@@ -8818,7 +8818,7 @@
       "visibility": "implementation",
       "rustPath": "api::system_api::set_tray_unread_count",
       "sourceFile": "src/apps/desktop/src/api/system_api.rs",
-      "signature": "fn set_tray_unread_count(request: SetTrayUnreadCountRequest) -> Result<(), String>",
+      "signature": "fn set_tray_unread_count( app: tauri::AppHandle, request: SetTrayUnreadCountRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
