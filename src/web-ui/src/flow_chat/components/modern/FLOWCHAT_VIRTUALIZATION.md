@@ -167,9 +167,20 @@ first-line box must use that same font size when deriving row geometry.
 User-message timestamps and actions occupy a normal-flow meta row below the
 bubble. Its full height, including the 28px action targets, belongs to the
 measured message even when no valid timestamp is available. The timestamp and
-actions remain visible at rest, without requiring hover or keyboard focus; the
-timestamp stays at the row's leading edge while the actions stay at its trailing
-edge. The shell's trailing margin remains the item gap; the next Turn may remove
+actions remain visible at rest, without requiring hover or keyboard focus.
+`_transcript-layout.scss` owns the reading-column inset shared by user-message
+shells, model rounds, Explore regions, and the runtime-status footer.
+The shared content-padding token defaults to 0.75rem on wide and narrow surfaces,
+keeping the reading column compact while leaving room for decoration and targets.
+The bubble extends into that gutter by its corner radius. Its horizontal border
+tangent points define the same leading and trailing edges as user text, timestamps,
+reply prose, and completion metadata. Inner padding is the radius minus the border
+width; borderless failed messages keep the same tangent points and content axis.
+Both metadata rows align the last icon frame with the content's trailing edge,
+retaining 28px hit targets and the same compact action gap. Each action cluster
+wraps as a whole when space is limited. A half-space-1 gap groups user metadata
+with its bubble; all geometry stays in normal flow. The shell's trailing
+margin remains the item gap; the next Turn may remove
 that gap without removing space occupied by controls.
 
 MCP service references in user-message text render as ordinary reference capsules,
@@ -185,7 +196,7 @@ alignment reference.
 
 ## A Row's Mount Is Not an Arrival
 
-**No mount or enter animation may live inside `.virtual-item-wrapper`**, no
+**No mount-triggered enter animation may live inside `.virtual-item-wrapper`**, no
 mount-triggered motion may change transcript geometry, and nothing may be keyed
 on a state change a scroll can replay.
 
@@ -205,8 +216,29 @@ dimming and coming back on every page up. `VirtualItemRenderer.scss` cancels it
 for anything inside a row and leaves the library alone, where a markdown block
 really is mounted once.
 
+An explicit local submission has a separate, transient presentation receipt.
+`addSubmittedDialogTurn` registers it before the synchronous optimistic store
+write; history hydration and remote replay continue through the ordinary store
+path and never register one. The receipt includes the device activation, Session,
+Turn, and message identity, expires after 300ms, and can be claimed by one
+renderer only. It never enters persisted messages or wire payloads.
+
+`useSubmittedMessageMotion` consumes that receipt to animate only the user-message
+contents: the bubble moves 4px over 220ms; timestamp and actions move 2px over
+180ms, starting at 60ms and 100ms. All three use the submission's clock, so a late
+commit catches up instead of restarting. A virtualized remount has no claim.
+The measured wrapper, full metadata height, virtual keys, and scroll owners stay
+unchanged. Focus/pointer interaction, reduced motion, a hidden document, and device
+activation changes finish feedback immediately. Unsupported animation APIs display
+the settled message directly.
+
+`RuntimeStatusSlot` may defer only its initial paint until 160ms after the same
+submission; clearing the real status removes that delay immediately. Existing
+runtime wait-status scheduling and first-token delivery remain independent of the
+motion. The resident status slot retains its full height throughout.
+
 The rule is stated here because four correct local fixes could not reach it.
-`ModelRoundItem.scss` and `UserMessageItem.scss` each refuse an enter animation
+`ModelRoundItem.scss` and `UserMessageItem.scss` each refuse a CSS mount animation
 of their own, in comments that name this reason. `FlowTextBlock`'s typewriter
 refuses to replay on mount, because a streaming block that scrolled out and
 back would restart from an empty string and re-grow. `FlowTextBlock.scss`

@@ -57,6 +57,7 @@ import {
 import { restoreImageContextsFromPayload } from '../../utils/imageContextRestoration';
 import { UserMessagePresentationContent, UserMessageTextContent } from './UserMessagePresentationContent';
 import { UserMessageImage } from './UserMessageImage';
+import { useSubmittedMessageMotion } from './useSubmittedMessageMotion';
 import './UserMessageItem.scss';
 
 const log = createLogger('UserMessageItem');
@@ -122,6 +123,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const setEditDraft = useMessageEditStore(s => s.setDraft);
     const setEditSubmitting = useMessageEditStore(s => s.setSubmitting);
     const containerRef = useRef<HTMLDivElement>(null);
+    const shellRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
     const sentTimestamp = typeof message?.timestamp === 'number'
@@ -182,6 +184,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const resolvedTurnStatus = dialogTurn?.status ?? turnStatus;
     const isFailed = resolvedTurnStatus === 'error';
     const resolvedSessionId = sessionId ?? currentSession?.sessionId;
+    useSubmittedMessageMotion(shellRef, resolvedSessionId, turnId, message?.id, isFailed || isEditing);
     const sessionMachine = useSessionStateMachine(resolvedSessionId ?? null);
     const sessionExecutionState = sessionMachine && sessionMachine.sessionId === resolvedSessionId
       ? sessionMachine.currentState
@@ -533,7 +536,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     }
     
     return (
-      <div className="user-message-item-shell">
+      <div className="user-message-item-shell" ref={shellRef}>
         <div
           data-openbitfun-product-component="user-message-item"
           data-openbitfun-product-part="root"

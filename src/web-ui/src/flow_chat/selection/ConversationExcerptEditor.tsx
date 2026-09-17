@@ -8,12 +8,8 @@ export function ConversationExcerptQuote({ excerpt }: { excerpt: ConversationExc
   const quote = excerptText(excerpt).replace(/\s+/g, ' ').trim();
   return <div className="conversation-excerpt__quote"
     data-openbitfun-product-component="conversation-excerpt" data-openbitfun-product-part="quote">
-    <span className="conversation-excerpt__quote-mark"
-      data-openbitfun-product-component="conversation-excerpt" data-openbitfun-product-part="quoteMark">“</span>
     <OverflowText as="span" behavior="fade" overflowStyle="ellipsis" className="conversation-excerpt__quote-text"
       data-openbitfun-product-component="conversation-excerpt" data-openbitfun-product-part="quoteText">{quote}</OverflowText>
-    <span className="conversation-excerpt__quote-mark"
-      data-openbitfun-product-component="conversation-excerpt" data-openbitfun-product-part="quoteMark">”</span>
   </div>;
 }
 

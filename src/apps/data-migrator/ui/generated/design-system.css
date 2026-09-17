@@ -77,8 +77,8 @@
     --openbitfun-control-flow-chat-card-radius: var(--openbitfun-radius-base);
     --openbitfun-control-flow-chat-code-block-padding-block: 0.55rem;
     --openbitfun-control-flow-chat-code-block-padding-inline: 0.75rem;
-    --openbitfun-control-flow-chat-content-padding-inline: 3rem;
-    --openbitfun-control-flow-chat-content-padding-inline-mobile: 1.5rem;
+    --openbitfun-control-flow-chat-content-padding-inline: 0.75rem;
+    --openbitfun-control-flow-chat-content-padding-inline-mobile: var(--openbitfun-control-flow-chat-content-padding-inline);
     --openbitfun-control-flow-chat-control-gap: var(--openbitfun-space-2);
     --openbitfun-control-flow-chat-control-padding-block: var(--openbitfun-space-1);
     --openbitfun-control-flow-chat-control-padding-inline: 0.75rem;

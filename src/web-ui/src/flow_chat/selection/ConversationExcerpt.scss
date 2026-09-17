@@ -9,18 +9,47 @@
 
   &__toolbar { flex: 0 1 auto; }
 
+  &__dialog {
+    > [data-openbitfun-part='header'] {
+      align-items: center;
+      padding-block: var(--openbitfun-space-5) var(--openbitfun-space-3);
+      padding-inline: var(--openbitfun-space-5);
+
+      [data-openbitfun-part='title'] {
+        font-family: var(--openbitfun-type-heading-section-font-family);
+        font-size: var(--openbitfun-type-heading-section-font-size);
+        font-weight: var(--openbitfun-type-heading-section-font-weight);
+        line-height: var(--openbitfun-type-heading-section-line-height);
+        letter-spacing: var(--openbitfun-type-heading-section-letter-spacing);
+      }
+    }
+
+    > [data-openbitfun-part='body'] {
+      padding-inline: var(--openbitfun-space-5);
+      padding-block-end: var(--openbitfun-space-4);
+    }
+
+    > [data-openbitfun-part='footer'] {
+      padding-block: 0 var(--openbitfun-space-5);
+      padding-inline: var(--openbitfun-space-5);
+    }
+  }
+
   &__editor {
     display: flex;
     flex-direction: column;
     min-inline-size: 0;
-    gap: var(--openbitfun-space-3);
+    gap: var(--openbitfun-space-4);
   }
 
   &__quote {
     display: flex;
     align-items: center;
     min-inline-size: 0;
-    color: var(--openbitfun-color-content-muted);
+    padding-block: var(--openbitfun-space-1);
+    padding-inline: var(--openbitfun-space-3);
+    border-inline-start: var(--openbitfun-border-width-strong) solid var(--openbitfun-color-border-default);
+    color: var(--openbitfun-color-content-secondary);
     font-family: var(--openbitfun-type-body-sm-font-family);
     font-size: var(--openbitfun-type-body-sm-font-size);
     font-weight: var(--openbitfun-type-body-sm-font-weight);
@@ -28,22 +57,18 @@
     letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
-  &__quote-mark { flex: 0 0 auto; }
-
   &__quote-text { flex: 0 1 auto; min-inline-size: 0; }
-
-  &__locate { margin-inline-end: auto; }
 
   &__comment {
     max-block-size: 40vh;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     color: var(--openbitfun-color-content-primary);
-    font-family: var(--openbitfun-type-body-sm-font-family);
-    font-size: var(--openbitfun-type-body-sm-font-size);
-    font-weight: var(--openbitfun-type-body-sm-font-weight);
-    line-height: var(--openbitfun-type-body-sm-line-height);
-    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
+    font-family: var(--openbitfun-type-body-md-font-family);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    font-weight: var(--openbitfun-type-body-md-font-weight);
+    line-height: var(--openbitfun-type-body-md-line-height);
+    letter-spacing: var(--openbitfun-type-body-md-letter-spacing);
   }
 
   &__attachments {

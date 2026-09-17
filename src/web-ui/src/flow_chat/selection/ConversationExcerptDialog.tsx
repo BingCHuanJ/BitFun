@@ -43,7 +43,8 @@ export function ConversationExcerptDialog({ target, label, open, onOpenChange }:
       () => notificationService.warning(t('selection.sourceUnavailable')));
   };
   const locateLabel = dirty ? t('selection.saveAndLocate') : t('selection.locate');
-  return <Dialog open={open} onOpenChange={onOpenChange} size="sm" initialFocusRef={target.mode === 'edit' ? inputRef : undefined}
+  return <Dialog open={open} onOpenChange={onOpenChange} size="sm" className="conversation-excerpt__dialog"
+    initialFocusRef={target.mode === 'edit' ? inputRef : undefined}
     data-flowchat-selection-ignore="true" data-openbitfun-product-component="conversation-excerpt" data-openbitfun-product-part="dialog"
     onKeyDown={event => event.stopPropagation()}>
     <DialogHeader>
@@ -64,7 +65,7 @@ export function ConversationExcerptDialog({ target, label, open, onOpenChange }:
       </div>
     </DialogBody>
     <DialogFooter>
-      <Button variant="text" className="conversation-excerpt__locate"
+      <Button variant="outline"
         data-openbitfun-product-component="conversation-excerpt" data-openbitfun-product-part="locate"
         disabled={!available} onClick={locate}>{locateLabel}</Button>
       {target.mode === 'edit' && <>
