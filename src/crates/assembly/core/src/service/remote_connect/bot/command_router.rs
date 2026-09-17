@@ -15,7 +15,7 @@
 //!     `execute_forwarded_turn`, `apply_interactive_request`.
 
 use crate::service_agent_runtime::{
-    remote_opened_workspace_catalog, remote_workspace_display_name,
+    remote_opened_workspace_catalog, remote_workspace_display_name, remote_workspace_metadata,
 };
 use log::{error, info};
 use serde_json::Value;
@@ -689,6 +689,21 @@ pub async fn handle_command(
     cmd: BotCommand,
     images: Vec<super::super::remote_server::ImageAttachment>,
 ) -> HandleResult {
+    if state.active_remote_device.is_none()
+        && !state.account_remote_context
+        && state.current_workspace.as_ref().is_some_and(|workspace| {
+            workspace.remote_ssh_host.as_deref().map(str::trim) == Some("localhost")
+                && workspace
+                    .remote_connection_id
+                    .as_deref()
+                    .is_none_or(|id| id.trim().is_empty())
+        })
+    {
+        if let Some(service) = crate::service::workspace::get_global_workspace_service() {
+            repair_local_bot_workspace_state(state, &service.list_workspace_infos().await);
+        }
+    }
+
     let image_contexts: Vec<crate::agentic::image_analysis::ImageContextData> =
         super::super::remote_server::images_to_contexts(if images.is_empty() {
             None
@@ -1365,6 +1380,58 @@ async fn select_workspace(
     select_local_workspace(state, &ws_service, choice, s).await
 }
 
+fn bot_workspace_ref(workspace: &crate::service::workspace::WorkspaceInfo) -> BotWorkspaceRef {
+    BotWorkspaceRef::with_identity(
+        workspace.root_path.to_string_lossy().to_string(),
+        remote_workspace_metadata(
+            &workspace.workspace_kind,
+            &workspace.metadata,
+            "connectionId",
+        ),
+        remote_workspace_metadata(&workspace.workspace_kind, &workspace.metadata, "sshHost"),
+    )
+}
+
+/// Repair the host-only local marker emitted by older bot versions using this
+/// host's registry. Never reinterpret another device's paths or an explicit SSH
+/// connection, and preserve ambiguous local/remote roots.
+fn repair_local_bot_workspace_state(
+    state: &mut BotChatState,
+    workspaces: &[crate::service::workspace::WorkspaceInfo],
+) {
+    use crate::service::workspace::WorkspaceKind;
+    if state.active_remote_device.is_some() || state.account_remote_context {
+        return;
+    }
+    let Some(current) = state.current_workspace.as_mut() else {
+        return;
+    };
+    if current
+        .remote_connection_id
+        .as_deref()
+        .is_some_and(|id| !id.trim().is_empty())
+        || current.remote_ssh_host.as_deref().map(str::trim) != Some("localhost")
+    {
+        return;
+    }
+    let matches: Vec<_> = workspaces
+        .iter()
+        .filter(|workspace| workspace.root_path.to_string_lossy() == current.path)
+        .collect();
+    if matches
+        .iter()
+        .any(|workspace| workspace.workspace_kind == WorkspaceKind::Remote)
+    {
+        return;
+    }
+    if matches
+        .iter()
+        .any(|workspace| workspace.workspace_kind != WorkspaceKind::Remote)
+    {
+        *current = BotWorkspaceRef::local(current.path.clone());
+    }
+}
+
 async fn select_local_workspace(
     state: &mut BotChatState,
     ws_service: &crate::service::workspace::WorkspaceService,
@@ -1388,23 +1455,7 @@ async fn select_local_workspace(
     {
         Ok(info) => {
             let workspace_path = info.root_path.to_string_lossy().to_string();
-            let remote_connection_id = info
-                .remote_ssh_connection_id()
-                .map(str::to_string)
-                .or_else(|| choice.remote_connection_id.clone());
-            let remote_ssh_host = info
-                .metadata
-                .get("sshHost")
-                .and_then(|value| value.as_str())
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-                .or_else(|| choice.remote_ssh_host.clone());
-            let workspace_ref = BotWorkspaceRef::with_identity(
-                workspace_path.clone(),
-                remote_connection_id,
-                remote_ssh_host,
-            );
+            let workspace_ref = bot_workspace_ref(&info);
             state.current_workspace = Some(workspace_ref.clone());
             state.current_session_id = None;
             info!(
@@ -3715,6 +3766,92 @@ mod parse_command_tests {
             remote_workspace_choices(r#"{"resp":"error","message":"Peer offline"}"#).unwrap_err(),
             "Peer offline"
         );
+    }
+
+    #[tokio::test]
+    async fn local_bot_identity_repairs_legacy_state_without_retargeting_remote_workspaces() {
+        use crate::service::workspace::{WorkspaceKind, WorkspaceService};
+        use openbitfun_runtime_ports::RemoteSessionWorkspaceIdentity;
+        use openbitfun_services_integrations::remote_connect::{
+            build_remote_session_create_request, RemoteConnectSubmissionSource,
+        };
+        let root = tempfile::tempdir().unwrap();
+        let paths = Arc::new(
+            crate::infrastructure::PathManager::with_user_root_for_tests(
+                root.path().join("user-root"),
+            ),
+        );
+        let service = WorkspaceService::new_for_test_path_manager(paths).await;
+        let project_root = root.path().join("project");
+        std::fs::create_dir_all(&project_root).unwrap();
+        let project = service.open_workspace(project_root).await.unwrap();
+        assert_eq!(
+            project.metadata.get("sshHost").and_then(Value::as_str),
+            Some("localhost")
+        );
+        let path = project.root_path.to_string_lossy().to_string();
+        let choices = local_pro_workspace_choices(remote_opened_workspace_catalog(&service).await);
+        assert_eq!(choices.len(), 1);
+        assert!(choices[0].remote_ssh_host.is_none());
+        // The identity captured after a successful open must agree with the picker.
+        assert_eq!(bot_workspace_ref(&project), BotWorkspaceRef::local(&path));
+
+        let legacy = serde_json::json!({
+            "path": path, "remote_connection_id": null, "remote_ssh_host": "localhost"
+        });
+        let mut state = BotChatState::new("chat".into());
+        state.current_workspace = Some(serde_json::from_value(legacy.clone()).unwrap());
+        state.current_session_id = Some("keep-session".into());
+        repair_local_bot_workspace_state(&mut state, &[project.clone()]);
+        assert_eq!(state.current_workspace, Some(BotWorkspaceRef::local(&path)));
+        assert_eq!(state.current_session_id.as_deref(), Some("keep-session"));
+        let serialized = serde_json::to_value(state.current_workspace.as_ref().unwrap()).unwrap();
+        let restored: BotWorkspaceRef = serde_json::from_value(serialized).unwrap();
+        assert_eq!(restored, BotWorkspaceRef::local(&path));
+        let request = build_remote_session_create_request(
+            "test",
+            "Code",
+            Some(path.clone()),
+            RemoteSessionWorkspaceIdentity::new(
+                restored.remote_connection_id,
+                restored.remote_ssh_host,
+            ),
+            RemoteConnectSubmissionSource::Bot,
+        );
+        assert!(request.remote_connection_id.is_none());
+        assert!(request.remote_ssh_host.is_none());
+
+        let mut remote = project.clone();
+        remote.workspace_kind = WorkspaceKind::Remote;
+        remote
+            .metadata
+            .insert("connectionId".into(), serde_json::json!("ssh-localhost"));
+        let remote_ref = bot_workspace_ref(&remote);
+        assert_eq!(
+            remote_ref.remote_connection_id.as_deref(),
+            Some("ssh-localhost")
+        );
+        assert_eq!(remote_ref.remote_ssh_host.as_deref(), Some("localhost"));
+        state.current_workspace = Some(remote_ref.clone());
+        repair_local_bot_workspace_state(&mut state, &[project.clone()]);
+        assert_eq!(state.current_workspace, Some(remote_ref));
+
+        state.current_workspace = Some(serde_json::from_value(legacy).unwrap());
+        let before = state.current_workspace.clone();
+        repair_local_bot_workspace_state(&mut state, &[project.clone(), remote]);
+        assert_eq!(state.current_workspace, before);
+        repair_local_bot_workspace_state(&mut state, &[]);
+        assert_eq!(state.current_workspace, before);
+        state.account_remote_context = true;
+        repair_local_bot_workspace_state(&mut state, &[project.clone()]);
+        assert_eq!(state.current_workspace, before);
+        state.account_remote_context = false;
+        state.active_remote_device = Some(RemoteDeviceTarget {
+            device_id: "other-device".into(),
+            device_name: "Other device".into(),
+        });
+        repair_local_bot_workspace_state(&mut state, &[project]);
+        assert_eq!(state.current_workspace, before);
     }
 
     #[tokio::test]
