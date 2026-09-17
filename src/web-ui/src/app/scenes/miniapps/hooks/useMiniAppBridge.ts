@@ -369,6 +369,7 @@ export function useMiniAppBridge(
                   sessionKind: 'miniapp',
                   isTransient: true,
                   agentBackedTransient: true,
+                  workspaceId: result.workspaceId,
                 },
               );
               if (!result.created) {

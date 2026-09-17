@@ -512,6 +512,18 @@ impl ChatState {
             .or(self.workspace.as_deref())
     }
 
+    /// Owning project workspace ID from the bound session, falling back to the
+    /// execution workspace ID when the binding predates linked worktrees.
+    pub(crate) fn project_workspace_id(&self) -> Option<&str> {
+        self.workspace_binding.as_ref().and_then(|binding| {
+            binding
+                .project_workspace_id
+                .as_deref()
+                .or(binding.workspace_id.as_deref())
+                .filter(|id| !id.trim().is_empty())
+        })
+    }
+
     pub(crate) fn set_git_repository_status(
         &mut self,
         is_repository: bool,

@@ -72,6 +72,7 @@ export async function activateGlobalSearchTarget(
       openFileInBestTarget({
         filePath: target.filePath,
         fileName: target.fileName,
+        workspaceId: target.workspaceId,
         workspacePath: target.workspacePath,
         jumpToLine: target.lineNumber,
       });

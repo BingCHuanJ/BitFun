@@ -40,7 +40,10 @@ import {
   getHistorySessionOpenTransitionSnapshot,
   subscribeHistorySessionOpenTransition,
 } from '@/flow_chat/services/sessionOpenIntent';
-import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
+import {
+  findReusableEmptySessionId,
+  flowChatSessionConfigForWorkspace,
+} from '@/app/utils/projectSessionWorkspace';
 import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { loadWorkspaceAcpMenuClients } from './workspaceAcpMenuClients';
 import WorkspaceAcpSessionSubmenu from './WorkspaceAcpSessionSubmenu';
@@ -208,7 +211,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
     cancelPendingAutoGitRefresh();
     return subscribeHistorySessionOpenTransition(cancelPendingAutoGitRefresh);
-  }, [isActive, workspace.rootPath, workspaceIsRemote]);
+  }, [isActive, workspace.id, workspaceIsRemote]);
 
   useEffect(() => {
     if (!WORKSPACE_SEARCH_AVAILABLE) return;
@@ -690,15 +693,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         return;
       }
       const newSessionId = await flowChatManager.createChatSession(
-        {
-          workspacePath: workspace.rootPath,
-          ...(isRemoteWorkspace(workspace) && workspace.connectionId
-            ? { remoteConnectionId: workspace.connectionId }
-            : {}),
-          ...(isRemoteWorkspace(workspace) && workspace.sshHost
-            ? { remoteSshHost: workspace.sshHost }
-            : {}),
-        },
+        flowChatSessionConfigForWorkspace(workspace),
         resolvedMode
       );
       await openMainSession(newSessionId, {
@@ -726,15 +721,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     try {
       const sessionId = await flowChatManager.createAcpChatSession(
         client.id,
-        {
-          workspacePath: workspace.rootPath,
-          ...(isRemoteWorkspace(workspace) && workspace.connectionId
-            ? { remoteConnectionId: workspace.connectionId }
-            : {}),
-          ...(isRemoteWorkspace(workspace) && workspace.sshHost
-            ? { remoteSshHost: workspace.sshHost }
-            : {}),
-        },
+        flowChatSessionConfigForWorkspace(workspace),
       );
       await openMainSession(sessionId, {
         workspaceId: workspace.id,
@@ -751,15 +738,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     try {
       const preferredMode = workspace.workspaceKind === WorkspaceKind.Assistant ? 'Claw' : undefined;
       const sessionId = await flowChatManager.createChatSession(
-        {
-          workspacePath: workspace.rootPath,
-          ...(isRemoteWorkspace(workspace) && workspace.connectionId
-            ? { remoteConnectionId: workspace.connectionId }
-            : {}),
-          ...(isRemoteWorkspace(workspace) && workspace.sshHost
-            ? { remoteSshHost: workspace.sshHost }
-            : {}),
-        },
+        flowChatSessionConfigForWorkspace(workspace),
         preferredMode
       );
 
@@ -770,6 +749,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
       await agentAPI.runInitAgentsMd({
         sessionId,
+        workspaceId: workspace.id,
         workspacePath: workspace.rootPath,
         ...(isRemoteWorkspace(workspace) && workspace.connectionId
           ? { remoteConnectionId: workspace.connectionId }
@@ -797,7 +777,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     window.dispatchEvent(new CustomEvent('terminal-create-requested', {
       detail: {
         workingDirectory: workspace.rootPath,
-        workspacePath: workspace.rootPath,
         surfaceId,
         resourceScope: {
           surfaceId,
@@ -1066,10 +1045,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               isOpen={sessionBatchModalOpen}
               onClose={() => setSessionBatchModalOpen(false)}
               workspaceId={workspace.id}
-              workspacePath={workspace.rootPath}
               workspaceLabel={workspaceDisplayName}
-              remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-              remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
             />
           </Suspense>
         </RetainedMountBoundary>
@@ -1602,10 +1578,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             isOpen={sessionBatchModalOpen}
             onClose={() => setSessionBatchModalOpen(false)}
             workspaceId={workspace.id}
-            workspacePath={workspace.rootPath}
             workspaceLabel={workspaceDisplayName}
-            remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-            remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
           />
         </Suspense>
       </RetainedMountBoundary>

@@ -2,7 +2,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReviewPlatformPullRequest, ReviewPlatformPullRequestDetailPage, ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api/service-api/ReviewPlatformAPI';
+import type { ReviewPlatformPullRequest, ReviewPlatformPullRequestDetailPage, ReviewPlatformWorkspaceSnapshot, ReviewRepositoryLocator } from '@/infrastructure/api/service-api/ReviewPlatformAPI';
 import { ReviewPlatformPanel } from './ReviewPlatformPanel';
 
 const mocks = vi.hoisted(() => ({ snapshot: vi.fn(), detail: vi.fn(), t: (key: string) => key }));
@@ -64,12 +64,22 @@ function deferred<T>() {
 let root: Root;
 let host: HTMLDivElement;
 let testNumber = 0;
+// The panel keys its module-level caches by workspace ID, so every test mounts
+// a distinct workspace; the path is only the IO operand sent alongside it.
+const workspaceIdFor = (path: string) => `workspace:${path}`;
+const locator = (path: string): ReviewRepositoryLocator => ({ workspaceId: workspaceIdFor(path), repositoryPath: path });
+type SnapshotMock = (repository: ReviewRepositoryLocator, remote: string | null, page: number, size: number, state: string) => Promise<ReviewPlatformWorkspaceSnapshot>;
+const snapshotFor = (mutate?: (result: ReviewPlatformWorkspaceSnapshot) => void): SnapshotMock => ({ repositoryPath }, _remote, page, _size, state) => {
+  const result = snapshot(repositoryPath, page, state);
+  mutate?.(result);
+  return Promise.resolve(result);
+};
 async function click(id: string) {
   await act(async () => { host.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)!.click(); });
 }
 async function mount() {
   const path = `/gitee-panel-test-${++testNumber}`;
-  await act(async () => { root.render(<ReviewPlatformPanel workspacePath={path} />); });
+  await act(async () => { root.render(<ReviewPlatformPanel workspaceId={workspaceIdFor(path)} workspacePath={path} />); });
   return path;
 }
 
@@ -79,21 +89,20 @@ describe('Gitee panel state and asynchronous request ordering', () => {
     host = document.createElement('div');
     document.body.append(host);
     root = createRoot(host);
-    mocks.snapshot.mockReset().mockImplementation((path, _remote, page, _size, state) => Promise.resolve(snapshot(path, page, state)));
+    mocks.snapshot.mockReset().mockImplementation(snapshotFor());
     mocks.detail.mockReset().mockImplementation(() => new Promise(() => {}));
   });
   afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
 
   it('renders statistics for every initial row while selected detail is still pending', async () => {
-    mocks.snapshot.mockImplementation((path, _remote, page, _size, state) => {
-      const result = snapshot(path, page, state);
+    mocks.snapshot.mockImplementation(snapshotFor(result => {
       result.pullRequests = result.pullRequests.map((pr, index) => ({ ...pr,
         changedFiles: index, changedFileCountKnown: true,
         additions: index * 4, deletions: index * 2, lineStatsKnown: true,
       }));
-      return Promise.resolve(result);
-    });
-    await mount();
+    }));
+    const path = await mount();
+    expect(mocks.snapshot).toHaveBeenCalledWith(locator(path), null, 1, 10, 'all');
     const rows = [...host.querySelectorAll('[data-testid="review-platform-pr-row"]')];
     expect(rows).toHaveLength(10);
     for (const [index, row] of rows.entries()) {
@@ -102,16 +111,15 @@ describe('Gitee panel state and asynchronous request ordering', () => {
       expect(row.querySelector('[data-testid="review-platform-pr-deletions"]')?.textContent).toBe(`-${index * 2}`);
     }
     expect(mocks.detail.mock.calls.map(([request]) => request.pullRequestId)).toEqual(['10']);
+    expect(mocks.detail).toHaveBeenCalledWith(expect.objectContaining(locator(path)));
   });
 
   it.each([true, false])('uses complete list statistics for unknown detail counts only at the same revisions (%s)', async sameRevisions => {
-    mocks.snapshot.mockImplementation((path, _remote, page, _size, state) => {
-      const result = snapshot(path, page, state);
+    mocks.snapshot.mockImplementation(snapshotFor(result => {
       result.pullRequests = result.pullRequests.map(pr => ({ ...pr,
         changedFiles: 2, changedFileCountKnown: true, additions: 4, deletions: 3, lineStatsKnown: true,
       }));
-      return Promise.resolve(result);
-    });
+    }));
     mocks.detail.mockImplementation(({ pullRequestId, section }) => Promise.resolve({
       ...detail(Number(pullRequestId), section),
       headRevision: (sameRevisions ? 'b' : 'c').repeat(40),
@@ -124,13 +132,11 @@ describe('Gitee panel state and asynchronous request ordering', () => {
   });
 
   it('updates both row and detail statistics to zero for a legacy overview', async () => {
-    mocks.snapshot.mockImplementation((path, _remote, page, _size, state) => {
-      const result = snapshot(path, page, state);
+    mocks.snapshot.mockImplementation(snapshotFor(result => {
       result.pullRequests = result.pullRequests.map(pr => ({ ...pr,
         changedFiles: 2, changedFileCountKnown: true, additions: 4, deletions: 3, lineStatsKnown: undefined,
       }));
-      return Promise.resolve(result);
-    });
+    }));
     mocks.detail.mockImplementation(({ pullRequestId, section }) => Promise.resolve({
       ...detail(Number(pullRequestId), section),
       changedFiles: 0, changedFileCountKnown: section === 'overview',
@@ -153,7 +159,7 @@ describe('Gitee panel state and asynchronous request ordering', () => {
     mocks.snapshot.mockReturnValueOnce(pending.promise);
     await click('review-platform-refresh');
     await click('review-platform-filter-merged');
-    expect(mocks.snapshot).toHaveBeenLastCalledWith(path, null, 1, 10, 'merged');
+    expect(mocks.snapshot).toHaveBeenLastCalledWith(locator(path), null, 1, 10, 'merged');
     await act(async () => pending.resolve(snapshot(path, 2)));
     expect(host.querySelector('[data-testid="review-platform-pagination"]')?.textContent).toContain('1-10 of 269');
     expect([...host.querySelectorAll('[data-testid="review-platform-pr-row"]')].map(row => row.getAttribute('data-pr-state'))).toEqual(Array(10).fill('merged'));

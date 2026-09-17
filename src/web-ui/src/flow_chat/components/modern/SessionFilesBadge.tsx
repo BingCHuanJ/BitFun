@@ -42,6 +42,7 @@ import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import { sessionWorkspaceId } from '../../session-drivers/sessionFileNavigation';
 import './SessionFilesBadge.scss';
 
 const log = createLogger('SessionFilesBadge');
@@ -472,7 +473,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     } finally {
       setLoadingStats(false);
     }
-  }, [sessionId, t, currentWorkspace?.rootPath]);
+  }, [sessionId, t]);
 
   // Reload stats when the file list changes.
   useEffect(() => {
@@ -604,7 +605,8 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
           false,
           {
             titleKind: 'diff',
-            duplicateKeyPrefix: 'diff'
+            duplicateKeyPrefix: 'diff',
+            workspaceId: sessionWorkspaceId(sessionId) ?? currentWorkspace?.id,
           }
         );
       }, 250);
@@ -613,7 +615,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     } catch (error) {
       log.error('Failed to open diff', { filePath, error });
     }
-  }, [sessionId, currentWorkspace?.rootPath]);
+  }, [sessionId, currentWorkspace?.rootPath, currentWorkspace?.id]);
 
   // Prepare and launch the least costly sufficient Review path.
   const handleReviewClick = useCallback(async (e: React.MouseEvent) => {
@@ -691,6 +693,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       const reviewThreadTitle = t('sessionFilesBadge.review.threadTitle');
       const launched = await launchPreparedReviewSession({
         parentSessionId: sessionId,
+        workspaceId: currentWorkspace?.id,
         workspacePath: currentWorkspace?.rootPath,
         displayMessage,
         prepared,
@@ -720,7 +723,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     } finally {
       setLaunchingReviewMode(null);
     }
-  }, [confirmDeepReviewLaunch, fileStats, isReviewActionLocked, sessionId, t, currentWorkspace?.rootPath]);
+  }, [confirmDeepReviewLaunch, fileStats, isReviewActionLocked, sessionId, t, currentWorkspace?.id, currentWorkspace?.rootPath]);
 
   const handleQuickActionClick = useCallback(async (action: QuickAction) => {
     if (!sessionId || isSessionProcessing) return;

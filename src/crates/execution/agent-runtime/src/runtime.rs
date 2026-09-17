@@ -743,6 +743,9 @@ pub enum SessionSelector {
     Create {
         session_name: String,
         agent_type: String,
+        /// Owning workspace ID; authoritative when present.
+        workspace_id: Option<String>,
+        /// Legacy execution root for pre-ID callers.
         workspace_path: Option<String>,
         metadata: serde_json::Map<String, serde_json::Value>,
     },
@@ -763,9 +766,24 @@ impl SessionSelector {
         Self::Create {
             session_name: session_name.into(),
             agent_type: agent_type.into(),
+            workspace_id: None,
             workspace_path,
             metadata: serde_json::Map::new(),
         }
+    }
+
+    /// Select the owning workspace by ID. The path, when also present, is
+    /// only an IO projection for hosts that still record it.
+    pub fn with_workspace_id(mut self, workspace_id: Option<String>) -> Self {
+        if let Self::Create {
+            workspace_id: slot, ..
+        } = &mut self
+        {
+            *slot = workspace_id
+                .map(|id| id.trim().to_string())
+                .filter(|id| !id.is_empty());
+        }
+        self
     }
 
     pub fn with_metadata(mut self, metadata: serde_json::Map<String, serde_json::Value>) -> Self {
@@ -1828,6 +1846,7 @@ impl AgentRuntime {
             SessionSelector::Create {
                 session_name,
                 agent_type,
+                workspace_id,
                 workspace_path,
                 metadata,
             } => {
@@ -1839,7 +1858,7 @@ impl AgentRuntime {
                         workspace_path,
                         project_workspace_path: None,
                         execution_target: None,
-                        workspace_id: None,
+                        workspace_id,
                         remote_connection_id: None,
                         remote_ssh_host: None,
                         model_id: None,
@@ -2329,6 +2348,7 @@ mod tests {
                         parent_tool_call_id: None,
                         subagent_type: None,
                         agent_id: None,
+                        workspace_id: Some("workspace-project".to_string()),
                         workspace_path: Some("/workspace/project".to_string()),
                         remote_connection_id: None,
                         remote_ssh_host: None,
@@ -2346,6 +2366,7 @@ mod tests {
                         parent_tool_call_id: Some("tool_1".to_string()),
                         subagent_type: Some("explore".to_string()),
                         agent_id: Some("child-agent".to_string()),
+                        workspace_id: Some("workspace-project".to_string()),
                         workspace_path: Some("/workspace/project".to_string()),
                         remote_connection_id: None,
                         remote_ssh_host: None,
@@ -3341,6 +3362,7 @@ mod tests {
             .expect("lineage");
         let inspection = runtime
             .read_lineage_session_transcript(AgentSessionLineageTranscriptRequest {
+                workspace_id: None,
                 workspace_path: "/workspace/project".to_string(),
                 root_session_id: "root_1".to_string(),
                 session_id: "child_1".to_string(),
@@ -3369,6 +3391,7 @@ mod tests {
 
         let result = runtime
             .cancel_lineage_session(AgentSessionLineageCancellationRequest {
+                workspace_id: None,
                 workspace_path: "/workspace/project".to_string(),
                 root_session_id: "root_1".to_string(),
                 session_id: "child_1".to_string(),
@@ -3391,6 +3414,7 @@ mod tests {
 
         let error = runtime
             .cancel_lineage_session(AgentSessionLineageCancellationRequest {
+                workspace_id: None,
                 workspace_path: "/workspace/project".to_string(),
                 root_session_id: "root_1".to_string(),
                 session_id: "outside".to_string(),
@@ -3590,6 +3614,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::new(
@@ -3646,6 +3671,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::new(
@@ -3721,6 +3747,7 @@ mod tests {
                 turn_id: "turn_1".to_string(),
                 execution_generation: 0,
                 workspace_path: Some("/workspace/project".to_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
             })
@@ -3766,6 +3793,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::SdkHost),

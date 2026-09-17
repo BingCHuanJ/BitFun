@@ -97,6 +97,11 @@ pub struct SessionManagerConfig {
 #[serde(rename_all = "camelCase")]
 pub struct SessionReferenceLocator {
     pub session_id: String,
+    /// Owning workspace ID; authoritative when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only pre-ID storage selector. New producers send workspace_id.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub workspace_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
@@ -1319,10 +1324,15 @@ impl SessionManager {
             .map_err(OpenBitFunError::Validation)?;
         openbitfun_core_types::validate_session_id(reference_artifact_stem)
             .map_err(OpenBitFunError::Validation)?;
+        let workspace_id = reference
+            .workspace_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty());
         let workspace_path = reference.workspace_path.trim();
-        if workspace_path.is_empty() {
+        if workspace_id.is_none() && workspace_path.is_empty() {
             return Err(OpenBitFunError::Validation(
-                "Referenced session workspace_path is required".to_string(),
+                "Referenced session workspace_id is required".to_string(),
             ));
         }
 
@@ -1340,13 +1350,18 @@ impl SessionManager {
                     source_session_id
                 ))
             })?;
-        let reference_storage_path = self
-            .resolve_storage_path_for_request(SessionStoragePathRequest {
-                workspace_path: PathBuf::from(workspace_path),
-                remote_connection_id: reference.remote_connection_id.clone(),
-                remote_ssh_host: reference.remote_ssh_host.clone(),
-            })
-            .await?;
+        let reference_storage_path = CoreSessionStorePort::with_path_manager(
+            self.persistence_manager.path_manager().clone(),
+        )
+        .resolve_storage_for_reference(
+            workspace_id,
+            workspace_path,
+            reference.remote_connection_id.clone(),
+            reference.remote_ssh_host.clone(),
+        )
+        .await
+        .map(|resolution| resolution.effective_storage_path)
+        .map_err(|error| OpenBitFunError::Session(error.to_string()))?;
 
         if source_session_id == reference.session_id
             && source_storage_path == reference_storage_path

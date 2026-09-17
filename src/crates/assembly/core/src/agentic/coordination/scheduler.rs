@@ -79,7 +79,10 @@ pub struct QueuedTurn {
     pub prepended_messages: Vec<Message>,
     pub turn_id: Option<String>,
     pub agent_type: String,
+    /// Execution root projection; storage selection prefers `workspace_id`.
     pub workspace_path: Option<String>,
+    /// Owning workspace ID supplied by ID-aware callers to locate an unloaded session.
+    pub workspace_id: Option<String>,
     pub remote_connection_id: Option<String>,
     pub remote_ssh_host: Option<String>,
     pub policy: DialogSubmissionPolicy,
@@ -814,6 +817,7 @@ impl DialogScheduler {
             turn_id: Some(resolved_turn_id.clone()),
             agent_type: delivery.agent_type,
             workspace_path: delivery.workspace_path,
+            workspace_id: None,
             remote_connection_id: delivery.remote_connection_id,
             remote_ssh_host: delivery.remote_ssh_host,
             policy: DialogSubmissionPolicy::new(DialogTriggerSource::AgentSession, queue_priority),
@@ -956,6 +960,7 @@ impl DialogScheduler {
             turn_id: Some(resolved_turn_id.clone()),
             agent_type,
             workspace_path,
+            workspace_id: None,
             remote_connection_id,
             remote_ssh_host,
             policy,
@@ -1004,6 +1009,7 @@ impl DialogScheduler {
             turn_id: Some(resolved_turn_id.clone()),
             agent_type,
             workspace_path: session.config.workspace_path.clone(),
+            workspace_id: None,
             remote_connection_id: session.config.remote_connection_id.clone(),
             remote_ssh_host: session.config.remote_ssh_host.clone(),
             policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
@@ -1174,13 +1180,35 @@ impl DialogScheduler {
                 session.config.project_workspace_path.as_deref(),
             );
         }
-        if let Some(workspace_path) = queued_turn.workspace_path.as_deref() {
-            let requested_storage_path = Self::resolve_session_restore_path(
-                workspace_path,
-                queued_turn.remote_connection_id.as_deref(),
-                queued_turn.remote_ssh_host.as_deref(),
+        let requested_workspace_id = queued_turn
+            .workspace_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(ToOwned::to_owned);
+        let requested_storage_path = if let Some(workspace_id) = requested_workspace_id.as_deref() {
+            // ID-aware callers locate the session by its owning workspace; the
+            // path on the request is only an execution-root projection.
+            Some(
+                CoreSessionStorePort::default()
+                    .resolve_workspace_storage(workspace_id)
+                    .await
+                    .map(|resolution| resolution.effective_storage_path)
+                    .map_err(SchedulerSubmitError::Port)?,
             )
-            .await?;
+        } else if let Some(workspace_path) = queued_turn.workspace_path.as_deref() {
+            Some(
+                Self::resolve_session_restore_path(
+                    workspace_path,
+                    queued_turn.remote_connection_id.as_deref(),
+                    queued_turn.remote_ssh_host.as_deref(),
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+        if let Some(requested_storage_path) = requested_storage_path {
             if let Some(restored_session) = self
                 .restore_missing_session_before_admission(&session_id, &requested_storage_path)
                 .await?
@@ -1194,6 +1222,11 @@ impl DialogScheduler {
             self.session_manager
                 .validate_session_storage_path_binding(&session_id, &requested_storage_path)
                 .map_err(SchedulerSubmitError::Core)?;
+            if requested_workspace_id.is_some() {
+                // The session is loaded and bound by ID; an omitted locator makes
+                // the coordinator reuse that binding instead of re-resolving a path.
+                queued_turn.workspace_path = None;
+            }
         }
         let state = self
             .session_manager
@@ -2751,6 +2784,7 @@ impl DialogScheduler {
             turn_id: Some(resolved_turn_id.clone()),
             agent_type: request.agent_type,
             workspace_path: request.workspace_path,
+            workspace_id: request.workspace_id,
             remote_connection_id: request.remote_connection_id,
             remote_ssh_host: request.remote_ssh_host,
             policy: request.policy,
@@ -3624,6 +3658,7 @@ mod tests {
             turn_id: Some(turn_id.to_string()),
             agent_type: "Standard".to_string(),
             workspace_path: Some("/workspace".to_string()),
+            workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
             policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
@@ -3831,6 +3866,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: Some(workspace.to_string_lossy().to_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
@@ -3897,6 +3933,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: None,
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
@@ -3977,6 +4014,7 @@ mod tests {
                     },
                 agent_type: "Standard".to_string(),
                 workspace_path: None,
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
@@ -4032,6 +4070,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: None,
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
@@ -4067,6 +4106,7 @@ mod tests {
                     },
                 agent_type: "Standard".to_string(),
                 workspace_path: None,
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
@@ -4126,6 +4166,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: None,
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
@@ -4199,6 +4240,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: None,
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
@@ -4244,6 +4286,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: Some(workspace_b.to_string_lossy().to_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
@@ -4295,6 +4338,7 @@ mod tests {
                 execution: Default::default(),
                 agent_type: "agent-that-does-not-exist".to_string(),
                 workspace_path: None,
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),

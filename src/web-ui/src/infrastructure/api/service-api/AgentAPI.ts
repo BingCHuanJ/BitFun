@@ -100,6 +100,8 @@ export interface StartDialogTurnRequest {
   execution?: AgentDialogTurnExecution;
   agentType: string; 
   /** Concrete root where this session executes. */
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   /** Stable project root used to locate persistence for worktree sessions. */
   projectWorkspacePath?: string;
@@ -234,6 +236,8 @@ export type PermissionRequestEvent =
 
 export interface CompactSessionRequest {
   sessionId: string;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -262,6 +266,8 @@ export type SessionMemoryMode = 'enabled' | 'disabled' | 'polluted';
 export interface SetSessionMemoryModeRequest {
   sessionId: string;
   mode: Exclude<SessionMemoryMode, 'polluted'>;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -329,6 +335,8 @@ export interface RestoreSessionViewResponse {
 
 export interface LoadSessionTurnWindowRequest {
   sessionId: string;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath: string;
   includeInternal?: boolean;
   targetStorageTurnIndex: number;
@@ -409,11 +417,15 @@ type RollbackSessionToTurnWireOutcome =
 
 export interface EnsureAssistantBootstrapRequest {
   sessionId: string;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath: string;
 }
 
 export interface RunInitAgentsMdRequest {
   sessionId: string;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -440,6 +452,8 @@ export interface UpdateSessionModelRequest {
   sessionId: string;
   modelName: string;
   reasoningPreset?: string | null;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -455,6 +469,8 @@ export interface SessionPermissionModeRequest {
   mode?: SessionPermissionMode | null;
   /** Exact active turn whose temporary override should be read or cleared. */
   turnId?: string;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -474,6 +490,8 @@ export interface ActiveTurnPermissionModeRequest extends SessionPermissionModeRe
 export interface UpdateSessionModeRequest {
   sessionId: string;
   modeId: string;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -490,6 +508,8 @@ export interface AgentContextReloadRequest {
 export interface UpdateSessionTitleRequest {
   sessionId: string;
   title: string;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -601,6 +621,8 @@ export interface RecoverInterruptedDialogTurnRequest {
   sessionId: string;
   dialogTurnId: string;
   executionGeneration: number;
+  /** Workspace identity; authoritative when present. Paths below are IO projections. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -811,6 +833,8 @@ export class AgentAPI {
   async activateSessionGoal(request: {
     sessionId: string;
     userHint?: string;
+    /** Workspace identity; authoritative when present. Paths below are IO projections. */
+    workspaceId?: string;
     workspacePath?: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;
@@ -837,6 +861,8 @@ export class AgentAPI {
 
   async getSessionThreadGoal(request: {
     sessionId: string;
+    /** Workspace identity; authoritative when present. Paths below are IO projections. */
+    workspaceId?: string;
     workspacePath?: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;
@@ -862,6 +888,8 @@ export class AgentAPI {
 
   async clearSessionThreadGoal(request: {
     sessionId: string;
+    /** Workspace identity; authoritative when present. Paths below are IO projections. */
+    workspaceId?: string;
     workspacePath?: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;
@@ -876,6 +904,8 @@ export class AgentAPI {
   async setSessionThreadGoalStatus(request: {
     sessionId: string;
     status: string;
+    /** Workspace identity; authoritative when present. Paths below are IO projections. */
+    workspaceId?: string;
     workspacePath?: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;
@@ -900,6 +930,8 @@ export class AgentAPI {
   async updateSessionThreadGoalObjective(request: {
     sessionId: string;
     objective: string;
+    /** Workspace identity; authoritative when present. Paths below are IO projections. */
+    workspaceId?: string;
     workspacePath?: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;

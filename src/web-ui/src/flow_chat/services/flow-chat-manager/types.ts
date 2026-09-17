@@ -67,6 +67,12 @@ export interface FlowChatContext {
    * this set is used to make handlers idempotent. Key format: `sessionId:turnId`.
    */
   handledTerminalTurnEvents: Set<string>;
+  /**
+   * Workspace this manager last initialized for. The ID is the identity used
+   * to attribute external sessions whose events carry no workspace facts; the
+   * path is only the matching IO projection.
+   */
+  currentWorkspaceId: string | null;
   currentWorkspacePath: string | null;
   /**
    * Re-arm this window's live agentic subscription. The reconcile loop calls it

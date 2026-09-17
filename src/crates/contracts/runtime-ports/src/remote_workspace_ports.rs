@@ -223,10 +223,14 @@ pub trait RemoteWorkspaceFileRuntimeHost: Send + Sync {
         Ok(None)
     }
 
+    /// Explicit file workspace identity is the workspace ID when the
+    /// controller supplies one; `workspace_path` + `remote_connection_id` is
+    /// the legacy projection for pre-ID controllers.
     async fn read_remote_file_chunk(
         &self,
         _path: &str,
         _session_id: Option<&str>,
+        _workspace_id: Option<&str>,
         _workspace_path: Option<&str>,
         _remote_connection_id: Option<&str>,
         _offset: u64,
@@ -239,6 +243,7 @@ pub trait RemoteWorkspaceFileRuntimeHost: Send + Sync {
         &self,
         _path: &str,
         _session_id: Option<&str>,
+        _workspace_id: Option<&str>,
         _workspace_path: Option<&str>,
         _remote_connection_id: Option<&str>,
     ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {

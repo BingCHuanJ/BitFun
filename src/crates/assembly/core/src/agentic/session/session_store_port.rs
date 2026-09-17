@@ -75,6 +75,34 @@ impl CoreSessionStorePort {
             .ok()
     }
 
+    /// ID-first storage resolution for request DTOs that still carry a
+    /// pre-ID `(path, connection, ssh)` selector. The ID is authoritative
+    /// whenever present; the legacy selector is only consulted for producers
+    /// that predate workspace IDs.
+    pub(crate) async fn resolve_storage_for_reference(
+        &self,
+        workspace_id: Option<&str>,
+        workspace_path: &str,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
+    ) -> PortResult<SessionStoragePathResolution> {
+        if let Some(id) = workspace_id.map(str::trim).filter(|id| !id.is_empty()) {
+            return self.resolve_workspace_storage(id).await;
+        }
+        if workspace_path.trim().is_empty() {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Session request must carry a workspace_id or a legacy workspace_path",
+            ));
+        }
+        self.resolve_session_storage_path(SessionStoragePathRequest {
+            workspace_path: PathBuf::from(workspace_path),
+            remote_connection_id,
+            remote_ssh_host,
+        })
+        .await
+    }
+
     fn has_parent_traversal(path: &Path) -> bool {
         path.components()
             .any(|component| matches!(component, Component::ParentDir))

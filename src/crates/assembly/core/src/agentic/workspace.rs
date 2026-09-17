@@ -221,7 +221,6 @@ impl WorkspaceBinding {
 #[cfg(test)]
 mod tests {
     use super::{WorkspaceBackend, WorkspaceBinding};
-    use crate::agentic::core::SessionConfig;
     use crate::service::workspace_runtime::WorkspaceRuntimeService;
     use openbitfun_core_types::{
         SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,

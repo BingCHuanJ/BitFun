@@ -472,7 +472,7 @@ describe('workbench content navigation', () => {
     fileTabManager.openFile({ filePath: '/project/a.ts' });
     const tab = useSceneStore.getState().openTabs[0];
     activateSurface('peer');
-    globalEventBus.emit('workspace:file-renamed', { surfaceId: 'local', oldPath: '/project/a.ts', newPath: '/project/b.ts' });
+    globalEventBus.emit('workspace:file-renamed', { surfaceId: 'local', workspaceId: 'project', oldPath: '/project/a.ts', newPath: '/project/b.ts' });
     expect(useContentResourceStore.getState().resources[tab.contentId!].target).toEqual({ kind: 'file', path: '/project/b.ts' });
   });
   it('detaches regular terminals on tab close and reconciles explicit renames and destruction', async () => {

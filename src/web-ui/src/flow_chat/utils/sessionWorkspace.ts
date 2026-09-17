@@ -52,6 +52,22 @@ export function sessionProjectWorkspacePath(
   );
 }
 
+/**
+ * Workspace ID of the main project that owns session persistence. Falls back
+ * to the execution workspace ID for sessions that are not in a linked worktree.
+ */
+export function sessionProjectWorkspaceId(
+  session: Partial<Pick<Session, 'workspaceId' | 'projectWorkspaceId' | 'config'>>,
+): string | undefined {
+  return (
+    session.projectWorkspaceId
+    || session.config?.projectWorkspaceId
+    || session.workspaceId
+    || session.config?.workspaceId
+    || undefined
+  );
+}
+
 export function requireSessionProjectWorkspacePath(
   session: SessionWorkspaceBinding,
   sessionId: string,
@@ -61,6 +77,13 @@ export function requireSessionProjectWorkspacePath(
     throw new Error(`Workspace path not found for session ${sessionId}`);
   }
   return path;
+}
+
+/** Workspace identity for persistence and routing; `undefined` only for pre-ID sessions. */
+export function sessionWorkspaceId(
+  session: Partial<Pick<Session, 'workspaceId' | 'config'>> | undefined,
+): string | undefined {
+  return session?.workspaceId || session?.config?.workspaceId || undefined;
 }
 
 /** Workspace identity for persistence and routing. Paths are IO projections only. */

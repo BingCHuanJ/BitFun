@@ -475,9 +475,12 @@ impl WorkspaceService {
             return WorkspaceInfo::new_without_worktree(PathBuf::from(path), options).await;
         }
         #[cfg(not(feature = "ssh-remote"))]
-        Err(OpenBitFunError::service(
-            "Opening a new remote workspace requires SSH support on this host",
-        ))
+        {
+            let _ = (path, connection_id, ssh_host);
+            Err(OpenBitFunError::service(
+                "Opening a new remote workspace requires SSH support on this host",
+            ))
+        }
     }
 
     pub(crate) async fn open_known_remote_workspace(
@@ -579,6 +582,53 @@ impl WorkspaceService {
         state_manager
             .set_active_connection_hint(Some(connection_id.to_string()))
             .await;
+    }
+
+    /// Refreshes activity for a workspace selected by ID without opening it.
+    /// The record decides local vs. remote; nothing is created or re-keyed.
+    pub async fn track_workspace_activity_by_id(
+        &self,
+        workspace_id: &str,
+        mode: WorkspaceActivityMode,
+    ) -> OpenBitFunResult<WorkspaceInfo> {
+        let workspace = self.require_workspace(workspace_id).await?;
+        let refresh_worktree = match mode {
+            WorkspaceActivityMode::TouchOnly => None,
+            WorkspaceActivityMode::RefreshMetadata => {
+                Some(if workspace.workspace_kind == WorkspaceKind::Remote {
+                    None
+                } else {
+                    WorkspaceInfo::resolve_worktree_info(
+                        &workspace.root_path,
+                        WorktreeTopologyFreshness::Cached,
+                    )
+                    .await
+                })
+            }
+        };
+        let refresh_worktree = match refresh_worktree {
+            Some(tree) => Some(self.register_worktree_project(tree).await?),
+            None => None,
+        };
+        let result = self
+            .manager
+            .write()
+            .await
+            .touch_workspace_by_id(&workspace.id, true, refresh_worktree)
+            .await;
+        if let Ok(workspace) = result.as_ref() {
+            self.ensure_workspace_runtime_best_effort(workspace, "tracked")
+                .await;
+        }
+        if result.is_ok() {
+            if let Err(e) = self.save_workspace_data().await {
+                warn!(
+                    "Failed to save workspace data after tracking activity: {}",
+                    e
+                );
+            }
+        }
+        result
     }
 
     /// Registers or refreshes workspace activity without marking it as opened in the UI.

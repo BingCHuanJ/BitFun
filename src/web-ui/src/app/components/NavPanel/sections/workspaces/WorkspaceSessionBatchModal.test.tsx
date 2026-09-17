@@ -54,7 +54,7 @@ describe('Claw session batch management', () => {
   });
   async function renderAndSelectAll() {
     await act(async () => root.render(
-      <WorkspaceSessionBatchModal workspaceId="assistant-one" isOpen onClose={() => {}} workspacePath="/assistant" workspaceLabel="Claw" remoteConnectionId="ssh-one" />,
+      <WorkspaceSessionBatchModal workspaceId="assistant-one" isOpen onClose={() => {}} workspaceLabel="Claw" />,
     ));
     expect(mocks.listSessions).toHaveBeenCalledWith('assistant-one');
     expect(container.textContent).toContain('First assistant chat');
@@ -75,7 +75,7 @@ describe('Claw session batch management', () => {
     expect(mocks.confirmWarning).not.toHaveBeenCalled();
     expect(mocks.confirmDanger).not.toHaveBeenCalled();
     expect(mocks.archiveChatSession.mock.calls).toEqual([['claw-2'], ['claw-1']]);
-    expect(mocks.refreshWorkspaceSessions).toHaveBeenCalledWith({ rootPath: '/assistant', connectionId: 'ssh-one', sshHost: undefined });
+    expect(mocks.refreshWorkspaceSessions).toHaveBeenCalledWith({ id: 'assistant-one' });
   });
 
   it('deletes selected Claw sessions after explicit confirmation', async () => {

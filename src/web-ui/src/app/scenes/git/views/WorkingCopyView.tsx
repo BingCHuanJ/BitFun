@@ -201,7 +201,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
         notification.error(t('notifications.fileRestoreFailed', { error: (err as Error).message }));
       }
     },
-    [workspacePath, handleRefresh, notification, t]
+    [workspacePath, workspaceId, handleRefresh, notification, t]
   );
 
   const handleOpenFileDiff = useCallback(
@@ -228,13 +228,15 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
 
           let modifiedContent = '';
           if (!isDeleted) {
-            modifiedContent = await workspaceAPI.readFileContent(fullPath);
+            modifiedContent = workspaceId
+              ? await workspaceAPI.readWorkspaceFile(workspaceId, fullPath)
+              : await workspaceAPI.readFileContent(fullPath);
           }
           let originalContent = '';
           try {
             originalContent = await gitService.getFileContent({ workspaceId: workspaceId ?? '', repositoryPath: workspacePath }, filePath, 'HEAD');
           } catch (_) {}
-          createGitDiffEditorTab(filePath, fileName, originalContent, modifiedContent, workspacePath, false);
+          createGitDiffEditorTab(filePath, fileName, originalContent, modifiedContent, workspacePath, false, undefined, workspaceId);
         } catch (err) {
           log.error('Open file diff failed', { filePath, err });
           notification.error(t('notifications.openDiffFailedWithPath', { error: String(err), file: filePath }));
@@ -247,7 +249,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
         }
       }, 0);
     },
-    [workspacePath, notification, t]
+    [workspacePath, workspaceId, notification, t]
   );
 
   const toggleFileGroup = useCallback((groupId: string) => {

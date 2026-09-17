@@ -211,7 +211,7 @@ public class DeviceDirectoryStore internal constructor(
         if (normalizedPath.isEmpty()) return
         updateWorkspaceState(id, identity) { it.copy(expanded = expanded) }
         if (!expanded || !entry.online) return
-        val state = devices[id]?.workspace(identity.path, identity.remoteConnectionId, identity.remoteSshHost)
+        val state = devices[id]?.workspace(identity)
         if (state?.status != WorkspaceDirectoryStatus.READY) loadWorkspaceSessions(id, identity, false)
     }
 
@@ -231,7 +231,7 @@ public class DeviceDirectoryStore internal constructor(
         if (workspaceLoads[key]?.isActive == true) return
         val entry = devices[deviceId] ?: return
         if (!entry.online) return
-        val existing = entry.workspace(identity.path, identity.remoteConnectionId, identity.remoteSshHost)
+        val existing = entry.workspace(identity)
         if (!force && existing?.status == WorkspaceDirectoryStatus.READY) return
         val slot = slotFor(deviceId) ?: run {
             updateWorkspaceState(deviceId, identity) { it.copy(status = WorkspaceDirectoryStatus.FAILED) }

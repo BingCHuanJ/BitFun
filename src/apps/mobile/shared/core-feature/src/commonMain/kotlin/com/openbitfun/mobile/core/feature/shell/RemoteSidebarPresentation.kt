@@ -23,9 +23,10 @@ public data class RemoteSidebarWorkspaceRow public constructor(
     public val sessions: List<RemoteSidebarSessionRow>,
     public val remoteConnectionId: String?,
     public val remoteSshHost: String?,
-    public val workspaceId: String? = null,
+    public val workspaceId: String?,
 ) {
     public val key: String get() = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost, workspaceId).key
+    public constructor(path: String, name: String, selected: Boolean, sessions: List<RemoteSidebarSessionRow>, remoteConnectionId: String?, remoteSshHost: String?) : this(path, name, selected, sessions, remoteConnectionId, remoteSshHost, null)
     public constructor(path: String, name: String, selected: Boolean, sessions: List<RemoteSidebarSessionRow>, remoteConnectionId: String?) : this(path, name, selected, sessions, remoteConnectionId, null)
     public constructor(path: String, name: String, selected: Boolean, sessions: List<RemoteSidebarSessionRow>) : this(path, name, selected, sessions, null)
 }
@@ -52,8 +53,8 @@ public object RemoteSidebarPresentation {
             RemoteSidebarWorkspaceRow(
                 path = path,
                 name = workspace.name,
-                selected = selected != null && workspace.identity().matches(
-                    RemoteWorkspaceIdentity(selected.path, selected.remoteConnectionId, selected.remoteSshHost, selected.workspaceId)),
+                // ID-first: IDs decide when both sides carry one; a pre-ID row falls back to the legacy triple.
+                selected = selected != null && workspace.identity().sameWorkspace(selected.identity()),
                 remoteConnectionId = connectionId,
                 remoteSshHost = workspace.remoteSshHost,
                 workspaceId = workspace.workspaceId,

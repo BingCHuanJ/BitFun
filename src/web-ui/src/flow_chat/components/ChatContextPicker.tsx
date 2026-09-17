@@ -639,6 +639,7 @@ export const ChatContextPicker: React.FC<ChatContextPickerProps> = ({
         type: 'session-reference',
         sessionId: session.sessionId,
         sessionName: session.sessionName,
+        workspaceId: session.workspaceId,
         workspacePath: session.workspacePath,
         remoteConnectionId: session.remoteConnectionId,
         remoteSshHost: session.remoteSshHost,

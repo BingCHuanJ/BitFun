@@ -587,7 +587,6 @@ impl ChatMode {
             );
             return;
         }
-        let workspace = std::path::PathBuf::from(self.agent.project_workspace_path_string());
         let workspace_id = self.agent.workspace_id();
         if !confirm {
             self.spawn_hook_management(

@@ -545,6 +545,7 @@ fn runtime_lineage_snapshot(
                         .as_ref()
                         .and_then(|value| value.subagent_type.clone()),
                     agent_id: None,
+                    workspace_id: metadata.workspace_id,
                     workspace_path: metadata.workspace_path,
                     remote_connection_id: remote_connection_id.map(str::to_string),
                     remote_ssh_host: remote_ssh_host.map(str::to_string),
@@ -2020,21 +2021,33 @@ impl ProductSearchPort for CoreAgentRuntimeCompatibility {
         &self,
         request: SessionContentSearchRequest,
     ) -> PortResult<SessionContentSearchResponse> {
-        if request.workspace_path.trim().is_empty() {
-            return Err(PortError::new(
-                PortErrorKind::InvalidRequest,
-                "Session content search requires a workspace path",
-            ));
-        }
         let limit = request.normalized_limit();
-        let storage_path = self
-            .resolve_persisted_session_storage_path(SessionStoragePathRequest {
+        let workspace_id = request
+            .workspace_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty());
+        let storage_path = if let Some(workspace_id) = workspace_id {
+            CoreSessionStorePort::with_path_manager(self.persistence.path_manager().clone())
+                .resolve_workspace_storage(workspace_id)
+                .await?
+                .effective_storage_path
+        } else {
+            // Legacy peers identify the workspace only by path.
+            if request.workspace_path.trim().is_empty() {
+                return Err(PortError::new(
+                    PortErrorKind::InvalidRequest,
+                    "Session content search requires a workspace ID",
+                ));
+            }
+            self.resolve_persisted_session_storage_path(SessionStoragePathRequest {
                 workspace_path: PathBuf::from(request.workspace_path),
                 remote_connection_id: request.remote_connection_id,
                 remote_ssh_host: request.remote_ssh_host,
             })
             .await
-            .map_err(runtime_port_error)?;
+            .map_err(runtime_port_error)?
+        };
         self.search_persisted_session_content(
             &storage_path,
             &request.query,
@@ -2069,18 +2082,22 @@ impl CoreSessionOperationsPort {
         }
     }
 
-    async fn resolve_session_storage_path(
+    /// Session storage for a request that names its workspace by ID, falling
+    /// back to the legacy path selector only for pre-ID producers.
+    async fn resolve_session_storage_for_reference(
         &self,
-        workspace_path: String,
+        workspace_id: Option<&str>,
+        workspace_path: &str,
         remote_connection_id: Option<String>,
         remote_ssh_host: Option<String>,
     ) -> PortResult<PathBuf> {
         CoreSessionStorePort::with_path_manager(self.persistence.path_manager().clone())
-            .resolve_session_storage_path(SessionStoragePathRequest {
-                workspace_path: PathBuf::from(workspace_path),
+            .resolve_storage_for_reference(
+                workspace_id,
+                workspace_path,
                 remote_connection_id,
                 remote_ssh_host,
-            })
+            )
             .await
             .map(|resolution| resolution.effective_storage_path)
     }
@@ -2459,8 +2476,9 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
         validate_persisted_session_id(&request.root_session_id).map_err(runtime_port_error)?;
         validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
         let storage_path = self
-            .resolve_session_storage_path(
-                request.workspace_path,
+            .resolve_session_storage_for_reference(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
                 request.remote_connection_id,
                 request.remote_ssh_host,
             )
@@ -2510,6 +2528,7 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
         request: AgentSessionLineageCancellationRequest,
     ) -> PortResult<AgentTurnCancellationResult> {
         let AgentSessionLineageCancellationRequest {
+            workspace_id,
             workspace_path,
             root_session_id,
             session_id,
@@ -2525,7 +2544,12 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
         let deadline = Instant::now() + wait_timeout;
         let storage_path = match tokio::time::timeout(wait_timeout, async {
             let storage_path = self
-                .resolve_session_storage_path(workspace_path, remote_connection_id, remote_ssh_host)
+                .resolve_session_storage_for_reference(
+                    workspace_id.as_deref(),
+                    &workspace_path,
+                    remote_connection_id,
+                    remote_ssh_host,
+                )
                 .await?;
             self.validate_lineage_descendant(&storage_path, &root_session_id, &session_id)
                 .await?;
@@ -2650,15 +2674,16 @@ impl AgentSessionUsagePort for CoreSessionOperationsPort {
         &self,
         request: AgentSessionUsageRequest,
     ) -> PortResult<SessionUsageReport> {
-        let workspace_path = request.workspace_path.clone().ok_or_else(|| {
-            PortError::new(
+        if request.workspace_id.is_none() && request.workspace_path.is_none() {
+            return Err(PortError::new(
                 PortErrorKind::InvalidRequest,
-                "Workspace path is required for usage reports",
-            )
-        })?;
+                "Workspace ID is required for usage reports",
+            ));
+        }
         let storage_path = self
-            .resolve_session_storage_path(
-                workspace_path,
+            .resolve_session_storage_for_reference(
+                request.workspace_id.as_deref(),
+                request.workspace_path.as_deref().unwrap_or_default(),
                 request.remote_connection_id.clone(),
                 request.remote_ssh_host.clone(),
             )
@@ -4567,6 +4592,7 @@ mod tests {
         let usage_task = tokio::spawn(async move {
             usage_port
                 .generate_session_usage(AgentSessionUsageRequest {
+                    workspace_id: None,
                     session_id: session_id.to_string(),
                     workspace_path: Some(usage_workspace_path),
                     remote_connection_id: None,
@@ -4617,6 +4643,7 @@ mod tests {
             workspace.path(),
             AgentSessionUsageRequest {
                 session_id: "../other-session".to_string(),
+                workspace_id: None,
                 workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -4679,6 +4706,7 @@ mod tests {
             &token_usage_service,
             workspace.path(),
             AgentSessionUsageRequest {
+                workspace_id: None,
                 session_id: session_id.to_string(),
                 workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                 remote_connection_id: None,

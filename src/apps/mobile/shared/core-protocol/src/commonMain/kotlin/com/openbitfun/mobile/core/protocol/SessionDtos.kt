@@ -104,6 +104,10 @@ public data class InitialSyncResponse(
     @SerialName("git_branch") val gitBranch: String? = null,
     @SerialName("workspace_kind") val workspaceKind: String? = null,
     @SerialName("assistant_id") val assistantId: String? = null,
+    @SerialName("remote_connection_id") val remoteConnectionId: String? = null,
+    @SerialName("remote_ssh_host") val remoteSshHost: String? = null,
+    /** Host feature list; `workspace_id_references_v1` is what allows ID-only workspace commands. */
+    @SerialName("capabilities") val capabilities: List<String> = emptyList(),
     @SerialName("sessions") val sessions: List<SessionItemResponse> = emptyList(),
     @SerialName("has_more_sessions") val hasMoreSessions: Boolean = false,
     @SerialName("authenticated_user_id") val authenticatedUserId: String? = null,
@@ -116,6 +120,8 @@ public data class CreateSessionResponse(
     @SerialName("session_id") val sessionId: String? = null,
     @SerialName("id") val id: String? = null,
     @SerialName("title") val title: String? = null,
+    /** Set by ID-aware hosts; the created session's workspace identity is this ID. */
+    @SerialName("workspace_id") val workspaceId: String? = null,
     @SerialName("workspace_path") val workspacePath: String? = null,
     @SerialName("remote_connection_id") val remoteConnectionId: String? = null,
     @SerialName("remote_ssh_host") val remoteSshHost: String? = null,

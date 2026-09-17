@@ -26,7 +26,6 @@ use openbitfun_core::service::remote_ssh::get_remote_workspace_manager;
 use openbitfun_core::service::remote_ssh::{
     search_remote_file_names, shell_quote_posix, RemoteFileNameSearch,
 };
-use openbitfun_core::service::workspace::WorkspaceInfoRuntimeExt;
 use openbitfun_core::service::workspace::{ScanOptions, WorkspaceInfo, WorkspaceKind};
 use openbitfun_core_types::product_identity::hidden_data_directory;
 use serde::{Deserialize, Serialize};
@@ -542,7 +541,12 @@ pub struct WriteFileContentRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResetWorkspacePersonaFilesRequest {
-    pub workspace_path: String,
+    /// Owning assistant workspace ID; authoritative when present.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Legacy path reference for pre-ID clients; the root is only an IO operand.
+    #[serde(default)]
+    pub workspace_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2929,31 +2933,59 @@ pub async fn reset_workspace_persona_files(
     state: State<'_, AppState>,
     request: ResetWorkspacePersonaFilesRequest,
 ) -> Result<(), String> {
-    let workspace_path = std::path::PathBuf::from(&request.workspace_path);
+    let service = &state.workspace_service;
+    let workspace_id = request
+        .workspace_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    let legacy_path = request
+        .workspace_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty());
+    let workspace = match (workspace_id, legacy_path) {
+        (Some(id), _) => service
+            .require_workspace(id)
+            .await
+            .map_err(|error| error.to_string())?,
+        (None, Some(path)) => service
+            .resolve_legacy_workspace_reference(None, path, None, None)
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| {
+                format!(
+                    "Workspace path {} is not an open workspace; select the assistant by its ID",
+                    path
+                )
+            })?,
+        (None, None) => {
+            return Err("A workspace ID is required to reset persona files".to_string());
+        }
+    };
 
-    if !state
-        .workspace_service
-        .is_assistant_workspace_path(&workspace_path)
+    if workspace.workspace_kind != WorkspaceKind::Assistant
+        || !service.is_assistant_workspace_path(&workspace.root_path)
     {
         return Err(format!(
-            "Workspace is not a managed assistant workspace: {}",
-            request.workspace_path
+            "Workspace {} is not a managed assistant workspace",
+            workspace.id
         ));
     }
 
-    openbitfun_core::service::reset_workspace_persona_files_to_default(&workspace_path)
+    openbitfun_core::service::reset_workspace_persona_files_to_default(&workspace.root_path)
         .await
         .map_err(|e| {
             error!(
-                "Failed to reset workspace persona files: path={} error={}",
-                request.workspace_path, e
+                "Failed to reset workspace persona files: workspace_id={} error={}",
+                workspace.id, e
             );
             format!("Failed to reset workspace persona files: {}", e)
         })?;
 
     info!(
-        "Workspace persona files reset to defaults: path={}",
-        request.workspace_path
+        "Workspace persona files reset to defaults: workspace_id={}",
+        workspace.id
     );
 
     Ok(())

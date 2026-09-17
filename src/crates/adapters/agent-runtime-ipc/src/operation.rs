@@ -528,6 +528,7 @@ mod tests {
         };
         let inspect = RuntimeIpcOperation::InspectLineageSession {
             request: AgentSessionLineageTranscriptRequest {
+                workspace_id: None,
                 workspace_path: "D:/workspace/project".to_string(),
                 root_session_id: "root-1".to_string(),
                 session_id: "child-1".to_string(),
@@ -538,6 +539,7 @@ mod tests {
         };
         let cancel = RuntimeIpcOperation::CancelLineageSession {
             request: AgentSessionLineageCancellationRequest {
+                workspace_id: None,
                 workspace_path: "D:/workspace/project".to_string(),
                 root_session_id: "root-1".to_string(),
                 session_id: "child-1".to_string(),

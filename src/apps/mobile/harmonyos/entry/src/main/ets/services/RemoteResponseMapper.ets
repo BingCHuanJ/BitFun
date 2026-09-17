@@ -24,7 +24,9 @@ export class RemoteResponseMapper {
       hasWorkspace: response.has_workspace !== false && workspacePath.length > 0,
       gitBranch: response.git_branch || '',
       workspaceKind: response.workspace_kind || 'normal',
-      assistantId: response.assistant_id
+      assistantId: response.assistant_id,
+      remoteConnectionId: (response.workspace_kind === 'normal' || response.workspace_kind === 'assistant') ? undefined : response.remote_connection_id,
+      remoteSshHost: (response.workspace_kind === 'normal' || response.workspace_kind === 'assistant') ? undefined : response.remote_ssh_host
     };
   }
 
@@ -107,6 +109,12 @@ export class RemoteResponseMapper {
         workspacePath: item.workspace_path,
         workspaceName: item.workspace_name
       };
+      // An ID-aware host pins every session to its workspace record. Keep that
+      // ID as the identity; the listing scope may later fill in display facts.
+      const workspaceId = (item.workspace_id || '').trim();
+      if (workspaceId.length > 0) {
+        session.workspaceIdentity = { workspaceId: workspaceId, path: item.workspace_path || '' };
+      }
       return session;
     });
   }

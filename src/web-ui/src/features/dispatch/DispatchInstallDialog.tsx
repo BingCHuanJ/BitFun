@@ -313,7 +313,8 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     !!protocol &&
     !probe.protocolError &&
     protocolCompatible;
-  const workspaceReady = !!sourceWorkspacePath?.trim();
+  // The source workspace is owned by ID; the path only labels its checkout.
+  const workspaceReady = !!sourceWorkspaceId?.trim() || !!sourceWorkspacePath?.trim();
   /** A compatible signed release makes one-click preparation available. */
   const installPending =
     !cliReady

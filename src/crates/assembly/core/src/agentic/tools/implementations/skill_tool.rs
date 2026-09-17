@@ -690,7 +690,15 @@ Use the remote project skill.
             }
         }
         let modes = registry
-            .get_mode_skill_infos_for_workspace(Some(temp.path()), "agent")
+            .get_mode_skill_infos_for_workspace(
+                Some(
+                    crate::agentic::tools::implementations::skills::mode_overrides::SkillPolicyWorkspace {
+                        workspace_id: "workspace-skill-tool-test",
+                        root: temp.path(),
+                    },
+                ),
+                "agent",
+            )
             .await;
         assert_eq!(
             modes

@@ -344,7 +344,6 @@ impl DesktopSessionApplication {
     pub(crate) async fn ensure_configured_plugin_instance(
         &self,
         request: DesktopSessionScopeRequest,
-        project_id: Option<String>,
     ) -> DesktopSessionApplicationResult<()> {
         let scope = self.resolved_scope(request).await?;
         self.ensure_runtime_ownership(&scope)?;
@@ -360,7 +359,6 @@ impl DesktopSessionApplication {
                 scope.workspace_path
             )));
         }
-        let workspace_path = PathBuf::from(&scope.workspace_path);
         openbitfun_core::plugin_host::ensure_configured_plugin_instance(
             crate::PLUGIN_HOST_LAUNCH_POLICY,
             &scope.workspace_id,
@@ -608,6 +606,7 @@ impl DesktopSessionApplication {
         let mut report = self
             .agent_runtime
             .generate_session_usage(AgentSessionUsageRequest {
+                workspace_id: Some(scope.workspace_id.clone()),
                 session_id,
                 workspace_path: Some(storage_path.to_string_lossy().to_string()),
                 remote_connection_id: scope.remote_connection_id.clone(),
@@ -753,9 +752,9 @@ impl DesktopSessionApplication {
         {
             return Ok(());
         }
-        if request.workspace_path.trim().is_empty() {
+        if request.workspace_id.is_none() && request.workspace_path.trim().is_empty() {
             return Err(DesktopSessionApplicationError::Validation(
-                "workspace_path is required when the session is not loaded".to_string(),
+                "workspace_id is required when the session is not loaded".to_string(),
             ));
         }
         let scope = self.resolved_scope(request).await?;

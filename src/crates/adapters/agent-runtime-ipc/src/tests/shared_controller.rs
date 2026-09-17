@@ -483,6 +483,7 @@ async fn cancellation_supersedes_a_slow_lineage_read_on_the_same_client() {
         inspect_client
             .request(RuntimeIpcOperation::InspectLineageSession {
                 request: AgentSessionLineageTranscriptRequest {
+                    workspace_id: None,
                     workspace_path: inspect_workspace_path,
                     root_session_id: "session-a".to_string(),
                     session_id: "session-child".to_string(),
@@ -504,6 +505,7 @@ async fn cancellation_supersedes_a_slow_lineage_read_on_the_same_client() {
         Duration::from_millis(300),
         client.request(RuntimeIpcOperation::CancelLineageSession {
             request: AgentSessionLineageCancellationRequest {
+                workspace_id: None,
                 workspace_path,
                 root_session_id: "session-a".to_string(),
                 session_id: "session-child".to_string(),
@@ -698,6 +700,7 @@ fn submit_operation(workspace: &Path, session_id: &str, turn_id: &str) -> Runtim
             execution: Default::default(),
             agent_type: "Standard".to_string(),
             workspace_path: Some(workspace.to_string_lossy().to_string()),
+            workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
             policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),

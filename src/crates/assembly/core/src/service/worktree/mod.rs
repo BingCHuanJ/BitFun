@@ -42,6 +42,10 @@ static REPOSITORY_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<AsyncMutex<()>>>>> 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeListRequest {
+    /// Owning project workspace ID. Hosts resolve the local project path from
+    /// this ID; `project_workspace_path` is the legacy/IO projection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
     pub project_workspace_path: String,
 }
 
@@ -52,6 +56,11 @@ pub struct WorktreeProjectListRequest {}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeProjectSummary {
+    /// Workspace ID of the open workspace whose root is this project's main
+    /// worktree. `None` when the main worktree is not itself an open
+    /// workspace and only linked worktrees of it are open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
     pub project_workspace_path: String,
     pub worktrees: Vec<WorktreeSummary>,
 }
@@ -60,6 +69,8 @@ pub struct WorktreeProjectSummary {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeCreateRequest {
     pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
     pub project_workspace_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_workspace_path: Option<String>,
@@ -85,6 +96,8 @@ pub struct WorktreeCreateResult {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeCreateBranchRequest {
     pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
     pub project_workspace_path: String,
     pub worktree_id: String,
     pub branch: String,
@@ -94,6 +107,8 @@ pub struct WorktreeCreateBranchRequest {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreePromoteRequest {
     pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
     pub project_workspace_path: String,
     pub worktree_id: String,
 }
@@ -102,6 +117,8 @@ pub struct WorktreePromoteRequest {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeRemoveRequest {
     pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
     pub project_workspace_path: String,
     pub worktree_id: String,
     #[serde(default)]
@@ -112,6 +129,8 @@ pub struct WorktreeRemoveRequest {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeRecreateRequest {
     pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
     pub project_workspace_path: String,
     pub worktree_id: String,
 }
@@ -344,9 +363,10 @@ impl WorktreeService {
         let project_paths = known_project_workspace_paths().await;
         let mut projects = Vec::new();
 
-        for project_path in project_paths {
+        for (project_path, project_workspace_id) in project_paths {
             match Self::list_scoped(
                 WorktreeListRequest {
+                    project_workspace_id: project_workspace_id.clone(),
                     project_workspace_path: path_string(&project_path),
                 },
                 Some(&managed_root),
@@ -362,6 +382,7 @@ impl WorktreeService {
                         continue;
                     }
                     projects.push(WorktreeProjectSummary {
+                        project_workspace_id,
                         project_workspace_path: path_string(&project_path),
                         worktrees,
                     });
@@ -1470,12 +1491,14 @@ impl WorktreeService {
     }
 }
 
-async fn known_project_workspace_paths() -> Vec<PathBuf> {
+/// Known local Git projects, keyed by main worktree path, paired with the ID
+/// of the open workspace whose root is that main worktree when one exists.
+async fn known_project_workspace_paths() -> Vec<(PathBuf, Option<String>)> {
     let Some(workspace_service) = get_global_workspace_service() else {
         return Vec::new();
     };
     let workspaces = workspace_service.list_workspaces().await;
-    let mut projects = HashMap::<String, PathBuf>::new();
+    let mut projects = HashMap::<String, (PathBuf, Option<String>)>::new();
 
     for workspace in workspaces {
         if workspace.workspace_kind != WorkspaceKind::Normal || !workspace.root_path.is_dir() {
@@ -1488,11 +1511,18 @@ async fn known_project_workspace_paths() -> Vec<PathBuf> {
             continue;
         };
         let main_path = PathBuf::from(main_worktree.path);
-        projects.insert(normalized_lookup_path(&main_path), main_path);
+        let main_key = normalized_lookup_path(&main_path);
+        let owns_main = normalized_lookup_path(&workspace.root_path) == main_key;
+        let entry = projects
+            .entry(main_key)
+            .or_insert_with(|| (main_path, None));
+        if owns_main && entry.1.is_none() {
+            entry.1 = Some(workspace.id.clone());
+        }
     }
 
     let mut paths = projects.into_values().collect::<Vec<_>>();
-    paths.sort_by_key(|left| path_string(left));
+    paths.sort_by_key(|(path, _)| path_string(path));
     paths
 }
 

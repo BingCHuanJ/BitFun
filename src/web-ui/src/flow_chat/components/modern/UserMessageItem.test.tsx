@@ -37,11 +37,30 @@ const editServiceMock = vi.hoisted(() => ({
   })),
   editAndRerunUserMessage: vi.fn(async () => undefined),
 }));
+/** Sessions are bound to a workspace by ID; its kind decides whether local-only actions are available. */
+const workspaceRecords = vi.hoisted(() => ({
+  local: { id: 'local-workspace', rootPath: '/project', workspaceKind: 'normal' as const },
+  remote: { id: 'remote-workspace', rootPath: '/srv/project', workspaceKind: 'remote' as const, connectionId: 'ssh:user@example.com:22' },
+}));
+
+vi.mock('@/infrastructure/services/business/workspaceManager', () => ({
+  workspaceManager: {
+    getState: () => ({
+      currentWorkspace: workspaceRecords.local,
+      openedWorkspaces: new Map([
+        [workspaceRecords.local.id, workspaceRecords.local],
+        [workspaceRecords.remote.id, workspaceRecords.remote],
+      ]),
+      recentWorkspaces: [],
+    }),
+  },
+}));
 
 function createPartialHistorySession(includeCatalog: boolean) {
   const session: any = {
     sessionId: 'partial-session',
     sessionKind: 'normal',
+    workspaceId: workspaceRecords.local.id,
     isPartial: true,
     loadedTurnCount: 1,
     totalTurnCount: 20,
@@ -670,6 +689,7 @@ describe('UserMessageItem steering tag', () => {
     activeSessionRef.current = {
       sessionId: 'main-session',
       sessionKind: 'normal',
+      workspaceId: workspaceRecords.local.id,
       dialogTurns: [{ id: 'turn-1', status: 'completed' }],
     };
 
@@ -714,9 +734,9 @@ describe('UserMessageItem steering tag', () => {
   });
 
   it.each([
-    { binding: { remoteConnectionId: 'ssh:user@example.com:22', remoteSshHost: 'example.com', config: {} }, reason: 'Remote' },
-    { binding: { config: { dispatchJobId: 'job-a100' } }, reason: 'Dispatch' },
-    { binding: { config: { dispatchTarget: { kind: 'device', deviceId: 'target', workspacePath: '/w', displayName: 'Target' } } }, reason: 'Dispatch' },
+    { binding: { workspaceId: workspaceRecords.remote.id, config: {} }, reason: 'Remote' },
+    { binding: { workspaceId: workspaceRecords.local.id, config: { dispatchJobId: 'job-a100' } }, reason: 'Dispatch' },
+    { binding: { workspaceId: workspaceRecords.local.id, config: { dispatchTarget: { kind: 'device', deviceId: 'target', workspacePath: '/w', displayName: 'Target' } } }, reason: 'Dispatch' },
   ])('disables file-consistent rollback and message editing for $reason sessions', ({ binding, reason }) => {
     activeSessionRef.current = {
       sessionId: 'remote-session',
@@ -804,6 +824,7 @@ describe('UserMessageItem steering tag', () => {
     activeSessionRef.current = {
       sessionId: 'partial-session',
       sessionKind: 'normal',
+      workspaceId: workspaceRecords.local.id,
       isPartial: true,
       loadedTurnCount: 1,
       totalTurnCount: 20,
@@ -845,6 +866,7 @@ describe('UserMessageItem steering tag', () => {
     activeSessionRef.current = {
       sessionId: 'partial-session',
       sessionKind: 'normal',
+      workspaceId: workspaceRecords.local.id,
       isPartial: true,
       loadedTurnCount: 1,
       totalTurnCount: 20,

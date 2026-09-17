@@ -798,6 +798,32 @@ impl WorkspaceManager {
             .await
     }
 
+    /// Refreshes activity of a workspace the caller already selected by ID.
+    /// Only the access time, recent placement and (optionally) the worktree
+    /// projection change; the recorded kind, name and SSH facts stay as they
+    /// are because a session's stale projection must not rewrite the record.
+    pub async fn touch_workspace_by_id(
+        &mut self,
+        workspace_id: &str,
+        add_to_recent: bool,
+        refresh_worktree: Option<Option<WorkspaceWorktreeInfo>>,
+    ) -> OpenBitFunResult<WorkspaceInfo> {
+        let workspace = self.workspaces.get_mut(workspace_id).ok_or_else(|| {
+            OpenBitFunError::service(format!("Workspace not found: {workspace_id}"))
+        })?;
+        if let Some(worktree) = refresh_worktree {
+            workspace.load_identity().await;
+            workspace.worktree = worktree;
+        }
+        self.touch_workspace_access(workspace_id, add_to_recent);
+        self.workspaces.get(workspace_id).cloned().ok_or_else(|| {
+            OpenBitFunError::service(format!(
+                "Workspace '{}' disappeared after touching it",
+                workspace_id
+            ))
+        })
+    }
+
     /// Registers or refreshes workspace activity without changing opened UI state.
     pub async fn track_workspace_with_options(
         &mut self,

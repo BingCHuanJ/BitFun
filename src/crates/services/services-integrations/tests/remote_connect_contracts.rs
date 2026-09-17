@@ -573,6 +573,7 @@ impl RecordingDialogHost {
         remote_ssh_host: &str,
     ) -> Self {
         self.binding_workspace = Some(RemoteDialogWorkspaceBinding {
+            workspace_id: None,
             workspace_path: workspace_path.to_string(),
             remote_connection_id: Some(remote_connection_id.to_string()),
             remote_ssh_host: Some(remote_ssh_host.to_string()),
@@ -847,8 +848,10 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
         self.events.lock().unwrap().push("session".to_string());
         RemoteResponse::SessionCreated {
             session_id: "session-created".to_string(),
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
+            remote_ssh_host: None,
         }
     }
 
@@ -1127,6 +1130,7 @@ async fn remote_connect_command_owner_preserves_cancel_and_group_routing() {
         &RemoteCommand::GetFileInfo {
             path: "README.md".to_string(),
             session_id: None,
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
         },
@@ -1749,6 +1753,7 @@ impl RemoteWorkspaceFileRuntimeHost for UnavailableSessionFileHost {
         session: Option<&str>,
         _: Option<&str>,
         _: Option<&str>,
+        _: Option<&str>,
         _: u64,
         _: u64,
     ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
@@ -1760,6 +1765,7 @@ impl RemoteWorkspaceFileRuntimeHost for UnavailableSessionFileHost {
         &self,
         _: &str,
         session: Option<&str>,
+        _: Option<&str>,
         _: Option<&str>,
         _: Option<&str>,
     ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
@@ -1782,12 +1788,14 @@ async fn remote_connect_file_provider_errors_never_fall_back_to_local_files() {
             session_id: session_id.clone(),
             offset: 0,
             limit: 3,
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
         },
         RemoteCommand::GetFileInfo {
             path,
             session_id,
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
         },
@@ -1812,12 +1820,14 @@ impl RemoteWorkspaceFileRuntimeHost for ExplicitFileWorkspaceHost {
         &self,
         _: &str,
         session: Option<&str>,
+        workspace_id: Option<&str>,
         workspace: Option<&str>,
         connection: Option<&str>,
         _: u64,
         _: u64,
     ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
         assert_eq!(session, None);
+        assert_eq!(workspace_id, None);
         assert_eq!(workspace, Some("/captured/workspace"));
         assert_eq!(connection, Some("saved-runtime-profile"));
         Ok(None)
@@ -1826,13 +1836,71 @@ impl RemoteWorkspaceFileRuntimeHost for ExplicitFileWorkspaceHost {
         &self,
         _: &str,
         session: Option<&str>,
+        workspace_id: Option<&str>,
         workspace: Option<&str>,
         connection: Option<&str>,
     ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
         assert_eq!(session, None);
+        assert_eq!(workspace_id, None);
         assert_eq!(workspace, Some("/captured/workspace"));
         assert_eq!(connection, Some("saved-runtime-profile"));
         Ok(None)
+    }
+}
+
+struct WorkspaceIdFileHost;
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for WorkspaceIdFileHost {
+    async fn resolve_remote_file_workspace_root(&self, _: Option<&str>) -> Option<PathBuf> {
+        panic!("Workspace ID identity must never fall back to the selected local workspace")
+    }
+    async fn read_remote_file_chunk(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        workspace_id: Option<&str>,
+        workspace: Option<&str>,
+        connection: Option<&str>,
+        _: u64,
+        _: u64,
+    ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
+        assert_eq!(session, None);
+        assert_eq!(workspace_id, Some("workspace-42"));
+        assert_eq!(workspace, None);
+        assert_eq!(connection, None);
+        Ok(None)
+    }
+    async fn remote_file_info(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        workspace_id: Option<&str>,
+        workspace: Option<&str>,
+        connection: Option<&str>,
+    ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
+        assert_eq!(session, None);
+        assert_eq!(workspace_id, Some("workspace-42"));
+        assert_eq!(workspace, None);
+        assert_eq!(connection, None);
+        Ok(None)
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_workspace_id_file_identity_is_forwarded_without_local_fallback() {
+    for name in ["read_file_chunk", "get_file_info"] {
+        let command: RemoteCommand = serde_json::from_value(serde_json::json!({
+            "cmd": name, "path": "file.bin", "workspace_id": "workspace-42",
+            "offset": 0, "limit": 3
+        }))
+        .unwrap();
+        assert_eq!(
+            handle_remote_workspace_file_command(&WorkspaceIdFileHost, &command).await,
+            RemoteResponse::Error {
+                message: "This host cannot resolve an explicit file workspace".into()
+            }
+        );
     }
 }
 
@@ -2144,8 +2212,10 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
         remote_session_created_response("session-new"),
         RemoteResponse::SessionCreated {
             session_id: "session-new".to_string(),
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
+            remote_ssh_host: None,
         }
     );
     assert_eq!(

@@ -221,6 +221,7 @@ fn protocol_round_trips_root_scoped_lineage_operations() {
         },
         RuntimeIpcOperation::InspectLineageSession {
             request: AgentSessionLineageTranscriptRequest {
+                workspace_id: None,
                 workspace_path: "D:/workspace/project".to_string(),
                 root_session_id: "root-1".to_string(),
                 session_id: "child-1".to_string(),
@@ -231,6 +232,7 @@ fn protocol_round_trips_root_scoped_lineage_operations() {
         },
         RuntimeIpcOperation::CancelLineageSession {
             request: AgentSessionLineageCancellationRequest {
+                workspace_id: None,
                 workspace_path: "D:/workspace/project".to_string(),
                 root_session_id: "root-1".to_string(),
                 session_id: "child-1".to_string(),
@@ -596,6 +598,7 @@ fn submit_turn_accepts_the_existing_64_kib_tui_paste_contract() {
                 execution: Default::default(),
                 agent_type: "Standard".to_string(),
                 workspace_path: Some("D:/workspace/project".to_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),

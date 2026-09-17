@@ -163,6 +163,9 @@ fn default_session_reference_search_limit() -> usize {
 pub struct SessionReferenceCandidate {
     pub session_id: String,
     pub session_name: String,
+    /// Owning workspace ID; the reference identity the composer sends back.
+    pub workspace_id: String,
+    /// Display/IO projection of the owning workspace root.
     pub workspace_path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
@@ -332,7 +335,7 @@ pub async fn search_session_content(
         .session_application()
         .search_session_content(
             desktop_session_scope(
-                None,
+                request.workspace_id,
                 request.workspace_path,
                 request.remote_connection_id,
                 request.remote_ssh_host,
@@ -413,6 +416,7 @@ pub async fn search_referenceable_sessions(
             candidates.push(SessionReferenceCandidate {
                 session_id: session.session_id,
                 session_name: session.session_name,
+                workspace_id: workspace.id.clone(),
                 workspace_path: workspace_path.clone(),
                 remote_connection_id: remote_connection_id.clone(),
                 remote_ssh_host: remote_ssh_host.clone(),

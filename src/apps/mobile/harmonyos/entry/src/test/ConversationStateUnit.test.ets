@@ -113,6 +113,7 @@ import {
   RemoteModelCatalog,
   ReadFileResult,
   RemoteSession,
+  RemoteWorkspaceIdentity,
   SelectedImageAttachment,
   SessionListResult,
   SessionMessagesResult,
@@ -1577,7 +1578,7 @@ export default function conversationStateUnitTest() {
       ]);
       const coordinator = new RemoteWorkspaceCoordinator(source);
 
-      const sessions = await coordinator.sessionsForWorkspaces(['/one', '/two']);
+      const sessions = await coordinator.sessionsForWorkspaces([{ path: '/one' }, { path: '/two' }]);
       expect(sessions.length).assertEqual(3);
       expect(sessions[0].id).assertEqual('shared-session');
       expect(sessions[1].id).assertEqual('one-session');
@@ -1588,15 +1589,15 @@ export default function conversationStateUnitTest() {
     // the order they happened to finish in.
     it('keeps results in path order across concurrency batches', 0, async () => {
       const source = new FakeRemoteWorkspaceDataSource();
-      const paths: string[] = [];
+      const workspaces: RemoteWorkspaceIdentity[] = [];
       for (let index = 0; index < 9; index++) {
         const path = `/workspace-${index}`;
-        paths.push(path);
+        workspaces.push({ path });
         source.sessionsByPath.set(path, [remoteSession(`session-${index}`, `Session ${index}`)]);
       }
       const coordinator = new RemoteWorkspaceCoordinator(source);
 
-      const sessions = await coordinator.sessionsForWorkspaces(paths);
+      const sessions = await coordinator.sessionsForWorkspaces(workspaces);
       expect(sessions.length).assertEqual(9);
       expect(sessions[0].id).assertEqual('session-0');
       expect(sessions[4].id).assertEqual('session-4');
@@ -1611,10 +1612,24 @@ export default function conversationStateUnitTest() {
       source.failingPaths = ['/two'];
       const coordinator = new RemoteWorkspaceCoordinator(source);
 
-      const sessions = await coordinator.sessionsForWorkspaces(['/one', '/two', '/three']);
+      const sessions = await coordinator.sessionsForWorkspaces([{ path: '/one' }, { path: '/two' }, { path: '/three' }]);
       expect(sessions.length).assertEqual(2);
       expect(sessions[0].id).assertEqual('one-session');
       expect(sessions[1].id).assertEqual('three-session');
+    });
+
+    it('lists identified workspaces by their ID rather than their display path', 0, async () => {
+      const source = new FakeRemoteWorkspaceDataSource();
+      source.sessionsByPath.set('ws-1', [remoteSession('by-id', 'By ID')]);
+      source.sessionsByPath.set('/renamed', [remoteSession('by-path', 'By path')]);
+      const coordinator = new RemoteWorkspaceCoordinator(source);
+
+      const sessions = await coordinator.sessionsForWorkspaces([{ workspaceId: 'ws-1', path: '/renamed' }]);
+      expect(sessions.length).assertEqual(1);
+      expect(sessions[0].id).assertEqual('by-id');
+      expect(source.listedPaths.join(',')).assertEqual('ws-1');
+      await coordinator.switchAssistant('', 'ws-2');
+      expect(source.lastSetAssistantId || '').assertEqual('ws-2');
     });
   });
 

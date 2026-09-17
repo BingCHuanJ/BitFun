@@ -15,6 +15,11 @@ export type BtwSessionViewKind = 'review-check';
 export interface BtwSessionPanelData {
   childSessionId: string;
   parentSessionId: string;
+  /** Workspace that owns the parent session; the identity used for routing. */
+  workspaceId?: string;
+  /** Main project workspace when the parent session executes in a linked worktree. */
+  projectWorkspaceId?: string;
+  /** Execution root of the parent session. IO projection only, kept for legacy tabs. */
   workspacePath?: string;
   viewKind?: BtwSessionViewKind;
   displayTitle?: string;
@@ -30,6 +35,7 @@ export interface BtwSessionPanelMetadata {
 export interface EnsureBtwSessionAvailableParams {
   childSessionId: string;
   parentSessionId: string;
+  workspaceId?: string;
   workspacePath?: string;
   sessionKind?: 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
   sessionTitle?: string;
@@ -82,10 +88,36 @@ const requestRightPanelExpansion = (): void => {
   }
 };
 
+export interface BtwSessionPanelWorkspace {
+  workspaceId?: string;
+  projectWorkspaceId?: string;
+  workspacePath?: string;
+}
+
+/** Workspace identity of the parent session, falling back to an explicit override. */
+const resolveBtwSessionPanelWorkspace = (
+  parentSessionId: string,
+  override: { workspaceId?: string; workspacePath?: string },
+): BtwSessionPanelWorkspace => {
+  const parent = flowChatStore.getState().sessions.get(parentSessionId);
+  const workspaceId = override.workspaceId
+    || parent?.workspaceId
+    || parent?.config?.workspaceId
+    || undefined;
+  const projectWorkspaceId = parent?.projectWorkspaceId
+    || parent?.config?.projectWorkspaceId
+    || undefined;
+  return {
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(projectWorkspaceId && projectWorkspaceId !== workspaceId ? { projectWorkspaceId } : {}),
+    workspacePath: override.workspacePath || parent?.workspacePath,
+  };
+};
+
 export const buildBtwSessionPanelContent = (
   childSessionId: string,
   parentSessionId: string,
-  workspacePath?: string,
+  workspace: BtwSessionPanelWorkspace,
   viewKind?: BtwSessionViewKind,
   displayTitle?: string,
 ): PanelContent => ({
@@ -94,7 +126,9 @@ export const buildBtwSessionPanelContent = (
   data: {
     childSessionId,
     parentSessionId,
-    workspacePath,
+    ...(workspace.workspaceId ? { workspaceId: workspace.workspaceId } : {}),
+    ...(workspace.projectWorkspaceId ? { projectWorkspaceId: workspace.projectWorkspaceId } : {}),
+    workspacePath: workspace.workspacePath,
     ...(viewKind ? { viewKind } : {}),
     ...(displayTitle?.trim() ? { displayTitle: displayTitle.trim() } : {}),
   } satisfies BtwSessionPanelData,
@@ -196,6 +230,9 @@ function ensureBtwSessionAvailableInternal(
         sessionKind: params.sessionKind || 'btw',
         parentToolCallId: params.parentToolCallId,
         subagentType: params.subagentType,
+        // Only an explicitly supplied child workspace ID is trusted here; the
+        // parent's ID is never inherited because a child may own a worktree.
+        ...(params.workspaceId ? { workspaceId: params.workspaceId } : {}),
       },
       resolvedRemoteConnectionId,
       resolvedRemoteSshHost,
@@ -233,6 +270,7 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
 export function openBtwSessionInAuxPane(params: {
   childSessionId: string;
   parentSessionId: string;
+  workspaceId?: string;
   workspacePath?: string;
   expand?: boolean;
   sessionKind?: 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
@@ -262,7 +300,7 @@ export function openBtwSessionInAuxPane(params: {
   const content = buildBtwSessionPanelContent(
     params.childSessionId,
     params.parentSessionId,
-    params.workspacePath,
+    resolveBtwSessionPanelWorkspace(params.parentSessionId, params),
     params.viewKind,
     params.sessionTitle,
   );

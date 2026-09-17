@@ -326,18 +326,11 @@ async fn canvas_service_for_workspace(
             .map_err(|e| e.to_string())?
             .ok_or("Legacy Canvas workspace cannot be resolved")?
     } else {
-        // Temporary pre-ID wire default. Current Canvas clients must send an ID.
-        let id = state
-            .workspace_id
-            .read()
-            .await
-            .clone()
-            .ok_or("No active workspace is available for legacy Canvas state")?;
-        state
-            .workspace_service
-            .require_workspace(&id)
-            .await
-            .map_err(|e| e.to_string())?
+        // Canvas state is keyed by the owning workspace. Falling through to the
+        // active workspace would silently store a session's Canvas under the
+        // wrong workspace, so reject requests that carry neither an ID nor a
+        // legacy path.
+        return Err("Canvas requests must identify the owning workspace".to_string());
     };
     let sessions_dir = openbitfun_core::agentic::session::CoreSessionStorePort::default()
         .resolve_workspace_storage(&workspace.id)

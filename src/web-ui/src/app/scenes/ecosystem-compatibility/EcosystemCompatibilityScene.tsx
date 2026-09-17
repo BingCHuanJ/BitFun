@@ -119,7 +119,9 @@ const EcosystemCompatibilityScene: React.FC = () => {
   const { workspace, workspacePath } = useCurrentWorkspace();
   const peerDevice = usePeerDeviceModeOptional();
   const peerDeviceId = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : undefined;
-  const requestScope = JSON.stringify([peerDeviceId, workspace?.id, workspace?.workspaceKind, workspacePath, workspace?.id]);
+  // Discovery results are owned by the (peer, workspace ID) pair; the path is
+  // an IO projection and must not fork the cache when a checkout moves.
+  const requestScope = JSON.stringify([peerDeviceId, workspace?.id]);
   const requestSequence = useRef(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const acpManagerRef = useRef<React.ComponentRef<typeof AcpAgentsConfig>>(null);
@@ -192,7 +194,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
     setLoadIssues(nextIssues);
     setLoading(false);
     return sourceResult.status === 'fulfilled' ? sourceResult.value : undefined;
-  }, [setAcpClients, setSnapshot, workspacePath, workspace?.id]);
+  }, [setAcpClients, setSnapshot, workspace?.id]);
 
   useEffect(() => {
     setSnapshot(null);
@@ -283,7 +285,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
   }, [selectProduct, showDevelopmentNotice]);
 
   const handleStartAcpClient = useCallback((client: AcpClientInfo) => {
-    if (!workspacePath) {
+    if (!workspace?.id) {
       notification.info(t('run.workspaceRequired'), { duration: 3200 });
       return;
     }
@@ -298,7 +300,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
       detail: { clientId: client.id },
     }));
     notification.info(t('run.starting', { name: client.name || client.id }), { duration: 2400 });
-  }, [notification, setOwnerSurface, t, workspacePath, workspace?.id]);
+  }, [notification, setOwnerSurface, t, workspace?.id]);
 
   const handleConfigureSubagent = useCallback((client: AcpClientInfo) => {
     if (!client.subagent) return;

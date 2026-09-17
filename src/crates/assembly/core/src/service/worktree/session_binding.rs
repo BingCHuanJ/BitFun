@@ -19,7 +19,6 @@ use openbitfun_core_types::{
     SessionExecutionTarget, WorktreeError, WorktreeErrorCode, WorktreeLifecycle,
 };
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::sync::LazyLock;
 
 /// Serializes the complete Git-create/rebind/release transition for one session.
@@ -36,7 +35,11 @@ static SESSION_BINDING_LOCKS: LazyLock<KeyedAsyncLock> = LazyLock::new(KeyedAsyn
 pub struct WorktreeSessionBindingRequest {
     pub request_id: String,
     pub session_id: String,
-    /// Stable owner path used to locate view-only or evicted persisted sessions.
+    /// Owning project workspace ID used to locate view-only or evicted
+    /// persisted sessions. Authoritative when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
+    /// Legacy owner path for peers that predate workspace IDs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_workspace_path: Option<String>,
     /// `true` moves the session into a managed worktree, `false` back to the project.
@@ -148,23 +151,59 @@ async fn load_binding_context(
                 transition_blocker,
             )
         } else {
-            let project_workspace_path = request
-                .project_workspace_path
+            let requested_project_workspace_id = request
+                .project_workspace_id
                 .as_deref()
                 .map(str::trim)
-                .filter(|path| !path.is_empty())
-                .ok_or_else(|| {
-                    error(
-                        WorktreeErrorCode::WorktreeNotFound,
-                        format!(
-                            "Session not found: {}. The project workspace path is required to restore historical sessions",
-                            request.session_id
-                        ),
-                    )
-                })?
-                .to_string();
+                .filter(|id| !id.is_empty());
+            let (project_workspace_path, session_storage_root) =
+                match requested_project_workspace_id {
+                    Some(requested_project_workspace_id) => {
+                        use openbitfun_runtime_ports::SessionStorePort;
+                        let workspace = crate::service::workspace::get_global_workspace_service()
+                            .ok_or_else(|| {
+                                error(
+                                    WorktreeErrorCode::IoFailed,
+                                    "Workspace service is not initialized",
+                                )
+                            })?
+                            .require_workspace(requested_project_workspace_id)
+                            .await
+                            .map_err(|workspace_error| {
+                                error(WorktreeErrorCode::InvalidPath, workspace_error.to_string())
+                            })?;
+                        let storage = crate::agentic::session::session_store_port::CoreSessionStorePort::default()
+                        .resolve_workspace_storage(&workspace.id)
+                        .await
+                        .map_err(|storage_error| {
+                            error(WorktreeErrorCode::IoFailed, storage_error.to_string())
+                        })?;
+                        (
+                            workspace.root_path.to_string_lossy().into_owned(),
+                            storage.effective_storage_path,
+                        )
+                    }
+                    None => {
+                        let path = request
+                        .project_workspace_path
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|path| !path.is_empty())
+                        .ok_or_else(|| {
+                            error(
+                                WorktreeErrorCode::WorktreeNotFound,
+                                format!(
+                                    "Session not found: {}. The project workspace ID is required to restore historical sessions",
+                                    request.session_id
+                                ),
+                            )
+                        })?
+                        .to_string();
+                        (path.clone(), std::path::PathBuf::from(path))
+                    }
+                };
             let metadata = session_manager
-                .load_session_metadata(Path::new(&project_workspace_path), &request.session_id)
+                .load_session_metadata(&session_storage_root, &request.session_id)
                 .await
                 .map_err(|metadata_error| {
                     error(
@@ -363,6 +402,7 @@ impl WorktreeService {
         let settings = Self::settings().await;
         let created = Self::create(WorktreeCreateRequest {
             request_id: request.request_id.clone(),
+            project_workspace_id: None,
             project_workspace_path: context.project_workspace_path.clone(),
             source_workspace_path: Some(context.execution_target.root_path.clone()),
             base_ref: None,
@@ -430,6 +470,7 @@ impl WorktreeService {
         .await?;
 
         let removable = Self::list(WorktreeListRequest {
+            project_workspace_id: None,
             project_workspace_path: context.project_workspace_path.clone(),
         })
         .await
@@ -452,6 +493,7 @@ impl WorktreeService {
         if removable {
             match Self::remove(WorktreeRemoveRequest {
                 request_id: request.request_id.clone(),
+                project_workspace_id: None,
                 project_workspace_path: context.project_workspace_path.clone(),
                 worktree_id,
                 force: false,

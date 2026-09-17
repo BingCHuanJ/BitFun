@@ -21,16 +21,12 @@ use openbitfun_core::external_sources::{
     NativePromptCommandDescriptor, PromptCommandInvocationOutcome,
     PromptCommandShellReviewDecision,
 };
-use openbitfun_core::service::remote_ssh::workspace_state::{
-    canonicalize_local_workspace_root, local_workspace_roots_equal,
-};
 use openbitfun_core::service::workspace::manager::WorkspaceKind;
 use openbitfun_product_domains::external_sources::{
     ExternalMcpImportApplyRequestV1, ExternalMcpImportApplyResultV1, ExternalMcpImportPlanV1,
 };
 use openbitfun_product_domains::workspace_references::WorkspaceReferenceSnapshot;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use tauri::State;
 
 use super::AppState;
@@ -509,16 +505,6 @@ fn ensure_registered_workspace_reference_kind(
         )),
         Some(WorkspaceKind::Normal | WorkspaceKind::Assistant) => Ok(()),
     }
-}
-
-fn workspace_reference_path_matches_registered_root(
-    registered_root: &Path,
-    requested_path: &Path,
-) -> bool {
-    let Ok((requested_path, _)) = canonicalize_local_workspace_root(requested_path) else {
-        return false;
-    };
-    local_workspace_roots_equal(registered_root, &requested_path)
 }
 
 #[tauri::command]
@@ -1003,29 +989,6 @@ mod tests {
         assert!(
             ensure_registered_workspace_reference_kind(Some(&WorkspaceKind::Assistant)).is_ok()
         );
-    }
-
-    #[test]
-    fn workspace_reference_paths_do_not_accept_unrelated_or_stale_local_paths() {
-        let directory = tempfile::tempdir().unwrap();
-        let registered_root = directory.path().join("registered");
-        let unrelated_root = directory.path().join("unrelated");
-        for path in [&registered_root, &unrelated_root] {
-            std::fs::create_dir_all(path).unwrap();
-        }
-
-        assert!(workspace_reference_path_matches_registered_root(
-            &registered_root,
-            &registered_root
-        ));
-        assert!(!workspace_reference_path_matches_registered_root(
-            &registered_root,
-            &unrelated_root
-        ));
-        assert!(!workspace_reference_path_matches_registered_root(
-            &registered_root,
-            Path::new("/stale/remote/workspace")
-        ));
     }
 
     #[test]

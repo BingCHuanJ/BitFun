@@ -176,6 +176,8 @@ export function createDiffEditorTab(
   options?: {
     titleKind?: 'git-diff' | 'diff' | 'fix-preview';
     duplicateKeyPrefix?: 'git-diff' | 'diff' | 'fix-diff';
+    /** Owning workspace ID; saves from the diff are routed by it. `repositoryPath` is only the IO root. */
+    workspaceId?: string;
   }
 ): void {
   const titleKind = options?.titleKind ?? (repositoryPath ? 'git-diff' : 'fix-preview');
@@ -201,6 +203,7 @@ export function createDiffEditorTab(
       modifiedCode,
       readOnly,
       repositoryPath,
+      workspaceId: options?.workspaceId,
       revealLine,
     },
     metadata: { filePath, repositoryPath, duplicateCheckKey: duplicateKey },
@@ -222,7 +225,8 @@ export function createGitDiffEditorTab(
   modifiedCode: string,
   repositoryPath: string,
   readOnly: boolean = false,
-  replaceExisting?: boolean
+  replaceExisting?: boolean,
+  workspaceId?: string
 ): void {
   createDiffEditorTab(
     filePath,
@@ -233,7 +237,8 @@ export function createGitDiffEditorTab(
     'git',
     repositoryPath,
     undefined,
-    replaceExisting
+    replaceExisting,
+    workspaceId ? { workspaceId } : undefined
   );
 }
 

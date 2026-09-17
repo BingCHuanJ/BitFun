@@ -9,7 +9,9 @@ use std::time::Instant;
 use tauri::{AppHandle, State};
 
 use crate::api::app_state::AppState;
-use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::api::session_storage_path::{
+    desktop_effective_session_storage_path, desktop_session_storage_root,
+};
 use crate::runtime::{
     DesktopRuntimeContext, DesktopSessionApplicationError, DesktopSessionScopeRequest,
 };
@@ -52,7 +54,6 @@ use openbitfun_core::service::config::project_permission_store::{
     deserialize_project_permission_config, project_permission_file_path,
     project_permission_file_path_for_remote, ProjectPermissionConfig,
 };
-use openbitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
 use openbitfun_core::service::session::{
     DialogTurnData, SessionContextUsage, SessionMemoryMode, SessionMetadata, SessionRelationship,
     SessionRelationshipKind, SessionTurnCatalog, SessionTurnWindowResponse,
@@ -92,13 +93,19 @@ fn worktree_error(
     })
 }
 
+/// Builds the session scope carried by Desktop session commands. The ID is the
+/// workspace identity; the path and SSH fields are only consulted for pre-ID
+/// clients and are otherwise IO projections.
 fn desktop_session_scope(
+    workspace_id: Option<String>,
     workspace_path: String,
     remote_connection_id: Option<String>,
     remote_ssh_host: Option<String>,
 ) -> DesktopSessionScopeRequest {
     DesktopSessionScopeRequest {
-        workspace_id: None,
+        workspace_id: workspace_id
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty()),
         workspace_path,
         remote_connection_id,
         remote_ssh_host,
@@ -236,6 +243,9 @@ pub struct UpdateSessionModelRequest {
     pub model_name: String,
     #[serde(default, deserialize_with = "deserialize_present_nullable")]
     pub reasoning_preset: Option<Option<String>>,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -256,6 +266,9 @@ pub struct UpdateSessionPermissionModeRequest {
     pub mode: Option<String>,
     #[serde(default)]
     pub turn_id: Option<String>,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -275,6 +288,9 @@ pub struct UpdateActiveTurnPermissionModeRequest {
     /// session mode at the next model-round boundary.
     #[serde(default)]
     pub mode: Option<String>,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -308,6 +324,9 @@ where
 pub struct UpdateSessionModeRequest {
     pub session_id: String,
     pub mode_id: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -323,6 +342,9 @@ pub struct UpdateSessionModeRequest {
 pub struct UpdateSessionTitleRequest {
     pub session_id: String,
     pub title: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -337,6 +359,9 @@ pub struct StartDialogTurnRequest {
     pub user_input: String,
     pub original_user_input: Option<String>,
     pub agent_type: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     /// Concrete execution root retained for backward compatibility and
     /// non-native transports.
     pub workspace_path: Option<String>,
@@ -366,6 +391,9 @@ pub struct StartDialogTurnResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CompactSessionRequest {
     pub session_id: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -379,6 +407,9 @@ pub struct ActivateSessionGoalRequest {
     pub session_id: String,
     #[serde(default)]
     pub user_hint: Option<String>,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -397,6 +428,9 @@ pub struct ActivateSessionGoalResponse {
 #[serde(rename_all = "camelCase")]
 pub struct GetSessionThreadGoalRequest {
     pub session_id: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -427,6 +461,9 @@ pub struct MemoryPathsResponse {
 pub struct SetSessionMemoryModeRequest {
     pub session_id: String,
     pub mode: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -445,6 +482,9 @@ pub struct SetSessionMemoryModeResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ClearSessionThreadGoalRequest {
     pub session_id: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -457,6 +497,9 @@ pub struct ClearSessionThreadGoalRequest {
 pub struct SetSessionThreadGoalStatusRequest {
     pub session_id: String,
     pub status: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -469,6 +512,9 @@ pub struct SetSessionThreadGoalStatusRequest {
 pub struct UpdateSessionThreadGoalObjectiveRequest {
     pub session_id: String,
     pub objective: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -496,6 +542,10 @@ pub struct EnsureCoordinatorSessionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct EnsureAssistantBootstrapRequest {
     pub session_id: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
     pub workspace_path: String,
 }
 
@@ -503,6 +553,9 @@ pub struct EnsureAssistantBootstrapRequest {
 #[serde(rename_all = "camelCase")]
 pub struct RunInitAgentsMdRequest {
     pub session_id: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -869,6 +922,9 @@ pub struct RecoverInterruptedDialogTurnRequest {
     pub session_id: String,
     pub dialog_turn_id: String,
     pub execution_generation: u32,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -1018,6 +1074,10 @@ impl RestoreSessionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct LoadSessionTurnWindowRequest {
     pub session_id: String,
+    /// Owning workspace ID; `workspacePath` and SSH fields are an upgrade-only projection.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
     pub workspace_path: String,
     #[serde(default)]
     pub include_internal: bool,
@@ -1128,23 +1188,14 @@ async fn permission_project_id_for_workspace(
         .await
         .ok_or_else(|| format!("Workspace not found: {workspace_id}"))?;
     let remote = workspace.workspace_kind == WorkspaceKind::Remote;
-    let connection_id = workspace
-        .metadata
-        .get("connectionId")
-        .and_then(|value| value.as_str());
-    let ssh_host = workspace
-        .metadata
-        .get("sshHost")
-        .and_then(|value| value.as_str());
-    let identity = resolve_workspace_session_identity(
-        &workspace.root_path.to_string_lossy(),
-        connection_id,
-        ssh_host,
-    )
-    .await
-    .ok_or_else(|| format!("Workspace identity is unavailable: {workspace_id}"))?;
+    // The record already names the workspace; its persistence identity is a
+    // projection of that record, never a path lookup.
+    let binding = openbitfun_core::agentic::workspace::WorkspaceBinding::resolve(&workspace.id)
+        .await
+        .map_err(|error| format!("Workspace identity is unavailable: {workspace_id}: {error}"))?;
     openbitfun_core::agentic::tools::pipeline::permission_project_id_for_workspace_identity(
-        &identity, remote,
+        &binding.session_identity,
+        remote,
     )
     .map_err(|error| error.to_string())
 }
@@ -1541,23 +1592,70 @@ pub async fn create_session(
             .as_ref()
             .and_then(|c| norm_conn(c.remote_connection_id.clone()))
     });
-    let remote_ssh_host = norm_conn(request.remote_ssh_host.clone()).or_else(|| {
+    let mut remote_ssh_host = norm_conn(request.remote_ssh_host.clone()).or_else(|| {
         request
             .config
             .as_ref()
             .and_then(|c| norm_conn(c.remote_ssh_host.clone()))
     });
 
-    if remote_conn.is_some() {
+    // The source workspace record is the identity authority for this command.
+    // ID-aware clients send `workspaceId`; pre-ID clients are upgraded once
+    // through the legacy adapter. Remote-ness comes from `workspace_kind`, never
+    // from whether the request happened to carry an SSH connection.
+    let source_workspace = if let Some(id) = norm_conn(request.workspace_id.clone()) {
+        app_state
+            .workspace_service
+            .require_workspace(&id)
+            .await
+            .map_err(|error| error.to_string())?
+    } else {
+        app_state
+            .workspace_service
+            .resolve_legacy_workspace_reference(
+                None,
+                &request.workspace_path,
+                remote_conn.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| {
+                format!(
+                    "Workspace ID is unavailable for session creation: {}",
+                    request.workspace_path
+                )
+            })?
+    };
+    request.workspace_id = Some(source_workspace.id.clone());
+    let source_is_remote = source_workspace.workspace_kind == WorkspaceKind::Remote;
+    let remote_conn = if source_is_remote {
+        source_workspace
+            .remote_ssh_connection_id()
+            .map(str::to_owned)
+            .or(remote_conn)
+    } else {
+        None
+    };
+    if source_is_remote {
+        remote_ssh_host = source_workspace
+            .metadata
+            .get("sshHost")
+            .and_then(|value| value.as_str())
+            .map(str::to_owned)
+            .or(remote_ssh_host);
         runtime
             .session_application()
             .ensure_workspace_runtime_ownership(desktop_session_scope(
+                request.workspace_id.clone(),
                 request.workspace_path.clone(),
                 remote_conn.clone(),
                 remote_ssh_host.clone(),
             ))
             .await
             .map_err(|error| error.to_string())?;
+    } else {
+        remote_ssh_host = None;
     }
 
     let source_workspace_path = request.workspace_path.clone();
@@ -1592,7 +1690,7 @@ pub async fn create_session(
             base_ref,
             copy_local_changes,
         } => {
-            if remote_conn.is_some() {
+            if source_is_remote {
                 return Err(worktree_error(
                     WorktreeErrorCode::RemoteUnsupported,
                     "Managed worktrees are not supported for remote SSH workspaces yet",
@@ -1604,6 +1702,7 @@ pub async fn create_session(
                     .request_id
                     .clone()
                     .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                project_workspace_id: None,
                 project_workspace_path: project_workspace_path.clone(),
                 source_workspace_path: Some(source_workspace_path.clone()),
                 base_ref,
@@ -1622,7 +1721,7 @@ pub async fn create_session(
             result.execution_target
         }
         SessionExecutionTargetRequest::ExistingWorktree { worktree_id } => {
-            if remote_conn.is_some() {
+            if source_is_remote {
                 return Err(worktree_error(
                     WorktreeErrorCode::RemoteUnsupported,
                     "Managed worktrees are not supported for remote SSH workspaces yet",
@@ -1630,6 +1729,7 @@ pub async fn create_session(
                 ));
             }
             let worktree = WorktreeService::list(WorktreeListRequest {
+                project_workspace_id: None,
                 project_workspace_path: project_workspace_path.clone(),
             })
             .await
@@ -1664,6 +1764,12 @@ pub async fn create_session(
         }
     };
     request.project_workspace_path = Some(project_workspace_path.clone());
+    // The project (storage) workspace is the source record's owning project:
+    // itself for a main checkout, or `main_workspace_id` for a linked worktree.
+    let project_workspace_id = source_workspace
+        .project_workspace_id()
+        .ok()
+        .map(str::to_owned);
 
     let tracked_worktree_workspace_id = if resolved_execution_target.kind
         != SessionExecutionTargetKind::Local
@@ -1709,14 +1815,12 @@ pub async fn create_session(
 
     if let Err(error) = runtime
         .session_application()
-        .ensure_configured_plugin_instance(
-            desktop_session_scope(
-                request.workspace_path.clone(),
-                remote_conn.clone(),
-                remote_ssh_host.clone(),
-            ),
+        .ensure_configured_plugin_instance(desktop_session_scope(
             request.workspace_id.clone(),
-        )
+            request.workspace_path.clone(),
+            remote_conn.clone(),
+            remote_ssh_host.clone(),
+        ))
         .await
     {
         openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
@@ -1732,9 +1836,10 @@ pub async fn create_session(
             .session_id
             .as_deref()
             .ok_or_else(|| "Idempotent worktree session requires a session ID".to_string())?;
-        let effective_path = desktop_effective_session_storage_path(
-            &app_state,
-            &project_workspace_path,
+        let effective_path = desktop_session_storage_root(
+            &coordinator,
+            project_workspace_id.as_deref(),
+            Some(&project_workspace_path),
             remote_conn.as_deref(),
             remote_ssh_host.as_deref(),
         )
@@ -1766,9 +1871,10 @@ pub async fn create_session(
             .session_id
             .as_deref()
             .ok_or_else(|| "Idempotent Review session requires a session ID".to_string())?;
-        let effective_path = desktop_effective_session_storage_path(
-            &app_state,
-            &project_workspace_path,
+        let effective_path = desktop_session_storage_root(
+            &coordinator,
+            project_workspace_id.as_deref(),
+            Some(&project_workspace_path),
             remote_conn.as_deref(),
             remote_ssh_host.as_deref(),
         )
@@ -1797,13 +1903,6 @@ pub async fn create_session(
                 repaired = true;
             }
             if repaired {
-                coordinator
-                    .ensure_workspace_runtime_ownership(
-                        Path::new(&project_workspace_path),
-                        remote_conn.as_deref(),
-                        remote_ssh_host.as_deref(),
-                    )
-                    .map_err(|error| error.to_string())?;
                 let relationship = request.relationship.clone();
                 let deep_review_run_manifest = request.deep_review_run_manifest.clone();
                 let review_target_evidence = request.review_target_evidence.clone();
@@ -1963,6 +2062,7 @@ pub async fn update_session_mode(
     ensure_session_loaded_for_selector_update(
         runtime.inner(),
         &session_id,
+        request.workspace_id,
         request.workspace_path,
         request.remote_connection_id,
         request.remote_ssh_host,
@@ -1992,6 +2092,7 @@ pub async fn update_session_model(
     ensure_session_loaded_for_selector_update(
         runtime.inner(),
         &session_id,
+        request.workspace_id,
         request.workspace_path,
         request.remote_connection_id,
         request.remote_ssh_host,
@@ -2056,6 +2157,7 @@ pub async fn update_session_permission_mode(
     ensure_session_loaded_for_selector_update(
         runtime.inner(),
         &session_id,
+        request.workspace_id,
         request.workspace_path,
         request.remote_connection_id,
         request.remote_ssh_host,
@@ -2127,6 +2229,7 @@ pub async fn update_active_turn_permission_mode(
     ensure_session_loaded_for_selector_update(
         runtime.inner(),
         &session_id,
+        request.workspace_id,
         request.workspace_path,
         request.remote_connection_id,
         request.remote_ssh_host,
@@ -2184,6 +2287,7 @@ pub async fn get_session_permission_mode(
     ensure_session_loaded_for_selector_update(
         runtime.inner(),
         &session_id,
+        request.workspace_id,
         request.workspace_path,
         request.remote_connection_id,
         request.remote_ssh_host,
@@ -2220,23 +2324,27 @@ pub async fn get_session_permission_mode(
 async fn ensure_session_loaded_for_selector_update(
     runtime: &DesktopRuntimeContext,
     session_id: &str,
+    workspace_id: Option<String>,
     workspace_path: Option<String>,
     remote_connection_id: Option<String>,
     remote_ssh_host: Option<String>,
     include_internal: bool,
 ) -> Result<(), String> {
-    let Some(workspace_path) = workspace_path
-        .as_deref()
-        .map(str::trim)
-        .filter(|path| !path.is_empty())
-    else {
+    let workspace_id = workspace_id
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty());
+    let workspace_path = workspace_path
+        .map(|path| path.trim().to_string())
+        .filter(|path| !path.is_empty());
+    if workspace_id.is_none() && workspace_path.is_none() {
         return Ok(());
-    };
+    }
     runtime
         .session_application()
         .ensure_session_loaded(
             desktop_session_scope(
-                workspace_path.to_string(),
+                workspace_id,
+                workspace_path.unwrap_or_default(),
                 remote_connection_id,
                 remote_ssh_host,
             ),
@@ -2270,16 +2378,22 @@ pub async fn update_session_title(
         return Err("session_id is required".to_string());
     }
 
-    let scope = request
+    let workspace_id = request
+        .workspace_id
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty());
+    let workspace_path = request
         .workspace_path
-        .filter(|workspace_path| !workspace_path.trim().is_empty())
-        .map(|workspace_path| {
-            desktop_session_scope(
-                workspace_path,
-                request.remote_connection_id,
-                request.remote_ssh_host,
-            )
-        });
+        .map(|path| path.trim().to_string())
+        .filter(|path| !path.is_empty());
+    let scope = (workspace_id.is_some() || workspace_path.is_some()).then(|| {
+        desktop_session_scope(
+            workspace_id,
+            workspace_path.unwrap_or_default(),
+            request.remote_connection_id,
+            request.remote_ssh_host,
+        )
+    });
     runtime
         .session_application()
         .rename_session(scope, session_id.to_string(), request.title)
@@ -2355,6 +2469,7 @@ fn desktop_dialog_turn_request(
         user_input,
         original_user_input,
         agent_type,
+        workspace_id,
         workspace_path,
         project_workspace_path,
         remote_connection_id,
@@ -2384,6 +2499,9 @@ fn desktop_dialog_turn_request(
         execution,
         agent_type,
         workspace_path: project_workspace_path.or(workspace_path),
+        workspace_id: workspace_id
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty()),
         remote_connection_id,
         remote_ssh_host,
         policy,
@@ -2433,7 +2551,6 @@ fn desktop_image_attachment(image: ImageContextData) -> AgentInputAttachment {
 #[tauri::command]
 pub async fn compact_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
-    app_state: State<'_, AppState>,
     request: CompactSessionRequest,
 ) -> Result<StartDialogTurnResponse, String> {
     let session_id = request.session_id.trim();
@@ -2446,24 +2563,10 @@ pub async fn compact_session(
         .get_session(session_id)
         .is_none()
     {
-        let workspace_path = request
-            .workspace_path
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                "workspace_path is required when the session is not loaded".to_string()
-            })?;
-        coordinator
-            .ensure_workspace_runtime_ownership(
-                Path::new(workspace_path),
-                request.remote_connection_id.as_deref(),
-                request.remote_ssh_host.as_deref(),
-            )
-            .map_err(|error| error.to_string())?;
-        let effective = desktop_effective_session_storage_path(
-            &app_state,
-            workspace_path,
+        let effective = desktop_session_storage_root(
+            &coordinator,
+            request.workspace_id.as_deref(),
+            request.workspace_path.as_deref(),
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
@@ -2488,7 +2591,6 @@ pub async fn compact_session(
 #[tauri::command]
 pub async fn activate_session_goal(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
-    app_state: State<'_, AppState>,
     request: ActivateSessionGoalRequest,
 ) -> Result<ActivateSessionGoalResponse, String> {
     let session_id = request.session_id.trim();
@@ -2501,24 +2603,10 @@ pub async fn activate_session_goal(
         .get_session(session_id)
         .is_none()
     {
-        let workspace_path = request
-            .workspace_path
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                "workspace_path is required when the session is not loaded".to_string()
-            })?;
-        coordinator
-            .ensure_workspace_runtime_ownership(
-                Path::new(workspace_path),
-                request.remote_connection_id.as_deref(),
-                request.remote_ssh_host.as_deref(),
-            )
-            .map_err(|error| error.to_string())?;
-        let effective = desktop_effective_session_storage_path(
-            &app_state,
-            workspace_path,
+        let effective = desktop_session_storage_root(
+            &coordinator,
+            request.workspace_id.as_deref(),
+            request.workspace_path.as_deref(),
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
@@ -2549,8 +2637,8 @@ pub async fn activate_session_goal(
 
 async fn ensure_session_for_thread_goal(
     coordinator: &Arc<ConversationCoordinator>,
-    app_state: &AppState,
     session_id: &str,
+    workspace_id: Option<&str>,
     workspace_path: Option<&str>,
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
@@ -2560,21 +2648,9 @@ async fn ensure_session_for_thread_goal(
         .get_session(session_id)
         .is_none()
     {
-        let workspace_path = workspace_path
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                "workspace_path is required when the session is not loaded".to_string()
-            })?;
-        coordinator
-            .ensure_workspace_runtime_ownership(
-                Path::new(workspace_path),
-                remote_connection_id,
-                remote_ssh_host,
-            )
-            .map_err(|error| error.to_string())?;
-        let effective = desktop_effective_session_storage_path(
-            app_state,
+        let effective = desktop_session_storage_root(
+            coordinator,
+            workspace_id,
             workspace_path,
             remote_connection_id,
             remote_ssh_host,
@@ -2596,8 +2672,8 @@ async fn ensure_session_for_thread_goal(
 
 async fn resolve_thread_goal_storage_path(
     coordinator: &Arc<ConversationCoordinator>,
-    app_state: &AppState,
     session_id: &str,
+    workspace_id: Option<&str>,
     workspace_path: Option<&str>,
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
@@ -2619,24 +2695,19 @@ async fn resolve_thread_goal_storage_path(
         return Ok(PathBuf::from(workspace_path));
     }
 
-    let workspace_path = workspace_path
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "workspace_path is required when the session is not loaded".to_string())?;
-
-    Ok(desktop_effective_session_storage_path(
-        app_state,
+    desktop_session_storage_root(
+        coordinator,
+        workspace_id,
         workspace_path,
         remote_connection_id,
         remote_ssh_host,
     )
-    .await?)
+    .await
 }
 
 #[tauri::command]
 pub async fn get_session_thread_goal(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
-    app_state: State<'_, AppState>,
     startup_trace: State<'_, DesktopStartupTrace>,
     request: GetSessionThreadGoalRequest,
 ) -> Result<GetSessionThreadGoalResponse, String> {
@@ -2648,8 +2719,8 @@ pub async fn get_session_thread_goal(
         }
         let storage_path = resolve_thread_goal_storage_path(
             coordinator.inner(),
-            app_state.inner(),
             session_id,
+            request.workspace_id.as_deref(),
             request.workspace_path.as_deref(),
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
@@ -2696,7 +2767,6 @@ pub async fn get_memory_paths(state: State<'_, AppState>) -> Result<MemoryPathsR
 #[tauri::command]
 pub async fn set_session_memory_mode(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
-    app_state: State<'_, AppState>,
     request: SetSessionMemoryModeRequest,
 ) -> Result<SetSessionMemoryModeResponse, String> {
     let session_id = request.session_id.trim();
@@ -2719,27 +2789,13 @@ pub async fn set_session_memory_mode(
         coordinator
             .ensure_session_runtime_ownership(session_id, None)
             .map_err(|error| error.to_string())?;
-    } else {
-        let workspace_path = request
-            .workspace_path
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                "workspace_path is required when the session is not loaded".to_string()
-            })?;
-        coordinator
-            .ensure_workspace_runtime_ownership(
-                Path::new(workspace_path),
-                request.remote_connection_id.as_deref(),
-                request.remote_ssh_host.as_deref(),
-            )
-            .map_err(|error| error.to_string())?;
     }
+    // For an unloaded session the storage root resolution below also takes
+    // runtime ownership of the owning workspace.
     let storage_path = resolve_thread_goal_storage_path(
         coordinator.inner(),
-        app_state.inner(),
         session_id,
+        request.workspace_id.as_deref(),
         request.workspace_path.as_deref(),
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
@@ -2761,7 +2817,6 @@ pub async fn set_session_memory_mode(
 #[tauri::command]
 pub async fn clear_session_thread_goal(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
-    app_state: State<'_, AppState>,
     request: ClearSessionThreadGoalRequest,
 ) -> Result<(), String> {
     let session_id = request.session_id.trim();
@@ -2770,8 +2825,8 @@ pub async fn clear_session_thread_goal(
     }
     let workspace_path = ensure_session_for_thread_goal(
         coordinator.inner(),
-        app_state.inner(),
         session_id,
+        request.workspace_id.as_deref(),
         request.workspace_path.as_deref(),
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
@@ -2786,7 +2841,6 @@ pub async fn clear_session_thread_goal(
 #[tauri::command]
 pub async fn set_session_thread_goal_status(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
-    app_state: State<'_, AppState>,
     request: SetSessionThreadGoalStatusRequest,
 ) -> Result<ThreadGoal, String> {
     let session_id = request.session_id.trim();
@@ -2804,8 +2858,8 @@ pub async fn set_session_thread_goal_status(
     };
     let workspace_path = ensure_session_for_thread_goal(
         coordinator.inner(),
-        app_state.inner(),
         session_id,
+        request.workspace_id.as_deref(),
         request.workspace_path.as_deref(),
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
@@ -2820,7 +2874,6 @@ pub async fn set_session_thread_goal_status(
 #[tauri::command]
 pub async fn update_session_thread_goal_objective(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
-    app_state: State<'_, AppState>,
     request: UpdateSessionThreadGoalObjectiveRequest,
 ) -> Result<ThreadGoal, String> {
     let session_id = request.session_id.trim();
@@ -2833,8 +2886,8 @@ pub async fn update_session_thread_goal_objective(
     }
     let workspace_path = ensure_session_for_thread_goal(
         coordinator.inner(),
-        app_state.inner(),
         session_id,
+        request.workspace_id.as_deref(),
         request.workspace_path.as_deref(),
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
@@ -2849,10 +2902,41 @@ pub async fn update_session_thread_goal_objective(
 #[tauri::command]
 pub async fn ensure_assistant_bootstrap(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: EnsureAssistantBootstrapRequest,
 ) -> Result<EnsureAssistantBootstrapResponse, String> {
+    // The assistant workspace is selected by ID; its root is only the IO
+    // operand handed to the bootstrap. Pre-ID clients are upgraded once.
+    let workspace = if let Some(id) = request
+        .workspace_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    {
+        app_state
+            .workspace_service
+            .require_workspace(id)
+            .await
+            .map_err(|error| error.to_string())?
+    } else {
+        app_state
+            .workspace_service
+            .resolve_legacy_workspace_reference(None, &request.workspace_path, None, None)
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Assistant workspace ID is unavailable".to_string())?
+    };
+    if workspace.workspace_kind != WorkspaceKind::Assistant {
+        return Err(format!(
+            "Workspace {} is not an assistant workspace",
+            workspace.id
+        ));
+    }
     let outcome = coordinator
-        .ensure_assistant_bootstrap(request.session_id, request.workspace_path)
+        .ensure_assistant_bootstrap(
+            request.session_id,
+            workspace.root_path.to_string_lossy().into_owned(),
+        )
         .await
         .map_err(|e| format!("Failed to ensure assistant bootstrap: {}", e))?;
 
@@ -2863,7 +2947,6 @@ pub async fn ensure_assistant_bootstrap(
 pub async fn run_init_agents_md(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     scheduler: State<'_, Arc<DialogScheduler>>,
-    app_state: State<'_, AppState>,
     request: RunInitAgentsMdRequest,
 ) -> Result<StartDialogTurnResponse, String> {
     let session_id = request.session_id.trim();
@@ -2876,24 +2959,10 @@ pub async fn run_init_agents_md(
         .get_session(session_id)
         .is_none()
     {
-        let workspace_path = request
-            .workspace_path
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                "workspace_path is required when the session is not loaded".to_string()
-            })?;
-        coordinator
-            .ensure_workspace_runtime_ownership(
-                Path::new(workspace_path),
-                request.remote_connection_id.as_deref(),
-                request.remote_ssh_host.as_deref(),
-            )
-            .map_err(|error| error.to_string())?;
-        let effective = desktop_effective_session_storage_path(
-            &app_state,
-            workspace_path,
+        let effective = desktop_session_storage_root(
+            &coordinator,
+            request.workspace_id.as_deref(),
+            request.workspace_path.as_deref(),
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
@@ -2904,12 +2973,18 @@ pub async fn run_init_agents_md(
             .map_err(|e| format!("Failed to restore session before running /init: {e}"))?;
     }
 
-    let workspace_path = request
-        .workspace_path
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
+    // The session is loaded and bound by ID above; an omitted path locator makes
+    // the scheduler reuse that binding. Only pre-ID clients still pass a path.
+    let workspace_path = if request.workspace_id.is_some() {
+        None
+    } else {
+        request
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    };
 
     scheduler
         .submit_init_agents_md(
@@ -3135,6 +3210,7 @@ pub async fn recover_interrupted_dialog_turn(
             turn_id: request.dialog_turn_id.clone(),
             execution_generation: request.execution_generation,
             workspace_path: request.workspace_path,
+            workspace_id: request.workspace_id,
             remote_connection_id: request.remote_connection_id,
             remote_ssh_host: request.remote_ssh_host,
         })
@@ -3713,6 +3789,7 @@ pub async fn load_session_turn_window(
             .session_application()
             .load_session_turn_window(
                 desktop_session_scope(
+                    request.workspace_id.clone(),
                     request.workspace_path.clone(),
                     request.remote_connection_id.clone(),
                     request.remote_ssh_host.clone(),
@@ -3924,7 +4001,6 @@ pub async fn get_available_modes(
     } else {
         None
     };
-    let workspace_path = workspace.as_ref().map(|record| record.root_path.clone());
     let external_sources_supported = workspace.as_ref().is_some_and(|record| {
         record.workspace_kind != openbitfun_core::service::workspace::WorkspaceKind::Remote
     });
@@ -3932,7 +4008,7 @@ pub async fn get_available_modes(
     if let Some(scope) = local_scope {
         if let Err(error) = runtime
             .session_application()
-            .ensure_configured_plugin_instance(scope, None)
+            .ensure_configured_plugin_instance(scope)
             .await
         {
             openbitfun_core::plugin_host::report_configured_plugin_activation_failure(

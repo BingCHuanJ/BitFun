@@ -13,6 +13,10 @@ pub struct WorkspaceUploadRequest {
     pub path: String,
     #[serde(default)]
     pub session_id: Option<String>,
+    /// Owning workspace ID; authoritative when present.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Legacy explicit file workspace for pre-ID controllers.
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -49,6 +53,7 @@ pub async fn workspace_file_upload(
     let (target, target_id) = CoreServiceAgentRuntime::scoped_remote_file_target_with_identity(
         &request.path,
         request.session_id.as_deref(),
+        request.workspace_id.as_deref(),
         request.workspace_path.as_deref(),
         request.remote_connection_id.as_deref(),
     )

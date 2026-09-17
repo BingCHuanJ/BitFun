@@ -173,7 +173,7 @@ export interface IFileSystemService {
   loadFileTree(workspaceId: string, rootPath: string, options?: FileSystemOptions): Promise<FileSystemNode[]>;
   searchFiles(rootPath: string, query: string): Promise<FileSystemNode[]>;
   watchFileChanges(rootPath: string, callback: (event: FileSystemChangeEvent) => void): () => void;
-  getFileContent(filePath: string): Promise<string>;
+  getFileContent(workspaceId: string, filePath: string): Promise<string>;
   getFileStats(filePath: string): Promise<{ size: number; lastModified: Date }>;
 }
 

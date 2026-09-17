@@ -184,11 +184,13 @@ export interface AssistantSessionPresentation {
 }
 
 interface SessionsSectionProps {
+  /** Authoritative scope: every load, reset, and dedup key is `workspaceId`. */
   workspaceId?: string;
+  /** IO/display projection of the scoped workspace root; never a scope key. */
   workspacePath?: string;
-  /** Remote SSH: same `workspacePath` on different hosts must filter by this (see Session.remoteConnectionId). */
+  /** Remote SSH IO projection forwarded to session dialogs; never a scope key. */
   remoteConnectionId?: string | null;
-  /** Remote SSH: disambiguates same path on different hosts; when set with matching session host, connectionId may differ. */
+  /** Remote SSH IO projection forwarded to session dialogs; never a scope key. */
   remoteSshHost?: string | null;
   isActiveWorkspace?: boolean;
   showCreateActions?: boolean;
@@ -205,11 +207,9 @@ interface SessionsSectionProps {
 }
 
 export interface WorkspaceSessionScope {
+  /** Authoritative scope key; loads and dedup use only this. */
   workspaceId: string;
   workspaceName: string;
-  workspacePath: string;
-  remoteConnectionId?: string | null;
-  remoteSshHost?: string | null;
 }
 
 const SessionsSection: React.FC<SessionsSectionProps> = ({
@@ -398,15 +398,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       isLoading: false,
       loadError: false,
     });
-  }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost]);
+  }, [workspaceId]);
 
   const workspaceScopesKey = useMemo(
-    () => workspaceScopes?.map(scope => [
-      scope.workspaceId,
-      scope.workspacePath,
-      scope.remoteConnectionId ?? '',
-      scope.remoteSshHost ?? '',
-    ].join(':')).join('|') ?? '',
+    () => workspaceScopes?.map(scope => scope.workspaceId).join('|') ?? '',
     [workspaceScopes],
   );
 
@@ -447,8 +442,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         const scope = workspaceScopes[index];
         log.warn('Failed to load all-session workspace projection', {
           error: result.reason,
-          workspacePath: scope?.workspacePath,
-          remote: Boolean(scope?.remoteConnectionId || scope?.remoteSshHost),
+          workspaceId: scope?.workspaceId,
         });
       });
       setAggregateLoadState({ isLoading: false, failedScopeCount });
@@ -481,10 +475,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     });
   }, [
     isVisible,
-    remoteConnectionId,
-    remoteSshHost,
     sessionFilters.hideArchived,
-    workspacePath,
+    workspaceId,
     workspaceScopes,
   ]);
 
@@ -495,7 +487,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       source: string,
       options?: { background?: boolean },
     ) => {
-      if (!workspacePath || limit <= 0) {
+      if (!workspaceId || limit <= 0) {
         return null;
       }
 
@@ -525,7 +517,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
       try {
         const page = await flowChatStore.loadSessionMetadataPage(
-          workspaceId!, limit, cursor,
+          workspaceId, limit, cursor,
           source
         );
         if (metadataLoadRequestIdRef.current === requestId) {
@@ -551,7 +543,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             loadError: true,
           }));
         }
-        log.warn('Failed to load visible session metadata page', { error, workspacePath, cursor, limit });
+        log.warn('Failed to load visible session metadata page', { error, workspaceId, cursor, limit });
         return null;
       } finally {
         if (!isBackgroundLoad) {
@@ -559,21 +551,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         }
       }
     },
-    [workspacePath, remoteConnectionId, remoteSshHost]
+    [workspaceId]
   );
 
-  const initialMetadataKey = useMemo(
-    () => [
-      workspacePath ?? '',
-      remoteConnectionId ?? '',
-      remoteSshHost ?? '',
-    ].join('\n'),
-    [workspacePath, remoteConnectionId, remoteSshHost],
-  );
+  const initialMetadataKey = workspaceId ?? '';
 
   const loadInitialMetadataPage = useCallback(
     async (source: string) => {
-      if (!workspacePath) {
+      if (!workspaceId) {
         return;
       }
       if (initialMetadataLoadKeyRef.current === initialMetadataKey) {
@@ -586,16 +571,16 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         initialMetadataLoadKeyRef.current = null;
       }
     },
-    [initialMetadataKey, loadMetadataPage, workspacePath],
+    [initialMetadataKey, loadMetadataPage, workspaceId],
   );
 
   useEffect(() => {
-    if (!isVisible || !workspacePath) {
+    if (!isVisible || !workspaceId) {
       return;
     }
 
     const loadMode = getInitialSessionMetadataLoadMode({
-      hasWorkspacePath: Boolean(workspacePath),
+      hasWorkspace: Boolean(workspaceId),
       isActiveWorkspace,
       isVisible,
       startupOverlayHandedOff: hasStartupOverlayHandedOff(),
@@ -616,7 +601,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       if (cancelled) {
         return;
       }
-      const delayMs = getDeferredSessionMetadataDelayMs(workspaceId ?? workspacePath);
+      const delayMs = getDeferredSessionMetadataDelayMs(workspaceId);
       const runDeferredLoad = () => {
         delayTimer = null;
         if (!cancelled) {
@@ -652,12 +637,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     isVisible,
     loadInitialMetadataPage,
     workspaceId,
-    workspacePath,
   ]);
 
   useEffect(() => {
     const needsExpandedDataset = sessionOrdering !== 'updated' || hasActiveSessionFilter;
-    if (!needsExpandedDataset || !isVisible || !workspacePath) {
+    if (!needsExpandedDataset || !isVisible || !workspaceId) {
       return;
     }
 
@@ -673,7 +657,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     loadMetadataPage,
     sessionOrdering,
     hasActiveSessionFilter,
-    workspacePath,
+    workspaceId,
   ]);
 
   // When sessions are archived, reset stale metadata so the expand toggle
@@ -692,13 +676,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         isLoading: false,
         loadError: false,
       });
-      if (isVisible && workspacePath) {
+      if (isVisible && workspaceId) {
         void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_post_archive');
       }
     };
     window.addEventListener('openbitfun:session-archived', handler);
     return () => window.removeEventListener('openbitfun:session-archived', handler);
-  }, [isVisible, workspacePath, loadMetadataPage]);
+  }, [isVisible, workspaceId, loadMetadataPage]);
 
   const closeSessionMenu = useCallback(() => {
     setOpenMenuSessionId(null);
@@ -902,7 +886,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   useEffect(() => {
     if (
       !isVisible ||
-      !workspacePath ||
+      !workspaceId ||
       metadataPageState.isLoading ||
       metadataPageState.totalTopLevelCount === null ||
       metadataPageState.syncedTopLevelCount === null ||
@@ -934,7 +918,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     metadataPageState.syncedTopLevelCount,
     metadataPageState.totalTopLevelCount,
     allTopLevelSessions.length,
-    workspacePath,
+    workspaceId,
   ]);
 
   // Keep a few rows loaded past the visible slice. Deleting a session then
@@ -943,7 +927,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   useEffect(() => {
     if (
       !isVisible ||
-      !workspacePath ||
+      !workspaceId ||
       metadataPageState.isLoading ||
       metadataPageState.loadError ||
       metadataPageState.totalTopLevelCount === null ||
@@ -988,7 +972,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     metadataPageState.nextCursor,
     metadataPageState.totalTopLevelCount,
     totalTopLevelSessionCount,
-    workspacePath,
+    workspaceId,
   ]);
 
   const visibleItems = useMemo(() => {
@@ -1097,6 +1081,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           openBtwSessionInAuxPane({
             childSessionId: sessionId,
             parentSessionId,
+            workspaceId: targetWorkspaceId,
             workspacePath: session.workspacePath,
           });
           return;
@@ -1224,14 +1209,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         setExportingSessionId(null);
       }
     },
-    [
-      closeSessionMenu,
-      exportingSessionId,
-      remoteConnectionId,
-      remoteSshHost,
-      resolveSessionTitle,
-      workspacePath,
-    ]
+    [closeSessionMenu, exportingSessionId, resolveSessionTitle]
   );
 
   const handleDelete = useCallback(
@@ -1907,20 +1885,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           <MenuItem
                             type="button"
                             leading={<Icon glyph={ListChecks} />}
-                            disabled={!workspacePath && !session.workspacePath}
+                            disabled={!workspaceId && !session.projectWorkspaceId && !session.workspaceId}
                             onClick={e => {
                               e.stopPropagation();
                               closeSessionMenu();
-                              const path = workspacePath || session.projectWorkspacePath || session.workspacePath;
-                              if (!path) return;
+                              const batchWorkspaceId = workspaceId || session.projectWorkspaceId || session.workspaceId;
+                              if (!batchWorkspaceId) return;
+                              const path = workspacePath || session.projectWorkspacePath || session.workspacePath || '';
                               setBatchWorkspace({
-                                workspaceId: workspaceId || session.workspaceId || '',
+                                workspaceId: batchWorkspaceId,
                                 workspaceName: presentation?.assistant.name
-                                  || (currentWorkspace?.rootPath === path && currentWorkspace.name)
-                                  || path,
-                                workspacePath: path,
-                                remoteConnectionId: remoteConnectionId ?? session.remoteConnectionId,
-                                remoteSshHost: remoteSshHost ?? session.remoteSshHost,
+                                  || (currentWorkspace?.id === batchWorkspaceId && currentWorkspace.name)
+                                  || path
+                                  || batchWorkspaceId,
                               });
                             }}
                             data-testid="nav-session-menu-manage-sessions"
@@ -2040,10 +2017,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             isOpen
             onClose={() => setBatchWorkspace(null)}
             workspaceId={batchWorkspace.workspaceId}
-            workspacePath={batchWorkspace.workspacePath}
             workspaceLabel={batchWorkspace.workspaceName}
-            remoteConnectionId={batchWorkspace.remoteConnectionId}
-            remoteSshHost={batchWorkspace.remoteSshHost}
           />
         </Suspense>
       )}

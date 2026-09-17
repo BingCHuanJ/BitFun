@@ -1,7 +1,5 @@
 //! External compatibility HostInvoke handlers for CLI Peer Host.
 
-use std::path::PathBuf;
-
 use openbitfun_core::external_sources::{
     apply_external_source_control_action, choose_external_mcp_conflict,
     choose_external_subagent_conflict, external_source_discovery_snapshot,

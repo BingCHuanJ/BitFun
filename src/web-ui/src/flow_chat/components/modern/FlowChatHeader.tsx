@@ -218,7 +218,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       }
 
       const snapshot = await reviewPlatformAPI.getWorkspaceSnapshot(
-        repositoryPath,
+        { workspaceId: currentWorkspace!.id, repositoryPath },
         null,
         1,
         PULL_REQUEST_OVERVIEW_LIMIT,
@@ -234,7 +234,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       if (pullRequestOverviewRequestRef.current !== requestId) return;
       setPullRequestOverview({ status: 'error', items: [], totalCount: 0 });
     }
-  }, [currentWorkspace?.rootPath]);
+  }, [currentWorkspace]);
 
   useEffect(() => {
     if (!isSessionOverviewOpen) return undefined;
@@ -385,7 +385,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     if (!currentWorkspace) return;
     createReviewPlatformTab(currentWorkspace.id, currentWorkspace.rootPath);
     closeSessionOverview(false);
-  }, [closeSessionOverview, currentWorkspace?.rootPath]);
+  }, [closeSessionOverview, currentWorkspace]);
 
   const handleOpenPullRequest = useCallback((pullRequest: ReviewPlatformPullRequest) => {
     if (!currentWorkspace) return;
@@ -398,7 +398,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       title: `#${pullRequest.number} ${pullRequest.title}`,
     });
     closeSessionOverview(false);
-  }, [closeSessionOverview, currentWorkspace?.rootPath]);
+  }, [closeSessionOverview, currentWorkspace]);
 
   const handleCommandSectionMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();

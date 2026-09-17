@@ -597,6 +597,7 @@ impl ports::AgentSessionLineagePort for Phase2Provider {
                 parent_tool_call_id: None,
                 subagent_type: None,
                 agent_id: None,
+                workspace_id: None,
                 workspace_path: Some("/authoritative/workspace".to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -949,6 +950,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
             let usage = client
                 .session_usage(protocol_session::SessionUsageRequest(
                     ports::AgentSessionUsageRequest {
+                        workspace_id: None,
                         session_id: "session-1".to_string(),
                         workspace_path: Some("/workspace".to_string()),
                         remote_connection_id: None,
@@ -1007,6 +1009,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
             let inspection = client
                 .inspect_lineage(protocol_session::InspectLineageRequest(
                     ports::AgentSessionLineageTranscriptRequest {
+                        workspace_id: None,
                         workspace_path: "/workspace".to_string(),
                         root_session_id: "session-1".to_string(),
                         session_id: "session-1".to_string(),
@@ -1021,6 +1024,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
             let cancelled = client
                 .cancel_lineage(protocol_session::CancelLineageRequest(
                     ports::AgentSessionLineageCancellationRequest {
+                        workspace_id: None,
                         workspace_path: "/workspace".to_string(),
                         root_session_id: "session-1".to_string(),
                         session_id: "session-1".to_string(),
@@ -1341,6 +1345,7 @@ async fn run_round_trips_through_create_and_submit() {
                         session: RunSessionSpec::Create {
                             session_name: "Example SDK Session".to_string(),
                             agent_type: "Standard".to_string(),
+                            workspace_id: None,
                             workspace_path: None,
                         },
                         message: "hello from an app-server client".to_string(),
@@ -1385,6 +1390,7 @@ async fn submit_dialog_turn_carries_agent_type_and_starts() {
                             turn_id: None,
                             execution: Default::default(),
                             agent_type: "Standard".to_string(),
+                            workspace_id: None,
                             workspace_path: None,
                             remote_connection_id: None,
                             remote_ssh_host: None,

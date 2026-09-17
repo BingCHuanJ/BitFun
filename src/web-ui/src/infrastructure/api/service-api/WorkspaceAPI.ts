@@ -4,7 +4,7 @@ import { workspaceScopedRequest } from './legacyWorkspaceCompatibility';
 import { api } from './ApiClient';
 import { workspaceIdRequest, workspaceSearchRequest, workspaceWatchRequest } from './legacyWorkspaceCompatibility';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import { getActiveSurfaceId, getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
+import { getActiveSurfaceId, getActiveSurfaceScope, isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 import type { FileResourceRenamedEvent } from '@/shared/types/contentResource';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
@@ -239,6 +239,68 @@ export class WorkspaceAPI {
     surface.assertCurrent('write workspace file');
   }
 
+  /**
+   * ID-first file mutations. The workspace ID routes the command to the
+   * owning host and connection; `path` is the IO operand inside that
+   * workspace. Pre-ID peers receive the negotiated legacy projection.
+   */
+  private async invokeWorkspaceFileCommand<T>(
+    command: string,
+    action: string,
+    workspaceId: string,
+    request: Record<string, unknown>,
+  ): Promise<T> {
+    const surface = getActiveSurfaceScope();
+    const reference = await workspaceIdRequest(workspaceId, 'workspacePath');
+    surface.assertCurrent(action);
+    try {
+      const result = await api.invoke<T>(command, { request: { ...reference, ...request } });
+      surface.assertCurrent(action);
+      return result;
+    } catch (error) {
+      if (isSurfaceChangedError(error)) throw error;
+      throw createTauriCommandError(command, error, { workspaceId, ...request });
+    }
+  }
+
+  async createWorkspaceFile(workspaceId: string, path: string): Promise<void> {
+    await this.invokeWorkspaceFileCommand<void>('create_file', 'create workspace file', workspaceId, { path });
+  }
+
+  async deleteWorkspaceFile(workspaceId: string, path: string): Promise<void> {
+    await this.invokeWorkspaceFileCommand<void>('delete_file', 'delete workspace file', workspaceId, { path });
+  }
+
+  async createWorkspaceDirectory(workspaceId: string, path: string): Promise<void> {
+    await this.invokeWorkspaceFileCommand<void>(
+      'create_directory', 'create workspace directory', workspaceId, { path },
+    );
+  }
+
+  async deleteWorkspaceDirectory(workspaceId: string, path: string, recursive: boolean = true): Promise<void> {
+    await this.invokeWorkspaceFileCommand<void>(
+      'delete_directory', 'delete workspace directory', workspaceId, { path, recursive },
+    );
+  }
+
+  async renameWorkspaceFile(workspaceId: string, oldPath: string, newPath: string): Promise<void> {
+    const surfaceId = getActiveSurfaceId();
+    await this.invokeWorkspaceFileCommand<void>(
+      'rename_file', 'rename workspace file', workspaceId, { oldPath, newPath },
+    );
+    globalEventBus.emit<FileResourceRenamedEvent>('workspace:file-renamed', { surfaceId, workspaceId, oldPath, newPath });
+  }
+
+  async compressWorkspacePath(workspaceId: string, path: string): Promise<string> {
+    return this.invokeWorkspaceFileCommand<string>('compress_path', 'compress workspace path', workspaceId, { path });
+  }
+
+  async decompressWorkspacePath(workspaceId: string, path: string): Promise<string> {
+    return this.invokeWorkspaceFileCommand<string>(
+      'decompress_path', 'decompress workspace path', workspaceId, { path },
+    );
+  }
+
   async getWorkspaceFileMetadata(workspaceId: string, path: string): Promise<FileMetadata> {
     const surface = getActiveSurfaceScope();
     const reference = await workspaceIdRequest(workspaceId, 'workspacePath');
@@ -268,13 +330,12 @@ export class WorkspaceAPI {
     }
   }
 
-  async resetWorkspacePersonaFiles(workspacePath: string): Promise<void> {
+  async resetWorkspacePersonaFiles(workspaceId: string): Promise<void> {
+    const reference = await workspaceIdRequest(workspaceId, 'workspacePath');
     try {
-      await api.invoke('reset_workspace_persona_files', {
-        request: { workspacePath }
-      });
+      await api.invoke('reset_workspace_persona_files', { request: reference });
     } catch (error) {
-      throw createTauriCommandError('reset_workspace_persona_files', error, { workspacePath });
+      throw createTauriCommandError('reset_workspace_persona_files', error, { workspaceId });
     }
   }
 

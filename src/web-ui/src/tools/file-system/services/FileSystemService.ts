@@ -178,11 +178,11 @@ class FileSystemService implements IFileSystemService {
     }
   }
 
-  async getFileContent(filePath: string): Promise<string> {
+  async getFileContent(workspaceId: string, filePath: string): Promise<string> {
     try {
-      return await workspaceAPI.readFileContent(filePath);
+      return await workspaceAPI.readWorkspaceFile(workspaceId, filePath);
     } catch (error) {
-      log.error('Failed to read file content', { filePath, error });
+      log.error('Failed to read file content', { workspaceId, filePath, error });
       throw new Error(`Failed to read file: ${error}`);
     }
   }

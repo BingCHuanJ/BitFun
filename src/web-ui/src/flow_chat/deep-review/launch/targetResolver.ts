@@ -327,13 +327,16 @@ function countTextFileLines(content: string): number {
 }
 
 async function resolveUntrackedContentFacts(
-  workspacePath: string,
+  workspace: GitWorkspaceScope,
   untrackedPaths: string[],
   remoteConnectionId?: string,
 ): Promise<{
   fingerprints: Record<string, string>;
   lineCounts: Record<string, number>;
 }> {
+  // File IO is routed by the owning workspace ID; the repository path is the IO root.
+  const workspacePath = workspace.repositoryPath ?? '';
+  const workspaceId = workspace.workspaceId?.trim() || undefined;
   const boundedPaths = untrackedPaths.slice(0, REVIEW_UNTRACKED_FILE_LIMIT);
   const entries: Array<readonly [string, string, number | undefined]> =
     untrackedPaths.map((path) => [
@@ -352,7 +355,9 @@ async function resolveUntrackedContentFacts(
     const filePath = boundedPaths[index];
     try {
       const absolutePath = workspaceFilePath(workspacePath, filePath);
-      const metadata = await workspaceAPI.getFileMetadata(absolutePath);
+      const metadata = workspaceId
+        ? await workspaceAPI.getWorkspaceFileMetadata(workspaceId, absolutePath)
+        : await workspaceAPI.getFileMetadata(absolutePath);
       if (
         metadata.isSymlink ||
         !metadata.isFile ||
@@ -364,13 +369,15 @@ async function resolveUntrackedContentFacts(
         return;
       }
       reservedBytes += metadata.size;
-      const content = remoteConnectionId
-        ? await workspaceAPI.readFileContent(
-            absolutePath,
-            undefined,
-            remoteConnectionId,
-          )
-        : await workspaceAPI.readFileContent(absolutePath);
+      const content = workspaceId
+        ? await workspaceAPI.readWorkspaceFile(workspaceId, absolutePath)
+        : remoteConnectionId
+          ? await workspaceAPI.readFileContent(
+              absolutePath,
+              undefined,
+              remoteConnectionId,
+            )
+          : await workspaceAPI.readFileContent(absolutePath);
       entries[index] = [
         normalizePath(filePath, workspacePath),
         stableReviewFingerprint(content),
@@ -484,7 +491,7 @@ export async function resolveCurrentFileReviewSnapshot(
         files: targetDiffPaths,
       }),
       resolveUntrackedContentFacts(
-        workspacePath,
+        workspace!,
         targetUntracked,
         remoteConnectionId,
       ),

@@ -63,6 +63,8 @@ export interface SessionLineageEntry {
   parentToolCallId?: string;
   subagentType?: string;
   agentId?: string;
+  /** Owning workspace ID; authoritative when present. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -73,6 +75,9 @@ export interface SessionLineageEntry {
 export interface SessionReferenceCandidate {
   sessionId: string;
   sessionName: string;
+  /** Owning workspace ID; the reference identity sent back with the turn. */
+  workspaceId: string;
+  /** Display/IO projection of the owning workspace root. */
   workspacePath: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -109,6 +114,8 @@ export interface SessionSearchDiagnostic {
 }
 
 export interface SessionContentSearchRequest {
+  workspaceId: string;
+  /** Legacy IO projection for peers that predate workspace IDs. */
   workspacePath: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -279,6 +286,7 @@ export class SessionAPI {
     try {
       return await api.invoke('search_session_content', {
         request: {
+          workspaceId: request.workspaceId,
           workspacePath: request.workspacePath,
           ...(request.remoteConnectionId
             ? { remoteConnectionId: request.remoteConnectionId }

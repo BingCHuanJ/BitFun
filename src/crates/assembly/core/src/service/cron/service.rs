@@ -582,6 +582,7 @@ impl CronService {
                 execution: Default::default(),
                 agent_type: resolved.agent_type,
                 workspace_path: Some(resolved.workspace_path),
+                workspace_id: resolved.workspace_id,
                 remote_connection_id: resolved.remote_connection_id,
                 remote_ssh_host: resolved.remote_ssh_host,
                 policy: scheduled_job_policy(),
@@ -616,6 +617,7 @@ impl CronService {
                     .unwrap_or_default();
                 Ok(ResolvedEnqueueSubmission {
                     session_id: session_id.clone(),
+                    workspace_id: workspace.workspace_id.clone(),
                     workspace_path: workspace.workspace_path.clone(),
                     remote_connection_id: workspace.remote_connection_id.clone(),
                     remote_ssh_host: workspace.remote_ssh_host.clone(),
@@ -651,6 +653,7 @@ impl CronService {
 
                 Ok(ResolvedEnqueueSubmission {
                     session_id: created.session_id,
+                    workspace_id: workspace.workspace_id.clone(),
                     workspace_path: workspace.workspace_path.clone(),
                     remote_connection_id: workspace.remote_connection_id.clone(),
                     remote_ssh_host: workspace.remote_ssh_host.clone(),
@@ -1019,6 +1022,7 @@ struct EnqueueInput {
 
 struct ResolvedEnqueueSubmission {
     session_id: String,
+    workspace_id: Option<String>,
     workspace_path: String,
     remote_connection_id: Option<String>,
     remote_ssh_host: Option<String>,

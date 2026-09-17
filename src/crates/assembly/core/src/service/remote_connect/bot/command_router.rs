@@ -1198,10 +1198,20 @@ fn workspace_selection_view(
     let mut items = Vec::new();
     let mut body = String::new();
     for (i, choice) in options.iter().enumerate() {
+        // The ID decides the current item whenever both sides carry one; the
+        // legacy triple is only for rows a pre-ID host could not label.
         let is_current = state.current_workspace.as_ref().is_some_and(|current| {
-            current.path == choice.path
-                && current.remote_connection_id == choice.remote_connection_id
-                && current.remote_ssh_host == choice.remote_ssh_host
+            match (
+                current.workspace_id.as_deref(),
+                choice.workspace_id.as_deref(),
+            ) {
+                (Some(current_id), Some(choice_id)) => current_id == choice_id,
+                _ => {
+                    current.path == choice.path
+                        && current.remote_connection_id == choice.remote_connection_id
+                        && current.remote_ssh_host == choice.remote_ssh_host
+                }
+            }
         });
         let marker = if is_current { s.current_marker } else { "" };
         let host_hint = choice
@@ -1305,13 +1315,21 @@ async fn select_workspace(
             let result = show_workspace_choices(state, options, s);
             return workspace_list_changed_result(state, result, s);
         };
-        let cmd = serde_json::json!({
-            "cmd": "set_workspace",
-            "workspace_id": choice.workspace_id,
-            "path": choice.path,
-            "remote_connection_id": choice.remote_connection_id,
-            "remote_ssh_host": choice.remote_ssh_host,
-        });
+        // A choice the device labelled with an ID is selected by that ID
+        // alone, so an ID-aware host can never fall back to the path. Rows
+        // from a pre-ID host carry no ID and get the legacy projection.
+        let cmd = match choice.workspace_id.as_deref() {
+            Some(workspace_id) => serde_json::json!({
+                "cmd": "set_workspace",
+                "workspace_id": workspace_id,
+            }),
+            None => serde_json::json!({
+                "cmd": "set_workspace",
+                "path": choice.path,
+                "remote_connection_id": choice.remote_connection_id,
+                "remote_ssh_host": choice.remote_ssh_host,
+            }),
+        };
         let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
         return match exec_remote_rpc(state, &cmd_json).await {
             Ok(resp) => {
@@ -1618,9 +1636,42 @@ fn truncate_label(label: &str, max_chars: usize) -> String {
 
 #[derive(Debug, Clone)]
 struct RemoteDeviceWorkspaceFacts {
+    /// Record ID reported by the device. A device that reports it accepts
+    /// ID-only workspace references; a device that does not is a pre-ID host.
+    workspace_id: Option<String>,
     path: String,
     remote_connection_id: Option<String>,
     remote_ssh_host: Option<String>,
+}
+
+impl RemoteDeviceWorkspaceFacts {
+    /// Workspace fields for a session-level RPC to this device. An ID-aware
+    /// device gets only the ID so it can never fall back to the path; a
+    /// pre-ID device gets the legacy projection it still understands.
+    fn apply_to_command(&self, command: &mut serde_json::Value) {
+        let Some(fields) = command.as_object_mut() else {
+            return;
+        };
+        match self.workspace_id.as_deref() {
+            Some(workspace_id) => {
+                fields.insert(
+                    "workspace_id".into(),
+                    Value::String(workspace_id.to_string()),
+                );
+            }
+            None => {
+                fields.insert("workspace_path".into(), Value::String(self.path.clone()));
+                fields.insert(
+                    "remote_connection_id".into(),
+                    serde_json::to_value(&self.remote_connection_id).unwrap_or(Value::Null),
+                );
+                fields.insert(
+                    "remote_ssh_host".into(),
+                    serde_json::to_value(&self.remote_ssh_host).unwrap_or(Value::Null),
+                );
+            }
+        }
+    }
 }
 
 async fn query_remote_device_workspace(
@@ -1647,6 +1698,12 @@ async fn query_remote_device_workspace(
                 .to_string()
         })?;
     Ok(RemoteDeviceWorkspaceFacts {
+        workspace_id: val
+            .get("workspace_id")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
         path: path.to_string(),
         remote_connection_id: val
             .get("remote_connection_id")
@@ -1680,14 +1737,12 @@ async fn start_resume(
                 );
             }
         };
-        let cmd = serde_json::json!({
+        let mut cmd = serde_json::json!({
             "cmd": "list_sessions",
-            "workspace_path": workspace.path,
-            "remote_connection_id": workspace.remote_connection_id,
-            "remote_ssh_host": workspace.remote_ssh_host,
             "limit": 10,
             "offset": page * 10,
         });
+        workspace.apply_to_command(&mut cmd);
         let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
         match exec_remote_rpc(state, &cmd_json).await {
             Ok(resp) => {
@@ -2090,14 +2145,12 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                 );
             }
         };
-        let cmd = serde_json::json!({
+        let mut cmd = serde_json::json!({
             "cmd": "create_session",
             "agent_type": agent_type,
             "session_name": session_name,
-            "workspace_path": workspace.path,
-            "remote_connection_id": workspace.remote_connection_id,
-            "remote_ssh_host": workspace.remote_ssh_host,
         });
+        workspace.apply_to_command(&mut cmd);
         let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
         match exec_remote_rpc(state, &cmd_json).await {
             Ok(resp) => {
@@ -4541,9 +4594,7 @@ mod handle_chat_tests {
     }
 
     async fn assert_remote_question_round_trip(supports_interaction: bool) {
-        use openbitfun_services_integrations::remote_connect::{
-            account::AccountSession, device_crypto, encryption,
-        };
+        use openbitfun_services_integrations::remote_connect::{device_crypto, encryption};
         use std::sync::{Arc, Mutex};
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

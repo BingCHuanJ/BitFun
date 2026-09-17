@@ -1,7 +1,7 @@
 //! App Server management adapter over the existing product owners.
 
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -1166,7 +1166,6 @@ impl AppManagementService {
         } else {
             None
         };
-        let workspace = record.as_ref().map(|record| record.root_path.clone());
         let include_external = request.include_external
             && record.as_ref().is_some_and(|record| {
                 record.workspace_kind != openbitfun_core::service::workspace::WorkspaceKind::Remote
@@ -1335,7 +1334,10 @@ impl AppManagementService {
             openbitfun_core::agentic::tools::implementations::skills::get_skill_registry();
         let skills = if request.manageable {
             registry
-                .get_mode_skill_infos_for_workspace(Some(workspace.root_path()), &request.mode_id)
+                .get_mode_skill_infos_for_workspace(
+                    openbitfun_core::agentic::tools::implementations::skills::mode_overrides::SkillPolicyWorkspace::from_binding(&workspace),
+                    &request.mode_id,
+                )
                 .await
                 .into_iter()
                 .map(skill_from_mode_info)
@@ -1786,6 +1788,7 @@ fn bounded_error(message: String) -> String {
 mod tests {
     use super::*;
     use crate::AppManagementErrorKind;
+    use std::path::PathBuf;
 
     fn native_overview_with_sensitive_paths() -> openbitfun_core::native_hooks::NativeHookOverview {
         openbitfun_core::native_hooks::NativeHookOverview {

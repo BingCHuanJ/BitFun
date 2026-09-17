@@ -617,6 +617,7 @@ fn compute_active_duration_millis(
     let report = build_session_usage_report_from_turns(
         SessionUsageReportRequest {
             session_id: session_id.to_string(),
+            workspace_id: None,
             workspace_path: Some(workspace_path.to_string_lossy().to_string()),
             remote_connection_id: None,
             remote_ssh_host: None,

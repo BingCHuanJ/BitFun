@@ -22,6 +22,7 @@ use openbitfun_core::agentic::tools::implementations::skills::mode_overrides::{
     project_mode_skills_path_for_remote, save_project_mode_skills_document_local,
     set_disabled_mode_skills_in_document, set_global_project_skill_disabled,
     set_global_user_skill_disabled, set_mode_skill_disabled_in_document, set_user_mode_skill_state,
+    SkillPolicyWorkspace,
 };
 use openbitfun_core::agentic::tools::implementations::skills::registry::imports::{
     self as skill_imports, SkillImportPreview,
@@ -292,9 +293,12 @@ async fn get_mode_skill_scan_report_for_workspace_input(
             REMOTE_SKILL_DISCOVERY_TIMEOUT,
         )
         .await
-    } else if let Some(workspace_root) = workspace_root_from_input(workspace) {
+    } else if let Some(record) = workspace {
         Ok(registry
-            .get_mode_skill_scan_report_for_workspace(Some(&workspace_root), mode_id)
+            .get_mode_skill_scan_report_for_workspace(
+                Some(SkillPolicyWorkspace::from_record(record)),
+                mode_id,
+            )
             .await)
     } else {
         // Mode-scoped built-in and user-level skills should still be available even
@@ -622,7 +626,7 @@ async fn skill_availability_settings(
                         .into(),
                 );
             }
-            load_globally_disabled_project_skills(&record.root_path)
+            load_globally_disabled_project_skills(SkillPolicyWorkspace::from_record(record))
                 .await
                 .map_err(|error| error.to_string())?
         }
@@ -682,9 +686,13 @@ pub async fn set_global_skill_disabled(
             let record = workspace
                 .as_ref()
                 .ok_or_else(|| "Project Skill availability requires a workspace".to_string())?;
-            set_global_project_skill_disabled(&record.root_path, skill_key, request.disabled)
-                .await
-                .map_err(|error| error.to_string())?;
+            set_global_project_skill_disabled(
+                SkillPolicyWorkspace::from_record(record),
+                skill_key,
+                request.disabled,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
         }
     }
     if let Err(error) = openbitfun_core::service::config::reload_global_config().await {

@@ -98,6 +98,8 @@ export interface BtwSessionPanelProps {
   isActive?: boolean;
   childSessionId?: string;
   parentSessionId?: string;
+  /** Owning workspace ID used when the child session has not reported its own yet. */
+  workspaceId?: string;
   workspacePath?: string;
   viewKind?: BtwSessionViewKind;
   displayTitle?: string;
@@ -148,6 +150,7 @@ const isSameReviewResult = (left: unknown, right: unknown): boolean => {
 const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPanelViewState }> = ({
   childSessionId,
   parentSessionId,
+  workspaceId,
   workspacePath,
   viewKind,
   displayTitle,
@@ -331,11 +334,13 @@ const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPa
     fileTabManager.openFile({
       filePath: absoluteFilePath,
       fileName,
+      // The child session owns the referenced file; the path is its IO projection.
+      workspaceId: childSessionRef.current?.workspaceId || childSessionRef.current?.config?.workspaceId || workspaceId,
       workspacePath,
       jumpToRange: lineRange,
       mode: 'agent',
     });
-  }, [workspacePath]);
+  }, [workspaceId, workspacePath]);
 
   const handleTabOpen = useCallback((tabInfo: any) => {
     if (!tabInfo?.type) return;

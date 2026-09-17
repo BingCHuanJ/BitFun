@@ -47,6 +47,29 @@ function refreshRemoteAcpCapabilities(connectionId: string): void {
     });
 }
 
+/**
+ * Close the workspace record behind a provider-level remote workspace. Records
+ * are named by workspace ID; a remote workspace without one is a stale
+ * provider projection and is left untouched (loudly) rather than guessed by
+ * connection ID.
+ */
+async function removeRemoteWorkspaceRecord(remoteWorkspace: RemoteWorkspace): Promise<void> {
+  if (!remoteWorkspace.workspaceId) {
+    log.warn('Remote workspace has no workspace ID; skipping record removal', {
+      connectionId: remoteWorkspace.connectionId,
+    });
+    return;
+  }
+  try {
+    await workspaceManager.removeRemoteWorkspace(remoteWorkspace.workspaceId);
+  } catch (error) {
+    log.warn('Failed to remove remote workspace record', {
+      workspaceId: remoteWorkspace.workspaceId,
+      error,
+    });
+  }
+}
+
 function getActiveRemoteWorkspaceForConnection(connectionId: string): RemoteWorkspace | null {
   const normalizedConnectionId = connectionId.trim();
   if (!normalizedConnectionId) {
@@ -75,6 +98,21 @@ function getActiveRemoteWorkspaceForConnection(connectionId: string): RemoteWork
   };
 }
 
+/**
+ * Two reconnect entries describe the same workspace when their workspace IDs
+ * match. Only pre-ID cache entries (no ID on either side) fall back to the
+ * legacy connection + remote path comparison.
+ */
+function sameRemoteWorkspace(left: RemoteWorkspace, right: RemoteWorkspace): boolean {
+  if (left.workspaceId || right.workspaceId) {
+    return left.workspaceId === right.workspaceId;
+  }
+  return (
+    left.connectionId === right.connectionId &&
+    normalizeRemoteWorkspacePath(left.remotePath) === normalizeRemoteWorkspacePath(right.remotePath)
+  );
+}
+
 /** After parallel reconnects: prefer the user's active remote workspace, else last in sidebar order (matches legacy serial last-write). */
 function pickGlobalRemoteAfterReconnect(
   connected: Array<{ workspace: RemoteWorkspace; connectionId: string }>,
@@ -86,23 +124,19 @@ function pickGlobalRemoteAfterReconnect(
   if (aid) {
     const aw = st.openedWorkspaces.get(aid);
     if (aw && aw.workspaceKind === WorkspaceKind.Remote && aw.connectionId) {
-      const arp = normalizeRemoteWorkspacePath(aw.rootPath);
-      const hit = connected.find(
-        c =>
-          c.connectionId === aw.connectionId &&
-          normalizeRemoteWorkspacePath(c.workspace.remotePath) === arp
-      );
+      const active: RemoteWorkspace = {
+        workspaceId: aw.id,
+        connectionId: aw.connectionId,
+        connectionName: aw.connectionName?.trim() || 'Remote',
+        remotePath: normalizeRemoteWorkspacePath(aw.rootPath),
+      };
+      const hit = connected.find(c => sameRemoteWorkspace(c.workspace, active));
       if (hit) return hit;
     }
   }
   for (let i = orderedList.length - 1; i >= 0; i--) {
     const ws = orderedList[i];
-    const hit = connected.find(
-      c =>
-        c.connectionId === ws.connectionId &&
-        normalizeRemoteWorkspacePath(c.workspace.remotePath) ===
-          normalizeRemoteWorkspacePath(ws.remotePath)
-    );
+    const hit = connected.find(c => sameRemoteWorkspace(c.workspace, ws));
     if (hit) return hit;
   }
   return connected[connected.length - 1] ?? null;
@@ -180,6 +214,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             (workspace.connectionId ?? '').trim() === connId
           )
           .map(workspace => ({
+            workspaceId: workspace.id,
             connectionId: connId,
             connectionName: workspace.connectionName?.trim() || 'Remote',
             remotePath: normalizeRemoteWorkspacePath(workspace.rootPath),
@@ -190,11 +225,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
         if (
           activeRemoteWorkspace &&
           activeRemoteWorkspace.connectionId === connId &&
-          !openedRemoteWorkspaces.some(
-            workspace =>
-              normalizeRemoteWorkspacePath(workspace.remotePath) ===
-              normalizeRemoteWorkspacePath(activeRemoteWorkspace.remotePath)
-          )
+          !openedRemoteWorkspaces.some(workspace => sameRemoteWorkspace(workspace, activeRemoteWorkspace))
         ) {
           openedRemoteWorkspaces.push(activeRemoteWorkspace);
         }
@@ -479,17 +510,18 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
         }
       }
 
-      // Key by connection + path so two servers at the same remote path stay distinct.
-      const remoteWorkspaceDedupKey = (cid: string, rp: string) => `${cid}\n${rp}`;
+      // Opened workspaces are keyed by workspace ID. Only the pre-ID legacy
+      // snapshot still uses connection + path, and it is dropped when an
+      // ID-owned record already covers the same checkout.
       const toReconnect = new Map<string, RemoteWorkspace>();
 
       for (const ws of openedRemote) {
         if (!ws.connectionId) continue;
-        const rp = normalizeRemoteWorkspacePath(ws.rootPath);
-        toReconnect.set(remoteWorkspaceDedupKey(ws.connectionId, rp), {
+        toReconnect.set(ws.id, {
+          workspaceId: ws.id,
           connectionId: ws.connectionId,
           connectionName: ws.connectionName || 'Remote',
-          remotePath: rp,
+          remotePath: normalizeRemoteWorkspacePath(ws.rootPath),
           sshHost: ws.sshHost?.trim() || undefined,
         });
       }
@@ -497,9 +529,13 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       // Add legacy workspace if it isn't already covered
       if (legacyWorkspace?.connectionId) {
         const leg = normalizeRemoteWorkspacePath(legacyWorkspace.remotePath);
-        const k = remoteWorkspaceDedupKey(legacyWorkspace.connectionId, leg);
+        const legacyRecord = resolveLegacySessionWorkspace({
+          workspaceId: legacyWorkspace.workspaceId, workspacePath: leg,
+          remoteConnectionId: legacyWorkspace.connectionId, remoteSshHost: legacyWorkspace.sshHost,
+        }, openedRemote);
+        const k = legacyRecord?.id ?? legacyWorkspace.workspaceId ?? `legacy\n${legacyWorkspace.connectionId}\n${leg}`;
         if (!toReconnect.has(k)) {
-          toReconnect.set(k, { ...legacyWorkspace, remotePath: leg });
+          toReconnect.set(k, { ...legacyWorkspace, workspaceId: legacyRecord?.id ?? legacyWorkspace.workspaceId, remotePath: leg });
         }
       }
 
@@ -837,11 +873,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
     if (currentRemoteWorkspace) {
       setWorkspaceStatus(currentRemoteWorkspace.connectionId, 'disconnected');
-      try {
-        await workspaceManager.removeRemoteWorkspace(currentRemoteWorkspace.connectionId);
-      } catch {
-        // Ignore errors
-      }
+      await removeRemoteWorkspaceRecord(currentRemoteWorkspace);
     }
   }, [connectionId, remoteWorkspace, setWorkspaceStatus]);
 
@@ -852,7 +884,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     const connName = connectionConfig?.name || 'Remote';
     const remotePath = normalizeRemoteWorkspacePath(pingPath);
     await sshApi.openWorkspace(connectionId, remotePath);
-    const remoteWs = {
+    const remoteWs: RemoteWorkspace = {
       connectionId,
       connectionName: connName,
       remotePath,
@@ -862,7 +894,12 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     setShowFileBrowser(false);
     setWorkspaceStatus(connectionId, 'connected');
 
-    await workspaceManager.openRemoteWorkspace(remoteWs);
+    const record = await workspaceManager.openRemoteWorkspace(remoteWs);
+    // The opened record is the identity; keep it on the provider state so
+    // close/disconnect can name the exact workspace instead of its connection.
+    setRemoteWorkspace(current =>
+      current && sameRemoteWorkspace(current, remoteWs) ? { ...current, workspaceId: record.id } : current
+    );
   }, [connectionId, connectionConfig, setWorkspaceStatus]);
 
   const closeWorkspace = useCallback(async () => {
@@ -878,11 +915,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
     if (currentRemoteWorkspace) {
       setWorkspaceStatus(currentRemoteWorkspace.connectionId, 'disconnected');
-      try {
-        await workspaceManager.removeRemoteWorkspace(currentRemoteWorkspace.connectionId);
-      } catch {
-        // Ignore errors
-      }
+      await removeRemoteWorkspaceRecord(currentRemoteWorkspace);
     }
   }, [remoteWorkspace, setWorkspaceStatus]);
 

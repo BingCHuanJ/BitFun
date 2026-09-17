@@ -1882,15 +1882,28 @@ export default function transportAndGeneralChatUnitTest() {
     it('builds workspace and assistant commands', 0, () => {
       expectCommandJson(RemoteCommandFactory.getWorkspaceInfo(), '{"cmd":"get_workspace_info"}');
       expectCommandJson(RemoteCommandFactory.listRecentWorkspaces(), '{"cmd":"list_recent_workspaces"}');
+      // Pre-ID references keep the legacy path projection.
       expectCommandJson(RemoteCommandFactory.setWorkspace('/repo'), '{"cmd":"set_workspace","path":"/repo"}');
+      expectCommandJson(
+        RemoteCommandFactory.setWorkspace('/repo', undefined, 'saved', 'host'),
+        '{"cmd":"set_workspace","path":"/repo","remote_connection_id":"saved","remote_ssh_host":"host"}'
+      );
       expectCommandJson(RemoteCommandFactory.listAssistants(), '{"cmd":"list_assistants"}');
       expectCommandJson(RemoteCommandFactory.setAssistant('/assistant'), '{"cmd":"set_assistant","path":"/assistant"}');
+      // An identified reference sends only its ID so the host cannot fall back to the path.
+      expectCommandJson(RemoteCommandFactory.setWorkspace('/repo', 'ws-1', 'saved', 'host'), '{"cmd":"set_workspace","workspace_id":"ws-1"}');
+      expectCommandJson(RemoteCommandFactory.setAssistant('/assistant', 'ws-2'), '{"cmd":"set_assistant","workspace_id":"ws-2"}');
     });
 
     it('builds session list and creation commands without unsupported fields', 0, () => {
-      const listCommand = RemoteCommandFactory.listSessions('/repo', 8, 16, '  auth  ');
+      const listCommand = RemoteCommandFactory.listSessions({ path: '/repo' }, 8, 16, '  auth  ');
       expectCommandJson(listCommand, '{"cmd":"list_sessions","workspace_path":"/repo","limit":8,"offset":16,"query":"auth"}');
       expect(JSON.stringify(listCommand).indexOf('agent_type')).assertEqual(-1);
+      const sshList = RemoteCommandFactory.listSessions({ path: '/repo', remoteConnectionId: 'saved', remoteSshHost: 'host' }, 8, 0, '');
+      expectCommandJson(sshList, '{"cmd":"list_sessions","workspace_path":"/repo","limit":8,"offset":0,"remote_connection_id":"saved","remote_ssh_host":"host"}');
+      const identifiedList = RemoteCommandFactory.listSessions(
+        { workspaceId: 'ws-1', path: '/repo', remoteConnectionId: 'saved', remoteSshHost: 'host' }, 8, 16, 'auth');
+      expectCommandJson(identifiedList, '{"cmd":"list_sessions","workspace_id":"ws-1","limit":8,"offset":16,"query":"auth"}');
 
       const createCommand = RemoteCommandFactory.createSession({
         agentType: 'cowork',
@@ -1908,6 +1921,11 @@ export default function transportAndGeneralChatUnitTest() {
       }, '/repo');
       expect(minimal.agent_type || '').assertEqual('minimal');
       expect(ultimate.agent_type || '').assertEqual('Ultra');
+
+      const identified = RemoteCommandFactory.createSession({
+        agentType: 'code', title: '', instruction: '', workspaceId: 'ws-1', remoteConnectionId: 'saved', remoteSshHost: 'host'
+      }, '/repo');
+      expectCommandJson(identified, '{"cmd":"create_session","agent_type":"code","session_name":"Remote Code Session","workspace_id":"ws-1"}');
     });
 
     it('builds message and polling commands', 0, () => {

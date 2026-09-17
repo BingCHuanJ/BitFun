@@ -33,6 +33,8 @@ interface WelcomePanelProps {
   onQuickAction?: (command: string) => void;
   className?: string;
   sessionMode?: string;
+  /** Owning workspace ID of the session being welcomed; selects the assistant identity document. */
+  workspaceId?: string;
   workspacePath?: string;
 }
 
@@ -40,6 +42,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   onQuickAction,
   className = '',
   sessionMode,
+  workspaceId,
   workspacePath = '',
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -63,7 +66,11 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const isCoworkSession = sessionModeLower === 'cowork';
   const isClawSession = sessionModeLower === 'claw';
 
-  const { document: identityDoc } = useAgentIdentityDocument(isClawSession ? workspacePath : '');
+  const identityWorkspace = useMemo(
+    () => (isClawSession && workspaceId ? { id: workspaceId, rootPath: workspacePath } : null),
+    [isClawSession, workspaceId, workspacePath],
+  );
+  const { document: identityDoc } = useAgentIdentityDocument(identityWorkspace);
   const assistantName = isClawSession ? (identityDoc.name || '') : '';
 
   const greeting = useMemo(() => {
@@ -168,7 +175,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   }, []);
 
   useEffect(() => {
-    if (isCoworkSession || isClawSession || !currentWorkspace?.rootPath) { setGitState(null); return; }
+    // The workspace is addressed by ID; git state needs an opened workspace, not a path.
+    if (isCoworkSession || isClawSession || !currentWorkspace?.id) { setGitState(null); return; }
     let cancelled = false;
     void loadGitState(currentWorkspace.id, () => cancelled);
     return () => {

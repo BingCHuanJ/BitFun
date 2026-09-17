@@ -562,6 +562,7 @@ pub(crate) async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
     let report = runtime
         .agent_runtime()
         .generate_session_usage(AgentSessionUsageRequest {
+            workspace_id: Some(runtime.workspace().id.clone()),
             session_id: resolved_session_id,
             workspace_path: Some(workspace_path.to_string_lossy().to_string()),
             remote_connection_id: None,

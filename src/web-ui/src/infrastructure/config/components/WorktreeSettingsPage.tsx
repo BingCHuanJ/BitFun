@@ -16,6 +16,7 @@ import { configAPI, worktreeAPI } from '@/infrastructure/api';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type {
   WorktreeCommandError,
+  WorktreeProjectLocator,
   WorktreeProjectSummary,
   WorktreeSessionSummary,
   WorktreeSettings,
@@ -52,6 +53,7 @@ const DEFAULT_SETTINGS: WorktreeSettings = {
 };
 
 interface DeleteTarget {
+  projectWorkspaceId?: string;
   projectWorkspacePath: string;
   worktree: WorktreeSummary;
 }
@@ -342,7 +344,10 @@ const WorktreeSettingsPage: React.FC = () => {
       const discardLocalWork =
         target.worktree.dirty || target.worktree.hasUnpublishedCommits;
       await worktreeAPI.remove(
-        target.projectWorkspacePath,
+        {
+          projectWorkspaceId: target.projectWorkspaceId,
+          projectWorkspacePath: target.projectWorkspacePath,
+        },
         target.worktree.worktreeId,
         createDeleteRequestId(),
         discardLocalWork,
@@ -399,15 +404,20 @@ const WorktreeSettingsPage: React.FC = () => {
   };
 
   const openAssociatedSession = useCallback(async (
-    projectWorkspacePath: string,
+    project: WorktreeProjectLocator,
     session: WorktreeSessionSummary,
   ) => {
     if (openingSessionId) return;
 
     setOpeningSessionId(session.sessionId);
     try {
-      const workspaceId = session.workspaceId ?? resolveLegacySessionWorkspace({ workspacePath: projectWorkspacePath },
-        [...workspaceManager.getState().openedWorkspaces.values()])?.id;
+      // The session's own workspace ID is authoritative; the owning project ID
+      // covers persisted sessions recorded before per-session IDs. The path
+      // lookup is the legacy-compat boundary for pre-ID project catalogs.
+      const workspaceId = session.workspaceId
+        ?? project.projectWorkspaceId
+        ?? resolveLegacySessionWorkspace({ workspacePath: project.projectWorkspacePath },
+          [...workspaceManager.getState().openedWorkspaces.values()])?.id;
       if (!workspaceId) throw new Error('Workspace ID is unavailable');
       if (session.archived) {
         const shouldRestore = await confirmWarning(
@@ -632,7 +642,7 @@ const WorktreeSettingsPage: React.FC = () => {
                         name: session.sessionName,
                       })}
                       onClick={() => void openAssociatedSession(
-                        project.projectWorkspacePath,
+                        project,
                         session,
                       )}
                     >
@@ -664,6 +674,7 @@ const WorktreeSettingsPage: React.FC = () => {
                 loading={deletingWorktreeId === worktree.worktreeId}
                 title={blockReason ?? undefined}
                 onClick={() => setDeleteTarget({
+                  projectWorkspaceId: project.projectWorkspaceId,
                   projectWorkspacePath: project.projectWorkspacePath,
                   worktree,
                 })}

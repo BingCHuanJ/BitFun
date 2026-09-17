@@ -1999,10 +1999,19 @@ impl StartupPage {
                 if self.agent.is_remote_workspace() {
                     anyhow::bail!("Skill management is unavailable for a Remote workspace")
                 }
-                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let workspace_id = self
+                    .agent
+                    .workspace_id()
+                    .ok_or_else(|| anyhow::anyhow!("Workspace ID is unavailable"))?;
+                let workspace =
+                    openbitfun_core::agentic::workspace::WorkspaceBinding::resolve(&workspace_id)
+                        .await?;
                 let values =
                     openbitfun_core::agentic::tools::implementations::skills::get_skill_registry()
-                        .get_mode_skill_infos_for_workspace(Some(&workspace), &self.agent_type)
+                        .get_mode_skill_infos_for_workspace(
+                            openbitfun_core::agentic::tools::implementations::skills::mode_overrides::SkillPolicyWorkspace::from_binding(&workspace),
+                            &self.agent_type,
+                        )
                         .await;
                 Ok::<_, anyhow::Error>(
                     values

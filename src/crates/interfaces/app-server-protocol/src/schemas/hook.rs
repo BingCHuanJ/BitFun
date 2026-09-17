@@ -180,6 +180,7 @@ mod tests {
     #[test]
     fn hook_request_debug_redacts_workspace_paths() {
         let request = ExternalHookMutationRequest {
+            workspace_id: Some("workspace-1".to_string()),
             workspace_path: "C:/secret/workspace".to_string(),
             operation_id: "hook-operation-1".to_string(),
             mutation: ExternalHookImportMutationRequestV1 {

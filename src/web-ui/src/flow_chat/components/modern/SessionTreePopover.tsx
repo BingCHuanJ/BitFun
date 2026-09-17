@@ -33,6 +33,8 @@ export interface SessionTreeSelection {
   agentType?: string;
   subagentType?: string;
   agentId?: string;
+  /** Owning workspace ID; authoritative when present. */
+  workspaceId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -332,6 +334,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       agentType: node.agentType,
       subagentType: node.subagentType,
       agentId: node.agentId,
+      workspaceId: node.workspaceId,
       workspacePath: node.workspacePath,
       remoteConnectionId: node.remoteConnectionId,
       remoteSshHost: node.remoteSshHost,
@@ -387,6 +390,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       agentType: node.agentType,
       subagentType: node.subagentType,
       agentId: node.agentId,
+      workspaceId: node.workspaceId,
       workspacePath: node.workspacePath,
       remoteConnectionId: node.remoteConnectionId,
       remoteSshHost: node.remoteSshHost,

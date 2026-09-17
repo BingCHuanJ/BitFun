@@ -595,6 +595,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               originalContent={originalCode}
               modifiedContent={modifiedCode}
               filePath={diffFilePath}
+              workspaceId={diffData.workspaceId ?? content.metadata?.resourceScope?.workspaceId}
               repositoryPath={diffRepositoryPath}
               onAcceptAll={() => {
                 diffMigrationContext?.onAcceptAll?.();
@@ -622,6 +623,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             />
           );
         }
+        // The diff tab is owned by a workspace ID; the path is only the IO root.
+        const diffOwnerWorkspaceId: string | undefined =
+          diffData.workspaceId ?? content.metadata?.resourceScope?.workspaceId;
         
         return renderLazyEditor(
           <DiffEditor
@@ -634,14 +638,19 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             renderSideBySide={true}
             onSave={async (content) => {
               try {
+                const targetWorkspaceId = diffOwnerWorkspaceId;
                 const targetWorkspacePath = workspacePath || diffMigrationContext?.workspacePath;
-                if (!targetWorkspacePath || !diffFilePath) {
-                  log.warn('DiffEditor save failed: missing workspacePath or filePath');
+                if (!diffFilePath || (!targetWorkspaceId && !targetWorkspacePath)) {
+                  log.warn('DiffEditor save failed: missing workspace owner or filePath');
                   return;
                 }
 
                 const { workspaceAPI } = await import('@/infrastructure/api');
-                await workspaceAPI.writeFileContent(targetWorkspacePath, diffFilePath, content);
+                if (targetWorkspaceId) {
+                  await workspaceAPI.writeWorkspaceFile(targetWorkspaceId, diffFilePath, content);
+                } else {
+                  await workspaceAPI.writeFileContent(targetWorkspacePath!, diffFilePath, content);
+                }
 
                 globalEventBus.emit('file-tree:refresh');
 
@@ -770,6 +779,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         const planViewerData = content.data || {};
         const planFilePath = planViewerData.filePath || '';
         const planFileName = planViewerData.fileName || content.title;
+        const planWorkspaceId = planViewerData.workspaceId || content.metadata?.resourceScope?.workspaceId;
         const planWorkspacePath = planViewerData.workspacePath || workspacePath;
         const planJumpToLine = planViewerData.jumpToLine;
         const planJumpToColumn = planViewerData.jumpToColumn;
@@ -788,6 +798,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             <PlanViewer
               filePath={planFilePath}
               fileName={planFileName}
+              workspaceId={planWorkspaceId}
               workspacePath={planWorkspacePath}
               jumpToLine={planJumpToLine}
               jumpToColumn={planJumpToColumn}
@@ -833,6 +844,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               isActive={isActive}
               childSessionId={content.data?.childSessionId}
               parentSessionId={content.data?.parentSessionId}
+              workspaceId={content.data?.workspaceId ?? content.metadata?.resourceScope?.workspaceId}
               workspacePath={content.data?.workspacePath || workspacePath}
               viewKind={content.data?.viewKind}
               displayTitle={content.data?.displayTitle}

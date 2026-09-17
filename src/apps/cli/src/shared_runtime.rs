@@ -71,13 +71,12 @@ impl SharedRuntimeHandler {
     }
 
     #[cfg(test)]
-    pub(crate) fn build_for_test(runtime: AgentRuntime, workspace: &Path) -> Result<Self> {
-        Self::build_optional(
-            runtime,
-            None,
-            workspace,
-            Some("test-shared-workspace".into()),
-        )
+    pub(crate) fn build_for_test(
+        runtime: AgentRuntime,
+        workspace: &Path,
+        workspace_id: &str,
+    ) -> Result<Self> {
+        Self::build_optional(runtime, None, workspace, Some(workspace_id.to_string()))
     }
 
     fn build_optional(
@@ -277,7 +276,6 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                         error
                     );
                 }
-                let workspace = PathBuf::from(&binding.workspace_path);
                 if let Err(error) =
                     openbitfun_core::external_sources::ensure_external_source_workspace_snapshot(
                         binding.workspace_id.as_deref(),
@@ -374,7 +372,6 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 })
             }
             RuntimeIpcOperation::ForkSession { request } => {
-                let workspace_path = self.workspace.to_string_lossy().into_owned();
                 let forked = match request.before_turn_id {
                     Some(source_turn_id) => {
                         self.runtime

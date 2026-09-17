@@ -10,7 +10,6 @@ use openbitfun_app_server_protocol::session::{
     SessionUsageRequest, SessionUsageResponse, SyncSessionRequest, SyncSessionResponse,
     UndoSessionRequest, WaitForSettlementRequest, WaitForSettlementResponse,
 };
-use openbitfun_runtime_ports::{AgentSessionWorkspaceBinding, SessionExecutionTarget};
 
 use crate::agent::{runtime_call, OpenBitFunAppRuntime};
 use crate::role::{AppClient, AppServer};
@@ -168,7 +167,6 @@ pub(in crate::server) fn builder(
                 let runtime = runtime.clone();
                 async move |request: SyncSessionRequest, responder, _cx| {
                     let session_id = request.session_id.clone();
-                    let workspace_path = request.workspace_path.clone();
                     let restored = runtime
                         .runtime()
                         .restore_session(AgentSessionRestoreRequest {

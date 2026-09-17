@@ -254,6 +254,7 @@ mod tests {
     #[test]
     fn command_debug_redacts_workspace_and_arguments() {
         let request = ExpandExternalCommandRequest {
+            workspace_id: Some("workspace-1".to_string()),
             workspace_path: "C:/secret/project".to_string(),
             operation_id: "operation-1".to_string(),
             command_name: "review".to_string(),

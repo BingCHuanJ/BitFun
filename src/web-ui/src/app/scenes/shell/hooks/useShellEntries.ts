@@ -39,7 +39,7 @@ export interface UseShellEntriesReturn {
 }
 
 export function useShellEntries(targetWorkspace?: WorkspaceInfo | null): UseShellEntriesReturn {
-  const { activeWorkspace, openedWorkspacesList } = useWorkspaceContext();
+  const { activeWorkspace } = useWorkspaceContext();
   const workspace = targetWorkspace === undefined ? activeWorkspace : targetWorkspace;
   const workspacePath = workspace?.rootPath ?? '';
   const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
@@ -48,9 +48,6 @@ export function useShellEntries(targetWorkspace?: WorkspaceInfo | null): UseShel
   const profileWorkspace = useMemo(() => workspace ? { surfaceId: scope.surfaceId, workspaceId: workspace.id } : undefined,
     [scope.surfaceId, workspace?.id]);
   const profileKey = scope.key('terminal-profiles', workspace?.id);
-  const workspaces = useMemo(() => openedWorkspacesList.map(item => ({
-    workspaceId: item.id, rootPath: item.rootPath, isRemote: item.workspaceKind === 'remote', connectionId: item.connectionId,
-  })), [openedWorkspacesList]);
 
   const [editingState, setEditingTerminal] = useState<EditingTerminalState | null>(null);
   const editingTerminal = editingState?.key === profileKey ? editingState : null;
@@ -87,7 +84,6 @@ export function useShellEntries(targetWorkspace?: WorkspaceInfo | null): UseShel
     isRemote,
     currentConnectionId,
     scope,
-    workspaces,
     savedSessionIds,
   });
 

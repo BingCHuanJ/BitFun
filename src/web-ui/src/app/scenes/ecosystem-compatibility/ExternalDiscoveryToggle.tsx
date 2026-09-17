@@ -14,7 +14,7 @@ interface Props {
 /** Controls catalog discovery without changing runtime or import authorization. */
 export default function ExternalDiscoveryToggle({ snapshot, onSnapshotChange, controlRef }: Props) {
   const { t } = useI18n('scenes/ecosystem-compatibility');
-  const { workspace, workspacePath } = useCurrentWorkspace();
+  const { workspace } = useCurrentWorkspace();
   const labelId = useId();
   const descriptionId = useId();
   const errorId = useId();
@@ -31,7 +31,8 @@ export default function ExternalDiscoveryToggle({ snapshot, onSnapshotChange, co
     ? t('discovery.loadingDescription')
     : !canChange
       ? t('discovery.readOnlyDescription')
-      : `${t(enabled ? 'discovery.enabledDescription' : 'discovery.disabledDescription')} ${t(workspacePath ? 'discovery.workspaceScope' : 'discovery.userScope')}`;
+      // The mutation scopes by workspace ID, so the description must agree with it.
+      : `${t(enabled ? 'discovery.enabledDescription' : 'discovery.disabledDescription')} ${t(workspace?.id ? 'discovery.workspaceScope' : 'discovery.userScope')}`;
 
   async function change(enabled: boolean) {
     if (!canChange || !snapshot || pending.current) return;

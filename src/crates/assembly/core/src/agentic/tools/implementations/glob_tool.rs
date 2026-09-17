@@ -275,7 +275,6 @@ impl Tool for GlobTool {
                     let resolved_path = PathBuf::from(&effective_glob.search_path);
                     let (_walk_root, effective_pattern) =
                         resolve_effective_glob_scope(&resolved_path, &effective_glob.pattern);
-                    let repo_root = workspace_root.to_string_lossy().to_string();
                     let workspace_id = context.workspace.as_ref()
                         .and_then(|workspace| workspace.workspace_id.as_deref())
                         .ok_or_else(|| OpenBitFunError::tool("Remote search requires a workspace ID"))?;

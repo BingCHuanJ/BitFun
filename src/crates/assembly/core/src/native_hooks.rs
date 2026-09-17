@@ -1342,6 +1342,7 @@ pub(crate) async fn overview_with_facts(
         }
         #[cfg(not(feature = "external-sources"))]
         {
+            let _ = workspace_id;
             Vec::new()
         }
     } else {

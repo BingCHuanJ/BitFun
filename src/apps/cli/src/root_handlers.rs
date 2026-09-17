@@ -928,6 +928,14 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
 
     crate::initialize_terminal_service().await;
 
+    // The ACP host owns workspace records for the directories its clients
+    // name by `cwd`; the process cwd is opened first so the fixed runtime
+    // ownership below and the session records share one workspace identity.
+    let workspace = crate::create_cli_local_workspace(&workspace_root)
+        .await
+        .context("Failed to open the ACP workspace record")?;
+    tracing::info!(workspace_id = %workspace.id, "ACP workspace record opened");
+
     let path_manager = openbitfun_core::infrastructure::try_get_path_manager_arc()
         .map_err(|error| anyhow::anyhow!(error.to_string()))?;
     let deployment = openbitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded;

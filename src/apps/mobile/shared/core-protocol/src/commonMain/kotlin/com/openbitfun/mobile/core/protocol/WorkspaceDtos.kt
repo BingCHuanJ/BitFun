@@ -98,6 +98,8 @@ public data class SetWorkspaceResponse(
     @SerialName("success") val success: Boolean? = null,
     @SerialName("path") val path: String? = null,
     @SerialName("project_name") val projectName: String? = null,
+    @SerialName("remote_connection_id") val remoteConnectionId: String? = null,
+    @SerialName("remote_ssh_host") val remoteSshHost: String? = null,
     @SerialName("error") val error: String? = null,
 ) : CommandStatus
 
@@ -118,6 +120,7 @@ public data class AssistantListResponse(
 
 @Serializable
 public data class SetAssistantResponse(
+    @SerialName("workspace_id") val workspaceId: String? = null,
     @SerialName("resp") override val resp: String? = null,
     @SerialName("message") override val message: String? = null,
     @SerialName("success") val success: Boolean? = null,

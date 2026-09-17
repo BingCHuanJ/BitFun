@@ -1143,14 +1143,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         || ''
       ).trim();
     const isWorktreeSession = !!effectiveTargetSession?.config.executionTarget?.worktreeId;
-    const sessionUsesDifferentRoot = !!sessionPath
-      && (!contextPath || !isSamePath(sessionPath, contextPath))
-      && !(
-        isWorktreeSession
-        && !!contextPath
-        && !!sessionProjectPath
-        && isSamePath(sessionProjectPath, contextPath)
-      );
+    // Workspace identity decides whether the session belongs to the current
+    // workspace; a session in a linked worktree still belongs to its owning
+    // project. Path comparison only serves sessions that predate workspace IDs.
+    const sessionWorkspaceId = hasRegisteredWorkspace
+      ? undefined
+      : (effectiveTargetSession?.workspaceId || effectiveTargetSession?.config.workspaceId);
+    const sessionProjectWorkspaceId = hasRegisteredWorkspace
+      ? undefined
+      : (effectiveTargetSession?.projectWorkspaceId || effectiveTargetSession?.config.projectWorkspaceId);
+    const contextWorkspaceId = hasRegisteredWorkspace ? undefined : workspace?.id;
+    const sessionUsesDifferentRoot = sessionWorkspaceId && contextWorkspaceId
+      ? sessionWorkspaceId !== contextWorkspaceId && sessionProjectWorkspaceId !== contextWorkspaceId
+      : !!sessionPath
+        && (!contextPath || !isSamePath(sessionPath, contextPath))
+        && !(
+          isWorktreeSession
+          && !!contextPath
+          && !!sessionProjectPath
+          && isSamePath(sessionProjectPath, contextPath)
+        );
     if (name && !sessionUsesDifferentRoot) return name;
     if (isWorktreeSession && sessionProjectPath) return path.basename(sessionProjectPath);
     if (chatStripRepositoryPath) return path.basename(chatStripRepositoryPath);
@@ -1158,10 +1170,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     chatStripRepositoryPath,
     effectiveTargetSession?.config.executionTarget?.worktreeId,
+    effectiveTargetSession?.config.projectWorkspaceId,
     effectiveTargetSession?.config.projectWorkspacePath,
+    effectiveTargetSession?.config.workspaceId,
+    effectiveTargetSession?.projectWorkspaceId,
     effectiveTargetSession?.projectWorkspacePath,
+    effectiveTargetSession?.workspaceId,
     effectiveTargetSession?.workspacePath,
     hasRegisteredWorkspace,
+    workspace?.id,
     workspaceName,
     workspacePath,
   ]);

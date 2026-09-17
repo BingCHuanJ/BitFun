@@ -400,7 +400,7 @@ fn build_workspace(request: &SessionUsageReportRequest) -> UsageWorkspace {
             .workspace_path
             .as_deref()
             .map(|path| redact_usage_label(path, 120).value),
-        workspace_id: None,
+        workspace_id: request.workspace_id.clone(),
         remote_connection_id: request.remote_connection_id.clone(),
         remote_ssh_host: request.remote_ssh_host.clone(),
     }
@@ -2719,6 +2719,7 @@ mod tests {
     fn test_request(remote_connection_id: Option<&str>) -> SessionUsageReportRequest {
         SessionUsageReportRequest {
             session_id: "session-1".to_string(),
+            workspace_id: None,
             workspace_path: Some("D:/workspace/openbitfun".to_string()),
             remote_connection_id: remote_connection_id.map(ToOwned::to_owned),
             remote_ssh_host: remote_connection_id.map(|_| "host.example".to_string()),

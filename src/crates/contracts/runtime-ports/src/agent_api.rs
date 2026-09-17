@@ -432,6 +432,10 @@ pub struct AgentSessionForkResult {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionUsageRequest {
     pub session_id: String,
+    /// Owning workspace ID; authoritative when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only pre-ID storage selector. New producers send workspace_id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -665,8 +669,13 @@ pub struct AgentDialogTurnRequest {
     #[serde(default, skip_serializing_if = "AgentDialogTurnExecution::is_standard")]
     pub execution: AgentDialogTurnExecution,
     pub agent_type: String,
+    /// Execution root projection retained for pre-ID clients; never a workspace key.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    /// Owning workspace ID used to locate the session when it is not loaded.
+    /// Paths and SSH fields below are upgrade-only projections.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -693,6 +702,9 @@ pub struct AgentDialogTurnRecoveryRequest {
     pub execution_generation: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    /// Owning workspace ID; when present it is the only identity compared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1460,6 +1472,10 @@ pub struct AgentSessionLineageEntry {
     /// Parent-scoped semantic handle assigned when this subagent was launched.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
+    /// Owning workspace ID; authoritative when present. Paths below are
+    /// location projections only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1498,6 +1514,10 @@ pub struct AgentSessionLineageRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionLineageTranscriptRequest {
+    /// Owning workspace ID; authoritative when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only pre-ID storage selector. New producers send workspace_id.
     pub workspace_path: String,
     pub root_session_id: String,
     pub session_id: String,
@@ -1523,6 +1543,10 @@ pub struct AgentSessionLineageInspection {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionLineageCancellationRequest {
+    /// Owning workspace ID; authoritative when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only pre-ID storage selector. New producers send workspace_id.
     pub workspace_path: String,
     pub root_session_id: String,
     pub session_id: String,
@@ -1586,6 +1610,9 @@ pub trait AgentWorkspaceReferencePort: Send + Sync {
 /// The lifecycle method decides whether persisted storage is preserved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentSessionReleaseRequest {
+    /// Owning workspace ID; authoritative when present.
+    pub workspace_id: Option<String>,
+    /// Upgrade-only pre-ID storage selector. New producers send workspace_id.
     pub workspace_path: String,
     pub session_id: String,
     pub remote_connection_id: Option<String>,
@@ -3103,6 +3130,7 @@ mod tests {
             execution: Default::default(),
             agent_type: "Standard".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            workspace_id: None,
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
             policy: DialogSubmissionPolicy::new(
@@ -3344,6 +3372,7 @@ mod tests {
             turn_id: "turn_1".to_string(),
             execution_generation: 1,
             workspace_path: Some("/workspace/project".to_string()),
+            workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
         };
@@ -3387,6 +3416,7 @@ mod tests {
             }],
         };
         let transcript_request = AgentSessionLineageTranscriptRequest {
+            workspace_id: None,
             workspace_path: "/workspace/project".to_string(),
             root_session_id: "root_1".to_string(),
             session_id: "child_1".to_string(),
@@ -3395,6 +3425,7 @@ mod tests {
             remote_ssh_host: None,
         };
         let cancellation_request = AgentSessionLineageCancellationRequest {
+            workspace_id: None,
             workspace_path: "/workspace/project".to_string(),
             root_session_id: "root_1".to_string(),
             session_id: "child_1".to_string(),

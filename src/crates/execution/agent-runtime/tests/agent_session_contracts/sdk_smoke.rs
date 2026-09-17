@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -468,6 +467,7 @@ async fn sdk_facade_delegates_connection_scoped_session_discard() {
         .build()
         .expect("sdk runtime");
     let request = AgentTransientSessionDiscardRequest {
+        workspace_id: None,
         workspace_path: "/workspace/project".to_string(),
         session_id: "sdk-session-1".to_string(),
         remote_connection_id: None,
@@ -494,6 +494,7 @@ async fn sdk_facade_delegates_persisted_session_unload() {
         .build()
         .expect("sdk runtime");
     let request = AgentTransientSessionDiscardRequest {
+        workspace_id: None,
         workspace_path: "/workspace/project".to_string(),
         session_id: "sdk-session-1".to_string(),
         remote_connection_id: None,
@@ -522,6 +523,7 @@ async fn sdk_facade_reports_missing_session_close_capability() {
 
     let error = runtime
         .discard_transient_session(AgentTransientSessionDiscardRequest {
+            workspace_id: None,
             workspace_path: "/workspace/project".to_string(),
             session_id: "sdk-session-1".to_string(),
             remote_connection_id: None,

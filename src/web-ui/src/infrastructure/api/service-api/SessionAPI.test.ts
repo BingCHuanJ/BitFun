@@ -91,6 +91,7 @@ describe('SessionAPI paged metadata reads', () => {
     invokeMock.mockRejectedValueOnce(new Error('search unavailable'));
 
     const error = await sessionAPI.searchSessionContent({
+      workspaceId: 'workspace-1',
       workspacePath: '/private/customer/repository',
       remoteConnectionId: 'remote-1',
       query: 'confidential roadmap',
@@ -115,6 +116,7 @@ describe('SessionAPI paged metadata reads', () => {
     invokeMock.mockRejectedValueOnce(abortError);
 
     await expect(sessionAPI.searchSessionContent({
+      workspaceId: 'workspace-1',
       workspacePath: '/repo',
       query: 'cancelled search',
     })).rejects.toBe(abortError);

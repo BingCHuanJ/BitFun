@@ -22,7 +22,11 @@ use tokio::sync::RwLock;
 pub(crate) struct ServerAppState {
     pub ai_client_factory: Arc<AIClientFactory>,
     pub workspace_service: Arc<workspace::WorkspaceService>,
-    pub workspace_path: Arc<RwLock<Option<std::path::PathBuf>>>,
+    /// Workspace record this Host activated at startup (opened from
+    /// `--workspace` or restored). Identity is the record ID; `root_path` is
+    /// only an IO operand.
+    pub initial_workspace: Option<workspace::WorkspaceInfo>,
+    pub workspace_id: Arc<RwLock<Option<String>>>,
     pub config_service: Arc<config::ConfigService>,
     pub filesystem_service: Arc<filesystem::FileSystemService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
@@ -151,9 +155,6 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
         workspace_service.get_current_workspace().await
     };
 
-    let initial_workspace_path = initial_workspace
-        .as_ref()
-        .map(|workspace| workspace.root_path.clone());
     if let Err(error) = openbitfun_core::plugin_host::initialize_configured_plugin_host(
         openbitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
     )
@@ -166,29 +167,30 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
         )
         .await;
     }
-    if let Some(workspace_path) = initial_workspace_path.as_ref() {
+    if let Some(workspace) = initial_workspace.as_ref() {
         if let Err(error) = openbitfun_core::plugin_host::ensure_configured_plugin_instance(
             openbitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
-            &initial_workspace
-                .as_ref()
-                .expect("workspace path has a record")
-                .id,
+            &workspace.id,
         )
         .await
         {
             openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                 "server workspace activation",
-                initial_workspace.as_ref().map(|record| record.id.as_str()),
+                Some(workspace.id.as_str()),
                 error,
             )
             .await;
         }
     }
+    let initial_workspace_id = initial_workspace
+        .as_ref()
+        .map(|workspace| workspace.id.clone());
 
     let state = Arc::new(ServerAppState {
         ai_client_factory,
         workspace_service,
-        workspace_path: Arc::new(RwLock::new(initial_workspace_path)),
+        initial_workspace,
+        workspace_id: Arc::new(RwLock::new(initial_workspace_id)),
         config_service,
         filesystem_service,
         agent_registry,

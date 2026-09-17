@@ -229,6 +229,7 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
 
                 RemoteResponse::DeviceInfo {
                     device_name: None,
+                    workspace_id: workspace.as_ref().map(|facts| facts.workspace_id.clone()),
                     workspace_path: workspace.as_ref().map(|facts| facts.path.clone()),
                     workspace_kind: workspace
                         .as_ref()

@@ -666,7 +666,6 @@ Usage:
                         .as_ref()
                         .map(|path| path.to_string_lossy().to_string())
                         .unwrap_or_else(|| request.repo_root.to_string_lossy().to_string());
-                    let repo_root = request.repo_root.to_string_lossy().to_string();
                     let workspace_id = context.workspace.as_ref()
                         .and_then(|workspace| workspace.workspace_id.as_deref())
                         .ok_or_else(|| OpenBitFunError::tool("Remote search requires a workspace ID"))?;

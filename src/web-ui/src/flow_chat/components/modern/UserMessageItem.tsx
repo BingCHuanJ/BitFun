@@ -83,6 +83,7 @@ function buildPresentationRerunPayload(presentation: ComposerPresentation): {
     .join('\n');
   const sessionReferences = composerPresentationSessionReferences(presentation).map(context => ({
     sessionId: context.sessionId,
+    ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
     workspacePath: context.workspacePath,
     remoteConnectionId: context.remoteConnectionId,
     remoteSshHost: context.remoteSshHost,

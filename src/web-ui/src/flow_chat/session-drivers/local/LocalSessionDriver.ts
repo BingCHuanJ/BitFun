@@ -1,4 +1,4 @@
-import { requireSessionWorkspaceId } from '../../utils/sessionWorkspace';
+import { requireSessionWorkspaceId, sessionWorkspaceId } from '../../utils/sessionWorkspace';
 /**
  * Local session driver: the default flavor backed by this machine's (or the
  * attached peer's) agent runtime via `agentAPI`.
@@ -196,6 +196,7 @@ export const localSessionDriver: SessionDriver = {
     const updatedTitle = await agentAPI.updateSessionTitle({
       sessionId,
       title,
+      workspaceId: sessionWorkspaceId(session),
       workspacePath: sessionProjectWorkspacePath(session),
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
@@ -254,6 +255,7 @@ export const localSessionDriver: SessionDriver = {
     }
     await agentAPI.compactSession({
       sessionId,
+      workspaceId: sessionWorkspaceId(session),
       workspacePath: session.workspacePath,
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
@@ -391,13 +393,14 @@ export const localSessionDriver: SessionDriver = {
         log.info('Materializing requested worktree after prompt submission', {
           sessionId,
           enabled: materialization.enabled,
+          projectWorkspaceId: materialization.projectWorkspaceId,
           projectWorkspacePath: materialization.projectWorkspacePath,
         });
         const result = await worktreeAPI.bindSession(
           sessionId,
           materialization.enabled,
           globalThis.crypto?.randomUUID?.() ?? `worktree-first-turn-${Date.now()}`,
-          materialization.projectWorkspacePath,
+          materialization,
         );
         surfaceScope.assertCurrent('bind session worktree');
         context.flowChatStore.updateSessionExecutionTarget(sessionId, {
@@ -432,6 +435,7 @@ export const localSessionDriver: SessionDriver = {
     context.contentBuffers.set(sessionId, new Map());
     context.activeTextItems.set(sessionId, new Map());
 
+    const workspaceId = sessionWorkspaceId(updatedSession);
     const workspacePath = updatedSession.workspacePath;
     const projectWorkspacePath = sessionProjectWorkspacePath(updatedSession);
 
@@ -443,6 +447,7 @@ export const localSessionDriver: SessionDriver = {
         userInput: message,
         originalUserInput: displayMessage || message,
         turnId: dialogTurnId,
+        workspaceId,
         workspacePath,
         imageContexts: options?.imageContexts,
         userMessageMetadata: options?.userMessageMetadata,
@@ -461,6 +466,7 @@ export const localSessionDriver: SessionDriver = {
           originalUserInput: displayMessage || message,
           turnId: dialogTurnId,
           agentType: currentAgentType,
+          workspaceId,
           workspacePath,
           projectWorkspacePath,
           remoteConnectionId: updatedSession.remoteConnectionId,
@@ -495,6 +501,7 @@ export const localSessionDriver: SessionDriver = {
             originalUserInput: displayMessage || message,
             turnId: dialogTurnId,
             agentType: currentAgentType,
+            workspaceId,
             workspacePath,
             projectWorkspacePath,
             remoteConnectionId: updatedSession.remoteConnectionId,

@@ -252,6 +252,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     execution: Default::default(),
                     agent_type: job.request.agent_type.clone(),
                     workspace_path: Some(workspace_path),
+                    workspace_id: Some(runtime.workspace().id.clone()),
                     remote_connection_id: None,
                     remote_ssh_host: None,
                     policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),

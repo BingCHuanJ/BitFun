@@ -204,6 +204,17 @@ pub(super) async fn resolved_session_storage_scope(
         .map_err(|error| format!("Failed to resolve session storage path: {error}"))
 }
 
+/// Whether the controller named the session's workspace, by ID or by the
+/// legacy path projection. Only such requests can (re)load the session.
+fn has_session_workspace_scope(request: &Value) -> bool {
+    ["workspaceId", "workspacePath"].iter().any(|key| {
+        request
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty())
+    })
+}
+
 fn validated_session_id(request: &Value) -> Result<String, String> {
     let session_id = get_string(request, "sessionId")?;
     openbitfun_agent_runtime::session_control::validate_session_id(&session_id)?;
@@ -567,9 +578,17 @@ pub(crate) async fn create_session(state: &PeerHostState, args: &Value) -> Resul
     let request = request_value(args);
     let session_name = get_string(request, "sessionName")?;
     let agent_type = get_string(request, "agentType")?;
-    let workspace_path = get_string(request, "workspacePath")?;
     let session_id = optional_string(request, "sessionId");
-    let workspace_id = optional_string(request, "workspaceId");
+    let workspace_id = optional_string(request, "workspaceId")
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty());
+    // The workspace ID selects the owning workspace; the path is only the
+    // legacy projection a pre-ID controller sends, so it is required only when
+    // no ID names the workspace.
+    let workspace_path = match workspace_id.as_deref() {
+        Some(_) => optional_string(request, "workspacePath"),
+        None => Some(get_string(request, "workspacePath")?),
+    };
     let remote_connection_id = optional_string(request, "remoteConnectionId");
     let remote_ssh_host = optional_string(request, "remoteSshHost");
 
@@ -590,7 +609,7 @@ pub(crate) async fn create_session(state: &PeerHostState, args: &Value) -> Resul
         session_name,
         agent_type,
         agent_route_key: None,
-        workspace_path: Some(workspace_path),
+        workspace_path,
         project_workspace_path: None,
         execution_target: None,
         workspace_id,
@@ -702,7 +721,7 @@ pub(crate) async fn get_session_thread_goal(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let storage_request = if optional_string(request, "workspacePath").is_some() {
+    let storage_request = if has_session_workspace_scope(request) {
         session_storage_request(state, request).await?
     } else {
         SessionStoragePathRequest {
@@ -737,11 +756,7 @@ pub(crate) async fn update_session_model(
     let reasoning_preset = optional_string(request, "reasoningPreset")
         .map(|preset| preset.trim().to_string())
         .filter(|preset| !preset.is_empty());
-    if request
-        .get("workspacePath")
-        .and_then(Value::as_str)
-        .is_some_and(|path| !path.trim().is_empty())
-    {
+    if has_session_workspace_scope(request) {
         ensure_coordinator_session(state, args).await?;
     }
     state
@@ -765,11 +780,7 @@ pub(crate) async fn update_session_mode(
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
     let mode_id = get_string(request, "modeId")?;
-    if request
-        .get("workspacePath")
-        .and_then(Value::as_str)
-        .is_some_and(|path| !path.trim().is_empty())
-    {
+    if has_session_workspace_scope(request) {
         ensure_coordinator_session(state, args).await?;
     }
     state
@@ -790,7 +801,7 @@ pub(crate) async fn ensure_coordinator_session(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let scope = ensure_session_workspace_runtime_ownership(state, request).await?;
+    ensure_session_workspace_runtime_ownership(state, request).await?;
     if state
         .compatibility
         .is_session_loaded_in_memory(&session_id)
@@ -817,21 +828,17 @@ pub(crate) async fn get_available_modes(
     let workspace_id = super::external_sources::workspace_id(state, request)
         .await
         .map_err(|error| error.encode())?;
-    let workspace = match workspace_id.as_deref() {
-        Some(id) => Some(
-            state
-                .workspace_service
-                .require_workspace(id)
-                .await
-                .map_err(|error| error.to_string())?
-                .root_path,
-        ),
-        None => None,
-    };
-    if let Some(workspace) = workspace.as_deref() {
+    // Plugin and external-source snapshots are keyed by the workspace ID; the
+    // record lookup only proves the ID names an open workspace on this host.
+    if let Some(id) = workspace_id.as_deref() {
+        state
+            .workspace_service
+            .require_workspace(id)
+            .await
+            .map_err(|error| error.to_string())?;
         if let Err(error) = openbitfun_core::plugin_host::ensure_configured_plugin_instance(
             crate::PLUGIN_HOST_LAUNCH_POLICY,
-            workspace_id.as_deref().ok_or("Workspace ID is required")?,
+            id,
         )
         .await
         {

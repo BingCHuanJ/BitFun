@@ -21,13 +21,6 @@ export function isTerminalPathInside(path: string, root: string, remote = false)
   return candidate === parent || candidate.startsWith(parent === '/' ? '/' : `${parent}/`);
 }
 
-export function terminalMatchesEnvironment(session: SessionResponse, scope: TerminalWorkspaceScope): boolean {
-  const remote = session.shellType === 'Remote' || Boolean(session.connectionId);
-  return scope.isRemote
-    ? remote && Boolean(scope.connectionId) && session.connectionId === scope.connectionId
-    : !remote;
-}
-
 /** Workspace ownership is independent of the terminal's mutable cwd. */
 export function terminalBelongsToWorkspace(
   session: SessionResponse,

@@ -46,6 +46,7 @@ export async function openAgentCompanionSession(sessionId: string): Promise<bool
     openBtwSessionInAuxPane({
       childSessionId: sessionId,
       parentSessionId,
+      workspaceId: session.workspaceId ?? workspaceId,
       workspacePath: session.workspacePath,
     });
     return true;

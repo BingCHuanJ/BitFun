@@ -1057,10 +1057,7 @@ async fn run_interactive(
         )
     };
     let agent = if let Some(runtime) = &runtime {
-        Arc::new(agent::runtime_client::CliAgentRuntimeClient::new(
-            runtime,
-            Some(workspace_path.clone()),
-        ))
+        Arc::new(agent::runtime_client::CliAgentRuntimeClient::new(runtime))
     } else {
         let client = shared_runtime::connect_or_start(&workspace_path).await?;
         client.health().await?;
@@ -1672,10 +1669,7 @@ async fn run_interactive_with_session(
 
     let workspace_path = runtime.workspace_root().to_path_buf();
     let workspace = Some(workspace_path.to_string_lossy().to_string());
-    let agent = Arc::new(agent::runtime_client::CliAgentRuntimeClient::new(
-        &runtime,
-        Some(workspace_path),
-    ));
+    let agent = Arc::new(agent::runtime_client::CliAgentRuntimeClient::new(&runtime));
     let sessions = agent.list_sessions().await?;
     let agent_type = sessions
         .iter()

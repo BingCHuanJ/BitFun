@@ -24,6 +24,9 @@ vi.mock('@/infrastructure/api', () => ({
     resolveRevision: (...args: any[]) => mockGitResolveRevision(...args),
   },
   workspaceAPI: {
+    // Untracked file IO is routed by the owning workspace ID.
+    readWorkspaceFile: (...args: any[]) => mockWorkspaceReadFile(...args),
+    getWorkspaceFileMetadata: (...args: any[]) => mockWorkspaceGetFileMetadata(...args),
     readFileContent: (...args: any[]) => mockWorkspaceReadFile(...args),
     getFileMetadata: (...args: any[]) => mockWorkspaceGetFileMetadata(...args),
   },
@@ -498,6 +501,7 @@ describe('Deep Review target resolver', () => {
     );
 
     expect(mockWorkspaceReadFile).toHaveBeenCalledWith(
+      'review-workspace',
       'D:/workspace/project/src/new.ts',
     );
     expect(stats).toEqual({
@@ -660,9 +664,10 @@ describe('Deep Review target resolver', () => {
       reviewSafe: true,
     });
     expect(mockWorkspaceGetFileMetadata).toHaveBeenCalledWith(
+      'review-workspace',
       `/workspace/${literalPath}`,
     );
-    expect(mockWorkspaceReadFile).toHaveBeenCalledWith(`/workspace/${literalPath}`);
+    expect(mockWorkspaceReadFile).toHaveBeenCalledWith('review-workspace', `/workspace/${literalPath}`);
     expect(snapshot.targetEvidence.files[0].path).toBe(literalPath);
   });
 

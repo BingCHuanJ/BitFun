@@ -171,20 +171,22 @@ function detailPageInfo(pagination: ReviewPlatformPagination, itemCount: number)
   };
 }
 
-function snapshotCacheKey(workspacePath: string, remoteId: string | null, page: number, perPage: number, mode: 'list' | 'context', state: ListStateFilter): string {
-  return `${workspacePath}::${remoteId ?? 'default'}::${page}::${perPage}::${mode}::${state}`;
+// Caches are keyed by the owning workspace ID, never by path: two workspaces
+// (for example a local checkout and a remote one) may share a root path.
+function snapshotCacheKey(workspaceId: string, remoteId: string | null, page: number, perPage: number, mode: 'list' | 'context', state: ListStateFilter): string {
+  return `${workspaceId}::${remoteId ?? 'default'}::${page}::${perPage}::${mode}::${state}`;
 }
 
-function detailCacheKey(workspacePath: string, remoteId: string, pullRequestId: string): string {
-  return `${workspacePath}::${remoteId}::${pullRequestId}`;
+function detailCacheKey(workspaceId: string, remoteId: string, pullRequestId: string): string {
+  return `${workspaceId}::${remoteId}::${pullRequestId}`;
 }
 
-function detailPageCacheKey(workspacePath: string, remoteId: string, pullRequestId: string, section: ReviewPlatformDetailSection, page: number, perPage: number): string {
-  return `${workspacePath}::${remoteId}::${pullRequestId}::${section}::${page}::${perPage}`;
+function detailPageCacheKey(workspaceId: string, remoteId: string, pullRequestId: string, section: ReviewPlatformDetailSection, page: number, perPage: number): string {
+  return `${workspaceId}::${remoteId}::${pullRequestId}::${section}::${page}::${perPage}`;
 }
 
-function clearDetailPageCacheForPullRequest(workspacePath: string, remoteId: string, pullRequestId: string): void {
-  const prefix = `${workspacePath}::${remoteId}::${pullRequestId}::`;
+function clearDetailPageCacheForPullRequest(workspaceId: string, remoteId: string, pullRequestId: string): void {
+  const prefix = `${workspaceId}::${remoteId}::${pullRequestId}::`;
   for (const key of detailPageCache.keys()) {
     if (key.startsWith(prefix)) {
       detailPageCache.delete(key);
@@ -218,23 +220,37 @@ function mergeDetailPage(
   };
 }
 
-function remotePreferenceKey(workspacePath: string): string {
+function remotePreferenceKey(workspaceId: string): string {
+  return `${REMOTE_STORAGE_PREFIX}id:${workspaceId}`;
+}
+
+/** Pre-ID installs stored the preference under the workspace path. */
+function legacyRemotePreferenceKey(workspacePath: string): string {
   return `${REMOTE_STORAGE_PREFIX}${workspacePath}`;
 }
 
-function readRememberedRemote(workspacePath?: string): string | null {
-  if (!workspacePath || typeof window === 'undefined') return null;
+function readRememberedRemote(workspaceId: string, workspacePath?: string): string | null {
+  if (!workspaceId || typeof window === 'undefined') return null;
   try {
-    return window.localStorage.getItem(remotePreferenceKey(workspacePath));
+    const remembered = window.localStorage.getItem(remotePreferenceKey(workspaceId));
+    if (remembered !== null) return remembered;
+    if (!workspacePath) return null;
+    // Migrate the legacy path-keyed preference onto the workspace ID.
+    const legacy = window.localStorage.getItem(legacyRemotePreferenceKey(workspacePath));
+    if (legacy !== null) {
+      window.localStorage.setItem(remotePreferenceKey(workspaceId), legacy);
+      window.localStorage.removeItem(legacyRemotePreferenceKey(workspacePath));
+    }
+    return legacy;
   } catch {
     return null;
   }
 }
 
-function rememberRemote(workspacePath: string | undefined, remoteId: string | null): void {
-  if (!workspacePath || typeof window === 'undefined') return;
+function rememberRemote(workspaceId: string, remoteId: string | null): void {
+  if (!workspaceId || typeof window === 'undefined') return;
   try {
-    const key = remotePreferenceKey(workspacePath);
+    const key = remotePreferenceKey(workspaceId);
     if (remoteId) {
       window.localStorage.setItem(key, remoteId);
     } else {
@@ -798,13 +814,13 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     const requestedRemoteId = nextRemoteId !== undefined
       ? nextRemoteId
       : detailOnly
-        ? readRememberedRemote(workspacePath)
+        ? readRememberedRemote(workspaceId, workspacePath)
         : null;
     const requestedPage = Math.max(1, options?.page ?? 1);
     const requestedState = detailOnly ? 'all' : options?.state ?? serverStateFilter.current;
     const snapshotMode = detailOnly ? 'context' : 'list';
     setListRemoteId(requestedRemoteId ?? null);
-    const requestedCacheKey = snapshotCacheKey(workspacePath, requestedRemoteId ?? null, requestedPage, PR_PAGE_SIZE, snapshotMode, requestedState);
+    const requestedCacheKey = snapshotCacheKey(workspaceId, requestedRemoteId ?? null, requestedPage, PR_PAGE_SIZE, snapshotMode, requestedState);
     const cached = snapshotCache.get(requestedCacheKey);
     const force = options?.force === true;
 
@@ -833,10 +849,11 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setLoading(true);
     setError(null);
     try {
+      const repository = { workspaceId, repositoryPath: workspacePath };
       const fetchSnapshot = () => detailOnly
-        ? reviewPlatformAPI.getWorkspaceContext(workspacePath, requestedRemoteId ?? null)
+        ? reviewPlatformAPI.getWorkspaceContext(repository, requestedRemoteId ?? null)
         : reviewPlatformAPI.getWorkspaceSnapshot(
-            workspacePath,
+            repository,
             requestedRemoteId ?? null,
             requestedPage,
             PR_PAGE_SIZE,
@@ -850,7 +867,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       const remoteId = next.selectedRemoteId ?? next.remotes[0]?.id ?? null;
       setSelectedRemoteId(remoteId);
       setPageIndex(Math.max(0, (next.pagination.page || requestedPage) - 1));
-      rememberRemote(workspacePath, remoteId);
+      rememberRemote(workspaceId, remoteId);
       setSelectedPrId(detailOnly ? null : next.pullRequests[0]?.id ?? null);
       setDetail(null);
       setVerifiedDetailKey(null);
@@ -858,7 +875,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       const entry = { snapshot: next, fetchedAt: Date.now() };
       snapshotCache.set(requestedCacheKey, entry);
       if (remoteId) {
-        snapshotCache.set(snapshotCacheKey(workspacePath, remoteId, requestedPage, PR_PAGE_SIZE, snapshotMode, requestedState), entry);
+        snapshotCache.set(snapshotCacheKey(workspaceId, remoteId, requestedPage, PR_PAGE_SIZE, snapshotMode, requestedState), entry);
       }
       setSnapshotCacheState('cached');
     } catch (err) {
@@ -871,13 +888,13 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         setLoading(false);
       }
     }
-  }, [detailOnly, workspacePath]);
+  }, [detailOnly, workspacePath, workspaceId]);
 
   const loadDetail = useCallback(async (repo: ReviewPlatformRepositoryRef | null, remoteId: string, pullRequestId: string, options?: { force?: boolean }) => {
     const requestSeq = ++detailRequestSeq.current;
     detailSectionRequestSeq.current += 1;
     const repositoryPath = workspacePath || repo?.workspacePath || '';
-    const cacheKey = detailCacheKey(repositoryPath, remoteId, pullRequestId);
+    const cacheKey = detailCacheKey(workspaceId, remoteId, pullRequestId);
     const cached = detailCache.get(cacheKey);
     const force = options?.force === true;
 
@@ -885,7 +902,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setVerifiedDetailKey(null);
     if (force) {
       detailCache.delete(cacheKey);
-      clearDetailPageCacheForPullRequest(repositoryPath, remoteId, pullRequestId);
+      clearDetailPageCacheForPullRequest(workspaceId, remoteId, pullRequestId);
     }
 
     if (cached && !force) {
@@ -897,6 +914,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setDetailLoading(true);
     try {
       const nextDetail = await reviewPlatformAPI.getPullRequestDetailPage({
+        workspaceId,
         repositoryPath,
         remoteId,
         pullRequestId,
@@ -906,7 +924,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       });
       if (detailRequestSeq.current !== requestSeq) return;
       if (cached && !samePullRequestRevisions(cached.detail, nextDetail)) {
-        clearDetailPageCacheForPullRequest(repositoryPath, remoteId, pullRequestId);
+        clearDetailPageCacheForPullRequest(workspaceId, remoteId, pullRequestId);
       }
       setDetail((current) => mergeRevalidatedPullRequestOverview(current, nextDetail));
       detailCache.set(cacheKey, { detail: nextDetail, fetchedAt: Date.now() });
@@ -923,7 +941,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         setDetailLoading(false);
       }
     }
-  }, [workspacePath]);
+  }, [workspacePath, workspaceId]);
 
   const applySectionPagination = useCallback((section: Exclude<ReviewPlatformDetailSection, 'overview'>, pagination: ReviewPlatformPagination) => {
     if (section === 'ci') {
@@ -948,8 +966,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   ) => {
     const repositoryPath = workspacePath || repo?.workspacePath || '';
     const page = Math.max(1, pageIndex + 1);
-    const cacheKey = detailPageCacheKey(repositoryPath, remoteId, pullRequestId, section, page, perPage);
-    const overviewCacheKey = detailCacheKey(repositoryPath, remoteId, pullRequestId);
+    const cacheKey = detailPageCacheKey(workspaceId, remoteId, pullRequestId, section, page, perPage);
+    const overviewCacheKey = detailCacheKey(workspaceId, remoteId, pullRequestId);
     const cached = detailPageCache.get(cacheKey);
     const force = options?.force === true;
     const matchesVerifiedOverview = (pageDetail: ReviewPlatformPullRequestDetail) => {
@@ -959,7 +977,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
     if (cached && !force) {
       if (!matchesVerifiedOverview(cached.detail)) {
-        clearDetailPageCacheForPullRequest(repositoryPath, remoteId, pullRequestId);
+        clearDetailPageCacheForPullRequest(workspaceId, remoteId, pullRequestId);
         void loadDetail(repo, remoteId, pullRequestId, { force: true });
         return;
       }
@@ -973,6 +991,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setDetailError(null);
     try {
       const nextPage = await reviewPlatformAPI.getPullRequestDetailPage({
+        workspaceId,
         repositoryPath,
         remoteId,
         pullRequestId,
@@ -982,7 +1001,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       });
       if (detailSectionRequestSeq.current !== requestSeq) return;
       if (!matchesVerifiedOverview(nextPage)) {
-        clearDetailPageCacheForPullRequest(repositoryPath, remoteId, pullRequestId);
+        clearDetailPageCacheForPullRequest(workspaceId, remoteId, pullRequestId);
         void loadDetail(repo, remoteId, pullRequestId, { force: true });
         return;
       }
@@ -998,7 +1017,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         setDetailLoading(false);
       }
     }
-  }, [applySectionPagination, loadDetail, workspacePath]);
+  }, [applySectionPagination, loadDetail, workspacePath, workspaceId]);
 
   useEffect(() => {
     serverStateFilter.current = 'all';
@@ -1055,7 +1074,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
     if (nextRemoteId && selectedRemoteId !== nextRemoteId) {
       setSelectedRemoteId(nextRemoteId);
-      rememberRemote(workspacePath, nextRemoteId);
+      rememberRemote(workspaceId, nextRemoteId);
     }
 
     if (selectedPrId !== targetPullRequestId) {
@@ -1072,6 +1091,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     snapshot.remotes,
     snapshot.selectedRemoteId,
     workspacePath,
+    workspaceId,
   ]);
 
   useEffect(() => {
@@ -1098,7 +1118,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
   useEffect(() => {
     if (!hasDetail || !selectedRemoteId || !selectedPrId || (!repository && !workspacePath)) return;
-    if (verifiedDetailKey !== detailCacheKey(workspacePath || repository?.workspacePath || '', selectedRemoteId, selectedPrId)) return;
+    if (verifiedDetailKey !== detailCacheKey(workspaceId, selectedRemoteId, selectedPrId)) return;
     let disposed = false;
     if (activeTab === 'overview') {
       void (async () => {
@@ -1131,6 +1151,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     selectedRemoteId,
     verifiedDetailKey,
     workspacePath,
+    workspaceId,
   ]);
 
   const visiblePullRequests = useMemo(() => {
@@ -1154,7 +1175,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       ? flowState.sessions.get(flowState.activeSessionId)
       : undefined;
     const sameWorkspace = (session?: Session) =>
-      Boolean(session && (!workspacePath || normalizePath(session.workspacePath ?? '') === normalizePath(workspacePath)));
+      Boolean(session && session.workspaceId === workspaceId);
 
     if (activeSession?.sessionKind === 'normal' && sameWorkspace(activeSession)) {
       return activeSession;
@@ -1174,11 +1195,11 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     return sessions
       .filter(session => session.sessionKind === 'normal' && sameWorkspace(session))
       .sort((left, right) => (right.lastActiveAt || right.updatedAt || right.createdAt) - (left.lastActiveAt || left.updatedAt || left.createdAt))[0];
-  }, [flowState.activeSessionId, flowState.sessions, workspacePath]);
+  }, [flowState.activeSessionId, flowState.sessions, workspaceId]);
 
   const currentPullRequest = detail ?? selectedPr;
   const selectedDetailKey = selectedRemoteId && selectedPrId
-    ? detailCacheKey(workspacePath || repository?.workspacePath || '', selectedRemoteId, selectedPrId)
+    ? detailCacheKey(workspaceId, selectedRemoteId, selectedPrId)
     : null;
   const currentRevisionsVerified = Boolean(
     selectedDetailKey && verifiedDetailKey === selectedDetailKey,
@@ -1293,10 +1314,10 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setStateFilter('all');
     serverStateFilter.current = 'all';
     setPageIndex(0);
-    rememberRemote(workspacePath, remoteId || null);
+    rememberRemote(workspaceId, remoteId || null);
     setSnapshot(emptySnapshot());
     void loadSnapshot(remoteId || null, { page: 1, state: 'all' });
-  }, [loadSnapshot, workspacePath]);
+  }, [loadSnapshot, workspaceId]);
 
   const handleStateChange = useCallback((state: ListStateFilter) => {
     setStateFilter(state);
@@ -1417,6 +1438,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
     try {
       const nextLog = await reviewPlatformAPI.getPullRequestCiLog({
+        workspaceId,
         repositoryPath,
         remoteId: selectedRemoteId,
         pullRequestId: selectedPrId,
@@ -1437,7 +1459,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         return next;
       });
     }
-  }, [ciLogById, repository, selectedPrId, selectedRemote, selectedRemoteId, workspacePath]);
+  }, [ciLogById, repository, selectedPrId, selectedRemote, selectedRemoteId, workspacePath, workspaceId]);
 
   const toggleCiExpanded = useCallback((item: ReviewPlatformCiItem) => {
     if (expandedCiItemIds.has(item.id)) {
@@ -1523,7 +1545,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     let ownsSharedLaunch = false;
     try {
       const reviewTarget = await reviewPlatformAPI.getPullRequestReviewTarget(
-        workspacePath,
+        { workspaceId, repositoryPath: workspacePath },
         selectedRemote.id,
         selectedPr.id,
       );
@@ -1551,7 +1573,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         baseRevision: freshPullRequest.baseRevision,
         headRevision: freshPullRequest.headRevision,
       });
-      const cacheKey = detailCacheKey(workspacePath, selectedRemote.id, selectedPr.id);
+      const cacheKey = detailCacheKey(workspaceId, selectedRemote.id, selectedPr.id);
       setDetail((current) => current ? { ...current, ...reviewTarget.pullRequest } : current);
       setSnapshot((current) => ({
         ...current,
@@ -1629,6 +1651,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     selectedPr,
     selectedRemote,
     workspacePath,
+    workspaceId,
   ]);
 
   const handleAddFileDiffContext = useCallback(async (file: ReviewPlatformFile) => {
@@ -2063,7 +2086,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   ? snapshot.remotes.find(remote => remote.id === pr.providerId)
                   : selectedRemote;
                 const cachedDetail = pullRequestRemote
-                  ? detailCache.get(detailCacheKey(workspacePath || repository?.workspacePath || '', pullRequestRemote.id, pr.id))
+                  ? detailCache.get(detailCacheKey(workspaceId, pullRequestRemote.id, pr.id))
                   : undefined;
                 const statistics = resolvedPullRequestStatistics(pr, cachedDetail?.detail);
                 const lineStats = resolvedLineStats(statistics);
@@ -2079,7 +2102,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     onClick={() => {
                       if (pr.providerId && pr.providerId !== selectedRemoteId) {
                         setSelectedRemoteId(pr.providerId);
-                        rememberRemote(workspacePath, pr.providerId);
+                        rememberRemote(workspaceId, pr.providerId);
                       }
                       setSelectedPrId(pr.id);
                     }}

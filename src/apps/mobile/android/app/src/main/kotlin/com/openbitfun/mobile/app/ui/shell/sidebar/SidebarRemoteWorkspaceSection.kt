@@ -49,6 +49,7 @@ import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
 import com.openbitfun.mobile.core.feature.connection.ConnectionStatusPresenter
 import com.openbitfun.mobile.core.feature.connection.RemoteControlSource
 import com.openbitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
+import com.openbitfun.mobile.core.feature.shell.RemoteSidebarWorkspaceRow
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 import com.openbitfun.mobile.app.ui.theme.openBitFunColors
@@ -78,8 +79,9 @@ internal fun SidebarRemoteWorkspaceSection(
     onSelectDevice: (String) -> Unit,
     onOpenSession: (String) -> Unit,
     onOpenActions: (RemoteSidebarSessionRow, IntRect) -> Unit,
-    onCreateInWorkspace: (String, String?, String?, String) -> Unit,
-    onOpenWorkspace: (String) -> Unit,
+    /** The row carries the workspace identity (ID first); the agent type follows. */
+    onCreateInWorkspace: (RemoteSidebarWorkspaceRow, String) -> Unit,
+    onOpenWorkspace: (RemoteSidebarWorkspaceRow) -> Unit,
     onAddWorkspace: (() -> Unit)? = null,
     onWorkspaceTool: (String, String?, Boolean) -> Unit,
 ) {
@@ -227,8 +229,9 @@ private fun SidebarActiveDeviceBody(
     onOpenSession: (String) -> Unit,
     onOpenActions: (RemoteSidebarSessionRow, IntRect) -> Unit,
     canActOnSessions: Boolean,
-    onCreateInWorkspace: (String, String?, String?, String) -> Unit,
-    onOpenWorkspace: (String) -> Unit,
+    /** The row carries the workspace identity (ID first); the agent type follows. */
+    onCreateInWorkspace: (RemoteSidebarWorkspaceRow, String) -> Unit,
+    onOpenWorkspace: (RemoteSidebarWorkspaceRow) -> Unit,
     onAddWorkspace: (() -> Unit)? = null,
     onWorkspaceTool: (String, String?, Boolean) -> Unit,
 ) {
@@ -305,7 +308,7 @@ private fun SidebarActiveDeviceBody(
                                     collapsedPaths + identityKey
                                 }
                             },
-                            onLongClick = { onOpenWorkspace(path) },
+                            onLongClick = { onOpenWorkspace(entry) },
                         )
                         .semantics(mergeDescendants = true) {
                             contentDescription = entry.name.ifBlank { path.substringAfterLast('/') }
@@ -346,7 +349,7 @@ private fun SidebarActiveDeviceBody(
                         expanded = createMenuOpen,
                         onToggle = { createMenuOpen = !createMenuOpen },
                         onDismiss = { createMenuOpen = false },
-                        onCreateAgent = { agent -> createMenuOpen = false; onCreateInWorkspace(path, entry.remoteConnectionId, entry.remoteSshHost, agent) },
+                        onCreateAgent = { agent -> createMenuOpen = false; onCreateInWorkspace(entry, agent) },
                     )
                     Icon(
                         painterResource(

@@ -132,6 +132,7 @@ export class FlowChatManager {
       userCancelledSessionIds: new Set(),
       pendingHistoryFenceSessions: new Set(),
       handledTerminalTurnEvents: new Set(),
+      currentWorkspaceId: null,
       currentWorkspacePath: null,
       ensureLiveSubscription: () => this.ensureEventListeners(),
     };
@@ -329,6 +330,7 @@ export class FlowChatManager {
           // not create one". Reporting history we cannot select would leave the
           // surface with no active session and no new one, so report no history
           // and let the caller create against the live workspace instead.
+          this.context.currentWorkspaceId = workspaceId;
           this.context.currentWorkspacePath = workspacePath;
           clearUnavailableSelection();
           log.warn('Session metadata reported history with nothing selectable for this workspace', {
@@ -361,6 +363,7 @@ export class FlowChatManager {
           currentState.activeSessionId !== activeSessionIdAtAutoSelectStart &&
           currentState.activeSessionId !== null;
         if (currentActiveSessionBelongsToWorkspace) {
+          this.context.currentWorkspaceId = workspaceId;
           this.context.currentWorkspacePath = workspacePath;
           return hasHistoricalSessions;
         }
@@ -372,6 +375,7 @@ export class FlowChatManager {
         // the old catalog entry after that mutation removed it.
         const candidate = currentState.sessions.get(latestSession.sessionId);
         if (!candidate || !sessionMatchesWorkspace(candidate) || !isAutoSelectableWorkspaceSession(candidate)) {
+          this.context.currentWorkspaceId = workspaceId;
           this.context.currentWorkspacePath = workspacePath;
           clearUnavailableSelection();
           return false;
@@ -381,6 +385,7 @@ export class FlowChatManager {
       }
 
       if (isCurrentInitializationRequest()) {
+        this.context.currentWorkspaceId = workspaceId;
         this.context.currentWorkspacePath = workspacePath;
         if (!hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
           clearUnavailableSelection();
@@ -526,6 +531,7 @@ export class FlowChatManager {
     this.latestInitializationRequestKey = null;
     // Drop controller-local path so createChatSession cannot reuse a stale
     // Windows/Mac path against the peer host after the surface switch.
+    this.context.currentWorkspaceId = null;
     this.context.currentWorkspacePath = null;
     const detachedSessionIds = Array.from(
       this.context.flowChatStore.getState().sessions.keys(),
@@ -598,6 +604,9 @@ export class FlowChatManager {
   async createAcpChatSession(clientId: string, config: SessionConfig = {}): Promise<string> {
     const surfaceScope = getActiveSurfaceScope();
     const titleDescriptor = createDefaultSessionTitleDescriptor((key, options) => i18nService.t(key, options));
+    // The workspace ID is the session's identity; the path is the ACP
+    // client's execution root and is only kept as an IO projection.
+    const workspaceId = requireSessionWorkspaceId({ config });
     const workspacePath =
       config.workspacePath?.trim() ||
       this.context.currentWorkspacePath?.trim();
@@ -613,6 +622,7 @@ export class FlowChatManager {
     try {
       const response = await ACPClientAPI.createFlowSession({
         clientId,
+        workspaceId,
         workspacePath,
         remoteConnectionId: config.remoteConnectionId,
         remoteSshHost: config.remoteSshHost,
@@ -621,7 +631,7 @@ export class FlowChatManager {
 
       surfaceScope.assertCurrent('create ACP backend session');
       const createdTitleDescriptor = await initializeSessionTitleMetadata(
-        response.sessionId, titleDescriptor, requireSessionWorkspaceId({ config }),
+        response.sessionId, titleDescriptor, workspaceId,
         surfaceScope,
       );
 

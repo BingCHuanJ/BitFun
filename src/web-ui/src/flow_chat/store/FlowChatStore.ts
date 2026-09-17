@@ -3305,8 +3305,11 @@ export class FlowChatStore {
         cacheHit: true, range, catalog };
     }
 
+    // The owning workspace ID selects the session store; the project root and
+    // SSH facts stay only as the upgrade projection for older hosts.
+    const workspaceId = session.workspaceId ?? session.config.workspaceId;
     const workspacePath = sessionProjectWorkspacePath(session);
-    if (!workspacePath) {
+    if (!workspaceId && !workspacePath) {
       return {
         status: 'not-found',
         sessionId,
@@ -3333,7 +3336,8 @@ export class FlowChatStore {
     );
     return this.loadSessionTurnWindowAttempt({
       sessionId,
-      workspacePath,
+      workspaceId,
+      workspacePath: workspacePath ?? '',
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
       includeInternal:
@@ -3353,6 +3357,7 @@ export class FlowChatStore {
 
   private async loadSessionTurnWindowAttempt(request: {
     sessionId: string;
+    workspaceId?: string;
     workspacePath: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;
@@ -3398,9 +3403,10 @@ export class FlowChatStore {
 
     const requestKey = this.surfaceKey(
       request.sessionId,
-      request.workspacePath,
-      request.remoteConnectionId ?? '',
-      request.remoteSshHost ?? '',
+      request.workspaceId ?? '',
+      request.workspaceId ? '' : request.workspacePath,
+      request.workspaceId ? '' : request.remoteConnectionId ?? '',
+      request.workspaceId ? '' : request.remoteSshHost ?? '',
       request.targetStorageTurnIndex,
       request.catalog.revision,
       request.before,
@@ -3421,6 +3427,7 @@ export class FlowChatStore {
     try {
       response = await this.invokeSessionTurnWindowRequest(requestKey, {
         sessionId: request.sessionId,
+        workspaceId: request.workspaceId,
         workspacePath: request.workspacePath,
         includeInternal: request.includeInternal,
         targetStorageTurnIndex: request.targetStorageTurnIndex,

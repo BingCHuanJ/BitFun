@@ -904,6 +904,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   // session object) keeps the context value referentially stable across
   // streaming flushes, which produce a new session object ~30x/second.
   const activeSessionId = activeSession?.sessionId;
+  const activeSessionWorkspaceId = activeSession?.workspaceId
+    || activeSession?.config?.workspaceId;
   const activeSessionWorkspacePath = activeSession?.workspacePath
     || activeSession?.config?.workspacePath;
   const activeSessionRemoteConnectionId = activeSession?.remoteConnectionId
@@ -944,6 +946,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onToolConfirm: handleToolConfirm,
     onToolReject: handleToolReject,
     sessionId: activeSessionId,
+    workspaceId: activeSessionWorkspaceId,
     workspacePath: activeSessionWorkspacePath,
     remoteConnectionId: activeSessionRemoteConnectionId,
     isHistoricalSession: activeSessionIsHistorical,
@@ -961,6 +964,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     handleToolConfirm,
     handleToolReject,
     activeSessionId,
+    activeSessionWorkspaceId,
     activeSessionWorkspacePath,
     activeSessionRemoteConnectionId,
     activeSessionIsHistorical,
@@ -2413,6 +2417,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     openBtwSessionInAuxPane({
       childSessionId: selection.sessionId,
       parentSessionId: selection.parentSessionId,
+      workspaceId: selection.workspaceId || activeSession.workspaceId || activeSession.config?.workspaceId,
       workspacePath: selection.workspacePath || activeSession.workspacePath,
       sessionKind: 'subagent',
       sessionTitle: selection.displayTitle,
@@ -2724,6 +2729,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
                   <WelcomePanel
                     key={activeSession?.sessionId ?? 'welcome'}
                     sessionMode={activeSession?.mode}
+                    workspaceId={activeSession?.workspaceId || activeSession?.config?.workspaceId}
                     workspacePath={activeSession?.workspacePath}
                     onQuickAction={(command) => {
                       window.dispatchEvent(new CustomEvent('fill-chat-input', {

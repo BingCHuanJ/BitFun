@@ -196,14 +196,32 @@ describe('FlowChatManager initialization', () => {
     storeMocks.saveSessionMetadata.mockResolvedValue(undefined);
     const manager = FlowChatManager.getInstance();
     try {
-      await expect(manager.createAcpChatSession('test-client', { workspacePath: '/repo' })).resolves.toBe('acp-created');
+      await expect(
+        manager.createAcpChatSession('test-client', { workspaceId: 'workspace-1', workspacePath: '/repo' }),
+      ).resolves.toBe('acp-created');
       expect(storeMocks.createAcpSession).toHaveBeenCalledTimes(1);
+      expect(storeMocks.createAcpSession).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: 'test-client', workspaceId: 'workspace-1', workspacePath: '/repo' }),
+      );
       const name = storeMocks.createAcpSession.mock.calls[0][0].sessionName;
       expect(storeMocks.store.createSession).toHaveBeenCalledWith(
-        'acp-created', expect.objectContaining({ agentType: 'acp:test-client', workspacePath: '/repo' }),
+        'acp-created',
+        expect.objectContaining({ agentType: 'acp:test-client', workspaceId: 'workspace-1', workspacePath: '/repo' }),
         undefined, name, 128128, 'acp:test-client', '/repo', undefined, undefined,
         expect.objectContaining({ source: 'i18n', text: name, key: 'flow-chat:session.new', workspaceSessionNumber: 6 }),
       );
+    } finally {
+      manager.destroy();
+    }
+  });
+
+  it('refuses to create an ACP session without a workspace ID', async () => {
+    storeMocks.store = { registerPersistUnreadCompletionCallback: vi.fn(), createSession: vi.fn() };
+    const manager = FlowChatManager.getInstance();
+    try {
+      await expect(manager.createAcpChatSession('test-client', { workspacePath: '/repo' }))
+        .rejects.toThrow('Session workspace ID is unavailable');
+      expect(storeMocks.createAcpSession).not.toHaveBeenCalled();
     } finally {
       manager.destroy();
     }

@@ -123,11 +123,17 @@ export async function writeAllToLocalFile(
   }
 }
 
+export interface PeerFileWorkspaceIdentity {
+  workspace_id: string;
+  workspace_path: string;
+  remote_connection_id?: string;
+}
+
 export async function* readPeerFileChunks(
   adapter: PeerDeviceTransportAdapter,
   sourcePath: string,
   onFileSize: (size: number) => void,
-  identity: {workspace_path: string; remote_connection_id?: string},
+  identity: PeerFileWorkspaceIdentity,
 ): AsyncGenerator<Uint8Array, number> {
   const info = await adapter.requestPeerCommand<PeerFileInfoResponse>({
     cmd: "get_file_info",
@@ -226,12 +232,17 @@ async function downloadPeerWorkspacePathToDisk(
   isDirectory: boolean,
   onProgress: (state: TransferProgressState | null) => void,
 ): Promise<void> {
-  if (!workspace?.rootPath) throw new Error("A fixed peer workspace is required for download");
+  if (!workspace?.id) throw new Error("A fixed peer workspace is required for download");
   if (isRemoteWorkspace(workspace) && !workspace.connectionId) {
     throw new Error(i18nService.t("panels/files:transfer.missingConnection"));
   }
-  const identity = {workspace_path: workspace.rootPath,
-    remote_connection_id: isRemoteWorkspace(workspace) ? workspace.connectionId : undefined};
+  // The peer selects the workspace by ID. The root path and connection are
+  // the legacy projection that pre-ID peer hosts still require.
+  const identity: PeerFileWorkspaceIdentity = {
+    workspace_id: workspace.id,
+    workspace_path: workspace.rootPath,
+    remote_connection_id: isRemoteWorkspace(workspace) ? workspace.connectionId : undefined,
+  };
   const entries = isDirectory
     ? await collectPeerDirectoryEntries(sourcePath, destinationPath, identity.remote_connection_id)
     : [{

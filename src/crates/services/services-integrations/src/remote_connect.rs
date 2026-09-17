@@ -384,6 +384,10 @@ pub struct RemoteTerminalPrewarmRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteDialogWorkspaceBinding {
+    /// Owning workspace record ID from the persisted session binding. It is
+    /// the authoritative restore target; the fields below are IO projections
+    /// kept for bindings that predate workspace IDs.
+    pub workspace_id: Option<String>,
     pub workspace_path: String,
     pub remote_connection_id: Option<String>,
     pub remote_ssh_host: Option<String>,
@@ -392,6 +396,7 @@ pub struct RemoteDialogWorkspaceBinding {
 impl RemoteDialogWorkspaceBinding {
     pub fn local(workspace_path: impl Into<String>) -> Self {
         Self {
+            workspace_id: None,
             workspace_path: workspace_path.into(),
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -861,6 +866,7 @@ where
         RemoteCommand::ReadFileChunk {
             path,
             session_id,
+            workspace_id,
             workspace_path,
             remote_connection_id,
             offset,
@@ -870,6 +876,7 @@ where
                 .read_remote_file_chunk(
                     path,
                     session_id.as_deref(),
+                    workspace_id.as_deref(),
                     workspace_path.as_deref(),
                     remote_connection_id.as_deref(),
                     *offset,
@@ -879,7 +886,11 @@ where
             {
                 Ok(Some(file)) => return remote_file_chunk_response(Ok(file)),
                 Err(error) => return remote_file_chunk_response(Err(error)),
-                Ok(None) if workspace_path.is_some() || remote_connection_id.is_some() => {
+                Ok(None)
+                    if workspace_id.is_some()
+                        || workspace_path.is_some()
+                        || remote_connection_id.is_some() =>
+                {
                     return RemoteResponse::Error {
                         message: "This host cannot resolve an explicit file workspace".into(),
                     }
@@ -897,6 +908,7 @@ where
         RemoteCommand::GetFileInfo {
             path,
             session_id,
+            workspace_id,
             workspace_path,
             remote_connection_id,
         } => {
@@ -904,6 +916,7 @@ where
                 .remote_file_info(
                     path,
                     session_id.as_deref(),
+                    workspace_id.as_deref(),
                     workspace_path.as_deref(),
                     remote_connection_id.as_deref(),
                 )
@@ -911,7 +924,11 @@ where
             {
                 Ok(Some(file)) => return remote_file_info_response(Ok(file)),
                 Err(error) => return remote_file_info_response(Err(error)),
-                Ok(None) if workspace_path.is_some() || remote_connection_id.is_some() => {
+                Ok(None)
+                    if workspace_id.is_some()
+                        || workspace_path.is_some()
+                        || remote_connection_id.is_some() =>
+                {
                     return RemoteResponse::Error {
                         message: "This host cannot resolve an explicit file workspace".into(),
                     }
@@ -1295,8 +1312,10 @@ where
 pub fn remote_session_created_response(session_id: impl Into<String>) -> RemoteResponse {
     RemoteResponse::SessionCreated {
         session_id: session_id.into(),
+        workspace_id: None,
         workspace_path: None,
         remote_connection_id: None,
+        remote_ssh_host: None,
     }
 }
 
@@ -1334,12 +1353,23 @@ pub trait RemoteSessionRuntimeHost: Send + Sync {
     async fn workspace_by_id(&self, _workspace_id: &str) -> Result<RemoteWorkspaceFacts, String> {
         Err("Host does not support workspace ID lookup".to_string())
     }
+    /// Translate a pre-ID `(path, connection, ssh)` reference into the owning
+    /// workspace record. `Ok(None)` means no record owns the reference;
+    /// `Err` means it is ambiguous or the host cannot resolve it. The handler
+    /// never uses the raw path as a storage key.
+    async fn resolve_legacy_workspace(
+        &self,
+        workspace_path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> Result<Option<RemoteWorkspaceFacts>, String>;
     async fn list_session_metadata(
         &self,
         workspace_path: &Path,
         workspace_identity: RemoteSessionWorkspaceIdentity,
     ) -> Result<Vec<RemoteSessionMetadata>, String>;
-    async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String>;
+    /// The primary assistant workspace record, created on first use.
+    async fn resolve_default_assistant_workspace(&self) -> Result<RemoteWorkspaceFacts, String>;
     async fn create_session(&self, request: AgentSessionCreateRequest) -> Result<String, String>;
     async fn load_model_catalog(
         &self,
@@ -1367,6 +1397,50 @@ pub trait RemoteSessionRuntimeHost: Send + Sync {
     fn remove_tracker(&self, session_id: &str);
 }
 
+/// Resolve the workspace a session-level command names. The ID is
+/// authoritative; a pre-ID `(path, connection, ssh)` reference is translated
+/// once through the host's legacy resolver. `Ok(None)` means the command named
+/// no workspace at all.
+async fn resolve_remote_session_workspace<H>(
+    host: &H,
+    workspace_id: Option<&str>,
+    workspace_path: Option<&str>,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> Result<Option<RemoteWorkspaceFacts>, String>
+where
+    H: RemoteSessionRuntimeHost + ?Sized,
+{
+    let workspace_id = workspace_id.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(id) = workspace_id {
+        return host.workspace_by_id(id).await.map(Some);
+    }
+    let Some(path) = workspace_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty() && *path != "/")
+    else {
+        return Ok(None);
+    };
+    let connection = remote_connection_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let ssh_host = remote_ssh_host
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    match host
+        .resolve_legacy_workspace(path, connection, ssh_host)
+        .await?
+    {
+        Some(record) => Ok(Some(record)),
+        None => Err(format!(
+            "Workspace path {path} is not an open workspace on the remote device; select the workspace by its ID"
+        )),
+    }
+}
+
+const NO_REMOTE_WORKSPACE_MESSAGE: &str =
+    "No workspace is open on the remote device; select a recent workspace or create one first";
+
 pub async fn handle_remote_session_command<H>(host: &H, command: &RemoteCommand) -> RemoteResponse
 where
     H: RemoteSessionRuntimeHost + ?Sized,
@@ -1381,50 +1455,34 @@ where
             offset,
             query,
         } => {
-            let resolved = if let Some(id) = workspace_id {
-                match host.workspace_by_id(id).await {
-                    Ok(record) => Some(record),
-                    Err(message) => return RemoteResponse::Error { message },
+            let workspace = match resolve_remote_session_workspace(
+                host,
+                workspace_id.as_deref(),
+                workspace_path.as_deref(),
+                remote_connection_id.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
+            .await
+            {
+                Ok(Some(workspace)) => workspace,
+                Ok(None) => {
+                    return RemoteResponse::Error {
+                        message: NO_REMOTE_WORKSPACE_MESSAGE.to_string(),
+                    };
                 }
-            } else {
-                None
+                Err(message) => return RemoteResponse::Error { message },
             };
-            let workspace_path = &resolved
-                .as_ref()
-                .map(|record| record.path.clone())
-                .or_else(|| workspace_path.clone());
-            let remote_connection_id = &resolved
-                .as_ref()
-                .map(|record| record.remote_connection_id.clone())
-                .unwrap_or_else(|| remote_connection_id.clone());
-            let remote_ssh_host = &resolved
-                .as_ref()
-                .map(|record| record.remote_ssh_host.clone())
-                .unwrap_or_else(|| remote_ssh_host.clone());
             let page_size = limit.unwrap_or(30).min(100);
             let page_offset = offset.unwrap_or(0);
 
-            let Some(workspace_path) = workspace_path
-                .as_deref()
-                .map(str::trim)
-                .filter(|path| !path.is_empty() && *path != "/")
-                .map(PathBuf::from)
-            else {
-                return RemoteResponse::Error {
-                    message: "No workspace is open on the remote device; select a recent workspace or create one first".to_string(),
-                };
-            };
-
-            let workspace_path_str = workspace_path.to_string_lossy().to_string();
-            let workspace_name = workspace_path
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string());
-
+            // The record's root is the storage/IO projection; the record ID is
+            // the only key the host lists by.
+            let workspace_path = PathBuf::from(&workspace.path);
             let workspace_identity = RemoteSessionWorkspaceIdentity::new(
-                remote_connection_id.clone(),
-                remote_ssh_host.clone(),
+                workspace.remote_connection_id.clone(),
+                workspace.remote_ssh_host.clone(),
             )
-            .with_workspace_id(workspace_id.clone());
+            .with_workspace_id(Some(workspace.workspace_id.clone()));
 
             match host
                 .list_session_metadata(&workspace_path, workspace_identity)
@@ -1443,11 +1501,19 @@ where
                                 .as_ref()
                                 .is_none_or(|query| session.name.to_lowercase().contains(query))
                         })
+                        .map(|mut session| {
+                            // Sessions listed from this workspace's storage are
+                            // owned by it even when their metadata predates IDs.
+                            session
+                                .workspace_id
+                                .get_or_insert_with(|| workspace.workspace_id.clone());
+                            session
+                        })
                         .collect();
                     remote_session_list_response(
                         sessions,
-                        Some(workspace_path_str.as_str()),
-                        workspace_name.as_deref(),
+                        Some(workspace.path.as_str()),
+                        Some(workspace.name.as_str()),
                         page_size,
                         page_offset,
                     )
@@ -1463,26 +1529,6 @@ where
             remote_connection_id,
             remote_ssh_host,
         } => {
-            let resolved = if let Some(id) = workspace_id {
-                match host.workspace_by_id(id).await {
-                    Ok(record) => Some(record),
-                    Err(message) => return RemoteResponse::Error { message },
-                }
-            } else {
-                None
-            };
-            let workspace_path = &resolved
-                .as_ref()
-                .map(|record| record.path.clone())
-                .or_else(|| workspace_path.clone());
-            let remote_connection_id = &resolved
-                .as_ref()
-                .map(|record| record.remote_connection_id.clone())
-                .unwrap_or_else(|| remote_connection_id.clone());
-            let remote_ssh_host = &resolved
-                .as_ref()
-                .map(|record| record.remote_ssh_host.clone())
-                .unwrap_or_else(|| remote_ssh_host.clone());
             let agent = resolve_remote_agent_type(agent_type.as_deref());
             let is_claw = agent == "Claw";
             let session_name = session_name
@@ -1494,60 +1540,52 @@ where
                     _ => "Remote Code Session",
                 });
 
-            let explicit_workspace = workspace_path
-                .as_deref()
-                .map(str::trim)
-                .filter(|path| !path.is_empty() && *path != "/");
-            let use_default_assistant = is_claw && explicit_workspace.is_none();
-            let binding_workspace = if let Some(path) = explicit_workspace {
-                Some(path.to_owned())
+            let explicit = match resolve_remote_session_workspace(
+                host,
+                workspace_id.as_deref(),
+                workspace_path.as_deref(),
+                remote_connection_id.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
+            .await
+            {
+                Ok(workspace) => workspace,
+                Err(message) => return RemoteResponse::Error { message },
+            };
+            let use_default_assistant = is_claw && explicit.is_none();
+            let workspace = if let Some(workspace) = explicit {
+                workspace
             } else if use_default_assistant {
-                match host.resolve_default_assistant_workspace_path().await {
-                    Ok(path) => Some(path),
+                match host.resolve_default_assistant_workspace().await {
+                    Ok(workspace) => workspace,
                     Err(message) => return RemoteResponse::Error { message },
                 }
             } else {
-                None
-            };
-
-            let Some(binding_workspace) = binding_workspace else {
                 return RemoteResponse::Error {
-                    message: if is_claw {
-                        "Failed to get or create assistant workspace".to_string()
-                    } else {
-                        "No workspace is open on the remote device; select a recent workspace or create one first".to_string()
-                    },
+                    message: NO_REMOTE_WORKSPACE_MESSAGE.to_string(),
                 };
             };
 
             let request = build_remote_session_create_request(
                 session_name,
                 agent,
-                Some(binding_workspace.clone()),
+                Some(workspace.path.clone()),
                 RemoteSessionWorkspaceIdentity::new(
-                    if use_default_assistant {
-                        None
-                    } else {
-                        remote_connection_id.clone()
-                    },
-                    if use_default_assistant {
-                        None
-                    } else {
-                        remote_ssh_host.clone()
-                    },
+                    workspace.remote_connection_id.clone(),
+                    workspace.remote_ssh_host.clone(),
                 )
-                .with_workspace_id(workspace_id.clone()),
+                .with_workspace_id(Some(workspace.workspace_id.clone())),
                 RemoteConnectSubmissionSource::Relay,
             );
             match host.create_session(request).await {
                 Ok(session_id) => RemoteResponse::SessionCreated {
                     session_id,
-                    workspace_path: Some(binding_workspace),
-                    remote_connection_id: if use_default_assistant {
-                        None
-                    } else {
-                        remote_connection_id.clone().filter(|id| !id.is_empty())
-                    },
+                    workspace_id: Some(workspace.workspace_id),
+                    workspace_path: Some(workspace.path),
+                    remote_connection_id: workspace
+                        .remote_connection_id
+                        .filter(|id| !id.is_empty()),
+                    remote_ssh_host: workspace.remote_ssh_host.filter(|host| !host.is_empty()),
                 },
                 Err(message) => RemoteResponse::Error { message },
             }
@@ -2607,6 +2645,10 @@ pub enum RemoteCommand {
     ReadFileChunk {
         path: String,
         session_id: Option<String>,
+        /// Owning workspace ID; authoritative when present.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_id: Option<String>,
+        /// Legacy explicit file workspace for pre-ID controllers.
         #[serde(default)]
         workspace_path: Option<String>,
         #[serde(default)]
@@ -2617,6 +2659,10 @@ pub enum RemoteCommand {
     GetFileInfo {
         path: String,
         session_id: Option<String>,
+        /// Owning workspace ID; authoritative when present.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_id: Option<String>,
+        /// Legacy explicit file workspace for pre-ID controllers.
         #[serde(default)]
         workspace_path: Option<String>,
         #[serde(default)]
@@ -2743,10 +2789,16 @@ pub enum RemoteResponse {
     },
     SessionCreated {
         session_id: String,
+        /// Owning workspace record ID; authoritative for controllers that pin
+        /// the session to a workspace. Absent only from pre-ID hosts.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_id: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         workspace_path: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         remote_connection_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
     },
     ModelCatalog {
         catalog: RemoteModelCatalog,
@@ -2864,6 +2916,10 @@ pub enum RemoteResponse {
     /// Device-to-device: info response from a peer device.
     DeviceInfo {
         device_name: Option<String>,
+        /// Active workspace record ID. Its presence also tells a controller
+        /// that this device accepts ID-only workspace references.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_id: Option<String>,
         workspace_path: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         workspace_kind: Option<String>,
@@ -4428,8 +4484,72 @@ mod tests {
         history_error: Option<String>,
     }
 
+    fn fake_workspace(
+        workspace_id: &str,
+        path: &str,
+        kind: RemoteWorkspaceKind,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> RemoteWorkspaceFacts {
+        RemoteWorkspaceFacts {
+            workspace_id: workspace_id.to_string(),
+            path: path.to_string(),
+            name: path.rsplit('/').next().unwrap_or(path).to_string(),
+            git_branch: None,
+            kind,
+            assistant_id: None,
+            remote_connection_id: remote_connection_id.map(str::to_string),
+            remote_ssh_host: remote_ssh_host.map(str::to_string),
+        }
+    }
+
     #[async_trait::async_trait]
     impl RemoteSessionRuntimeHost for FakeSessionHost {
+        async fn workspace_by_id(
+            &self,
+            workspace_id: &str,
+        ) -> Result<RemoteWorkspaceFacts, String> {
+            match workspace_id {
+                "workspace-project" => Ok(fake_workspace(
+                    "workspace-project",
+                    "/workspace/project",
+                    RemoteWorkspaceKind::Remote,
+                    Some("conn-1"),
+                    Some("host-1"),
+                )),
+                _ => Err(format!("Workspace {workspace_id} is unavailable")),
+            }
+        }
+
+        async fn resolve_legacy_workspace(
+            &self,
+            workspace_path: &str,
+            remote_connection_id: Option<&str>,
+            remote_ssh_host: Option<&str>,
+        ) -> Result<Option<RemoteWorkspaceFacts>, String> {
+            match (workspace_path, remote_connection_id) {
+                ("/workspace/project", Some("conn-1")) => Ok(Some(fake_workspace(
+                    "workspace-project",
+                    "/workspace/project",
+                    RemoteWorkspaceKind::Remote,
+                    Some("conn-1"),
+                    remote_ssh_host,
+                ))),
+                ("/workspace/selected-assistant", _) => Ok(Some(fake_workspace(
+                    "workspace-selected-assistant",
+                    "/workspace/selected-assistant",
+                    RemoteWorkspaceKind::Remote,
+                    remote_connection_id,
+                    remote_ssh_host,
+                ))),
+                ("/workspace/ambiguous", _) => Err(
+                    "Workspace path is ambiguous; select a workspace by its ID or saved SSH connection"
+                        .to_string(),
+                ),
+                _ => Ok(None),
+            }
+        }
+
         async fn list_session_metadata(
             &self,
             _workspace_path: &Path,
@@ -4461,8 +4581,16 @@ mod tests {
             ])
         }
 
-        async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
-            Ok("/workspace/assistant".to_string())
+        async fn resolve_default_assistant_workspace(
+            &self,
+        ) -> Result<RemoteWorkspaceFacts, String> {
+            Ok(fake_workspace(
+                "workspace-assistant",
+                "/workspace/assistant",
+                RemoteWorkspaceKind::Assistant,
+                None,
+                None,
+            ))
         }
 
         async fn create_session(
@@ -4592,8 +4720,18 @@ mod tests {
             sessions[0].workspace_path.as_deref(),
             Some("/workspace/project")
         );
+        // Sessions listed from the resolved workspace storage are pinned to
+        // its record ID even when their metadata predates workspace IDs.
+        assert_eq!(
+            sessions[0].workspace_id.as_deref(),
+            Some("workspace-project")
+        );
         {
             let list_identities = host.list_identities.lock().unwrap();
+            assert_eq!(
+                list_identities[0].workspace_id.as_deref(),
+                Some("workspace-project")
+            );
             assert_eq!(
                 list_identities[0].remote_connection_id.as_deref(),
                 Some("conn-1")
@@ -4620,13 +4758,19 @@ mod tests {
             created,
             RemoteResponse::SessionCreated {
                 session_id: "created-session".to_string(),
+                workspace_id: Some("workspace-project".to_string()),
                 workspace_path: Some("/workspace/project".to_string()),
                 remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: Some("host-1".to_string()),
             }
         );
         let created_requests = host.created_requests.lock().unwrap();
         assert_eq!(created_requests[0].session_name, "Remote Cowork Session");
         assert_eq!(created_requests[0].agent_type, "Cowork");
+        assert_eq!(
+            created_requests[0].workspace_id.as_deref(),
+            Some("workspace-project")
+        );
         assert_eq!(
             created_requests[0].workspace_path.as_deref(),
             Some("/workspace/project")
@@ -4639,6 +4783,66 @@ mod tests {
             created_requests[0].remote_ssh_host.as_deref(),
             Some("host-1")
         );
+    }
+
+    #[tokio::test]
+    async fn path_only_session_commands_resolve_through_the_legacy_workspace_resolver() {
+        let host = FakeSessionHost::default();
+
+        // A path no record owns is a loud error, never a raw storage key.
+        let unknown = handle_remote_session_command(
+            &host,
+            &RemoteCommand::ListSessions {
+                workspace_id: None,
+                workspace_path: Some("/workspace/unknown".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                limit: None,
+                offset: None,
+                query: None,
+            },
+        )
+        .await;
+        let RemoteResponse::Error { message } = unknown else {
+            panic!("unknown path must not list sessions");
+        };
+        assert!(message.contains("not an open workspace"), "{message}");
+        assert!(host.list_identities.lock().unwrap().is_empty());
+
+        // An ambiguous path is refused instead of picking one record.
+        let ambiguous = handle_remote_session_command(
+            &host,
+            &RemoteCommand::CreateSession {
+                workspace_id: None,
+                agent_type: None,
+                session_name: None,
+                workspace_path: Some("/workspace/ambiguous".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await;
+        let RemoteResponse::Error { message } = ambiguous else {
+            panic!("ambiguous path must not create a session");
+        };
+        assert!(message.contains("ambiguous"), "{message}");
+        assert!(host.created_requests.lock().unwrap().is_empty());
+
+        // An explicit ID never falls back to the path it is sent with.
+        let stale = handle_remote_session_command(
+            &host,
+            &RemoteCommand::CreateSession {
+                workspace_id: Some("workspace-missing".to_string()),
+                agent_type: None,
+                session_name: None,
+                workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: None,
+            },
+        )
+        .await;
+        assert!(matches!(stale, RemoteResponse::Error { .. }));
+        assert!(host.created_requests.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -4658,6 +4862,7 @@ mod tests {
             )
             .await;
             let RemoteResponse::SessionCreated {
+                workspace_id,
                 workspace_path,
                 remote_connection_id,
                 ..
@@ -4668,6 +4873,14 @@ mod tests {
             assert_eq!(
                 workspace_path.as_deref(),
                 Some(explicit.unwrap_or("/workspace/assistant"))
+            );
+            assert_eq!(
+                workspace_id.as_deref(),
+                Some(if explicit.is_some() {
+                    "workspace-selected-assistant"
+                } else {
+                    "workspace-assistant"
+                })
             );
             assert_eq!(
                 remote_connection_id.as_deref(),
