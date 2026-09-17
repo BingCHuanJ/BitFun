@@ -77,6 +77,15 @@ export class DurableSessionReducer {
   messages(): ChatMessage[] {
     const result: ChatMessage[] = [];
     const turns = Array.from(this.turns.values()).filter((turn: StoredTurn) => !!turn.data).sort((a: StoredTurn, b: StoredTurn) => (a.data?.turnIndex || 0) - (b.data?.turnIndex || 0));
+    // Grouping the items under their turn once keeps a rebuild linear in the
+    // session's length. Scanning the whole item map again for every turn made a
+    // long session pay for its own length twice over, on the thread that draws
+    // it, which is where the scrolling went.
+    const byTurn: Map<string, StoredItem[]> = new Map<string, StoredItem[]>();
+    this.items.forEach((item: StoredItem) => {
+      const bucket = byTurn.get(item.turnId);
+      if (bucket) bucket.push(item); else byTurn.set(item.turnId, [item]);
+    });
     for (const stored of turns) {
       const turn = stored.data;
       if (!turn) continue;
@@ -86,10 +95,10 @@ export class DurableSessionReducer {
       if (userText.length > 0 || (metadata?.images?.length || 0) > 0) result.push({ id: turn.userMessage.id, turnId: turn.turnId,
         role: 'user', text: userText, images: metadata?.images, status: 'sent', timestamp: new Date(turn.userMessage.timestamp).toISOString() });
       const turnFence = this.tombstones.get(`turn/${turn.turnId}`) ?? 0;
-      const entries = Array.from(this.items.values()).filter((item: StoredItem) => {
+      const entries = (byTurn.get(turn.turnId) ?? []).filter((item: StoredItem) => {
         const round = this.rounds.get(item.roundId);
         const roundFence = Math.max(turnFence, this.tombstones.get(`round/${item.roundId}`) ?? 0);
-        return item.turnId === turn.turnId && !!round?.data && round.revision > roundFence &&
+        return !!round?.data && round.revision > roundFence &&
           item.revision > Math.max(roundFence, this.tombstones.get(`item/${item.data.data.id}`) ?? 0);
       })
         .sort((a: StoredItem, b: StoredItem) => {

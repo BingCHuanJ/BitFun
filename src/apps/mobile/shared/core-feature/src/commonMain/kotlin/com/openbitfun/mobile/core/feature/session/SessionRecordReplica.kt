@@ -11,6 +11,14 @@ internal class SessionRecordReplica(private val sessionId: String) {
     private val rounds = linkedMapOf<String, Versioned>()
     private val items = linkedMapOf<String, Versioned>()
     private val controls = mutableMapOf<String, Pair<String, RemoteToolStatusResponse>>()
+
+    /**
+     * True until the stream has delivered a record of its own.
+     *
+     * An empty replica has nothing to say about the transcript, and rendering it
+     * would erase a timeline the cache or the history fetch already filled.
+     */
+    val isEmpty: Boolean get() = turns.isEmpty()
     fun applyControl(payload: JsonObject) {
         val turn = payload.string("turnId")
         val event = payload["toolEvent"] as? JsonObject ?: return
@@ -81,42 +89,73 @@ internal class SessionRecordReplica(private val sessionId: String) {
         }
     }
 
-    fun messages(): List<ChatMessage> = turns.filter { (id, record) -> record.revision > (tombstones["turn/$id"] ?: -1) }.values.sortedBy { it.value.number("turnIndex") }.flatMap { record ->
-        val turn = record.value
-        val turnId = turn.string("turnId")
-        val user = turn.getValue("userMessage").jsonObject
-        val turnFence = tombstones["turn/$turnId"] ?: -1
-        val children = rounds.filter { (id, record) -> record.revision > maxOf(turnFence, tombstones["round/$id"] ?: -1) }.values.map { it.value }.filter { it.string("turnId") == turnId }
-            .sortedBy { it.number("roundIndex") }.flatMap { round ->
-                items.filter { (id, record) -> itemRounds[id] == round.string("id") && record.revision > maxOf(turnFence, tombstones["round/" + round.string("id")] ?: -1, tombstones["item/$id"] ?: -1) }.values.map { it.value }
-                    .filter { it.getValue("data").jsonObject.string("status") !in setOf("superseded", "retry_superseded") }
-                    .sortedWith(compareBy({ it.getValue("data").jsonObject.number("orderIndex") }, { it.getValue("data").jsonObject.number("timestamp") }))
-            }
-        val rendered = children.map { item ->
-            val data = item.getValue("data").jsonObject
-            val type = item.string("type")
-            val result = data["toolResult"] as? JsonObject
-            ChatMessageItemResponse(type = type, content = data.string("content"), isSubagent = data["isSubagentItem"]?.jsonPrimitive?.booleanOrNull == true || data.string("subagentSessionId").isNotEmpty(),
-                tool = if (type != "tool") null else RemoteToolStatusResponse(
-                    id = (data["toolCall"] as? JsonObject)?.string("id")?.takeIf { it.isNotEmpty() } ?: data.string("id"), name = data.string("toolName"),
-                    status = data.string("status").takeIf { it.isNotEmpty() }
-                        ?: if (result == null) "running" else if (result["success"]?.jsonPrimitive?.booleanOrNull == true) "completed" else "failed",
-                    toolInput = (data["toolCall"] as? JsonObject)?.get("input"), toolOutput = result?.get("result"),
-                    errorPreview = result?.string("error"),
-                    startMs = data["startTime"]?.jsonPrimitive?.longOrNull,
-                    durationMs = data["durationMs"]?.jsonPrimitive?.longOrNull
-                        ?: result?.get("durationMs")?.jsonPrimitive?.longOrNull))
+    /**
+     * Groups every round and item under its parent once per rebuild.
+     *
+     * Reading the transcript used to filter the whole round map for each turn
+     * and the whole item map for each round, so a session paid for its own
+     * length twice over on every record that arrived. Long sessions spend that
+     * cost on the thread that draws them, which is where the scrolling went.
+     */
+    private data class Children(
+        val roundsByTurn: Map<String, List<Pair<String, Versioned>>>,
+        val itemsByRound: Map<String, List<Pair<String, Versioned>>>,
+    )
+
+    private fun children(): Children {
+        val roundsByTurn = mutableMapOf<String, MutableList<Pair<String, Versioned>>>()
+        rounds.forEach { (id, record) ->
+            roundsByTurn.getOrPut(record.value.string("turnId")) { mutableListOf() }.add(id to record)
         }
-        rendered.mapNotNull { it.tool }.filter { it.status in setOf("completed", "failed", "cancelled", "rejected", "skipped") }.forEach { controls.remove(it.id) }
-        val controlTools = controls.values.filter { it.first == turnId }.map { it.second }
-        val shownItems = rendered.map { item -> item.tool?.id?.let { id -> controlTools.firstOrNull { it.id == id } }?.let { item.copy(tool = it) } ?: item } +
-            controlTools.filter { tool -> rendered.none { it.tool?.id == tool.id } }.map { ChatMessageItemResponse(type = "tool", tool = it) }
-        listOf(RemoteResponseMapper.chatMessage(ChatMessageResponse(id = user.string("id"), role = "user", content = user.string("content"), turnId = turnId, metadata = user["metadata"], images = userImages(user), timestamp = user.string("timestamp"))),
-            RemoteResponseMapper.chatMessage(ChatMessageResponse(id = "${turnId}_assistant", role = "assistant", turnId = turnId,
-                content = rendered.filter { it.type == "text" && it.isSubagent != true }.joinToString("") { it.content.orEmpty() },
-                thinking = rendered.filter { it.type == "thinking" && it.isSubagent != true }.joinToString("") { it.content.orEmpty() },
-                items = shownItems, status = when (turn.string("status")) { "inprogress" -> "streaming"; "error" -> "failed"; else -> turn.string("status") }, error = turn.string("error"), metadata = turn)))
+        val itemsByRound = mutableMapOf<String, MutableList<Pair<String, Versioned>>>()
+        items.forEach { (id, record) ->
+            val roundId = itemRounds[id] ?: return@forEach
+            itemsByRound.getOrPut(roundId) { mutableListOf() }.add(id to record)
+        }
+        return Children(roundsByTurn, itemsByRound)
     }
+
+    fun messages(): List<ChatMessage> {
+        val index = children()
+        return turns.filter { (id, record) -> record.revision > (tombstones["turn/$id"] ?: -1) }.values.sortedBy { it.value.number("turnIndex") }.flatMap { record ->
+            val turn = record.value
+            val turnId = turn.string("turnId")
+            val user = turn.getValue("userMessage").jsonObject
+            val turnFence = tombstones["turn/$turnId"] ?: -1
+            val children = index.roundsByTurn[turnId].orEmpty().filter { (id, record) -> record.revision > maxOf(turnFence, tombstones["round/$id"] ?: -1) }
+                .sortedBy { it.second.value.number("roundIndex") }.flatMap { (currentRoundId, _) ->
+                    val roundFence = maxOf(turnFence, tombstones["round/$currentRoundId"] ?: -1)
+                    index.itemsByRound[currentRoundId].orEmpty().filter { (id, record) -> record.revision > maxOf(roundFence, tombstones["item/$id"] ?: -1) }.map { it.second.value }
+                        .filter { it.getValue("data").jsonObject.string("status") !in setOf("superseded", "retry_superseded") }
+                        .sortedWith(compareBy({ it.getValue("data").jsonObject.number("orderIndex") }, { it.getValue("data").jsonObject.number("timestamp") }))
+                }
+            val rendered = children.map { item ->
+                val data = item.getValue("data").jsonObject
+                val type = item.string("type")
+                val result = data["toolResult"] as? JsonObject
+                ChatMessageItemResponse(type = type, content = data.string("content"), isSubagent = data["isSubagentItem"]?.jsonPrimitive?.booleanOrNull == true || data.string("subagentSessionId").isNotEmpty(),
+                    tool = if (type != "tool") null else RemoteToolStatusResponse(
+                        id = (data["toolCall"] as? JsonObject)?.string("id")?.takeIf { it.isNotEmpty() } ?: data.string("id"), name = data.string("toolName"),
+                        status = data.string("status").takeIf { it.isNotEmpty() }
+                            ?: if (result == null) "running" else if (result["success"]?.jsonPrimitive?.booleanOrNull == true) "completed" else "failed",
+                        toolInput = (data["toolCall"] as? JsonObject)?.get("input"), toolOutput = result?.get("result"),
+                        errorPreview = result?.string("error"),
+                        startMs = data["startTime"]?.jsonPrimitive?.longOrNull,
+                        durationMs = data["durationMs"]?.jsonPrimitive?.longOrNull
+                            ?: result?.get("durationMs")?.jsonPrimitive?.longOrNull))
+            }
+            rendered.mapNotNull { it.tool }.filter { it.status in setOf("completed", "failed", "cancelled", "rejected", "skipped") }.forEach { controls.remove(it.id) }
+            val controlTools = controls.values.filter { it.first == turnId }.map { it.second }
+            val shownItems = rendered.map { item -> item.tool?.id?.let { id -> controlTools.firstOrNull { it.id == id } }?.let { item.copy(tool = it) } ?: item } +
+                controlTools.filter { tool -> rendered.none { it.tool?.id == tool.id } }.map { ChatMessageItemResponse(type = "tool", tool = it) }
+            listOf(RemoteResponseMapper.chatMessage(ChatMessageResponse(id = user.string("id"), role = "user", content = user.string("content"), turnId = turnId, metadata = user["metadata"], images = userImages(user), timestamp = user.string("timestamp"))),
+                RemoteResponseMapper.chatMessage(ChatMessageResponse(id = "${turnId}_assistant", role = "assistant", turnId = turnId,
+                    content = rendered.filter { it.type == "text" && it.isSubagent != true }.joinToString("") { it.content.orEmpty() },
+                    thinking = rendered.filter { it.type == "thinking" && it.isSubagent != true }.joinToString("") { it.content.orEmpty() },
+                    items = shownItems, status = when (turn.string("status")) { "inprogress" -> "streaming"; "error" -> "failed"; else -> turn.string("status") }, error = turn.string("error"), metadata = turn)))
+        }
+    }
+
     /** Attachments are recorded with the turn; one that kept only a host path has no
      * pixels to hand a client that cannot reach that filesystem. */
     private fun userImages(user: JsonObject): List<ImageAttachment> =
