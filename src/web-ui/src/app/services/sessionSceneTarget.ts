@@ -15,6 +15,11 @@ export function resolveSessionSceneWorkspace(session: Session, workspaces: Itera
   }, workspaces);
 }
 
+/** Scene-bar workspace key for a session that is owned by a known workspace ID. */
+export function sessionSceneWorkspaceKey(workspaceId: string): string {
+  return JSON.stringify(['workspace', workspaceId]);
+}
+
 export function resolveSessionSceneTarget(
   session: Session,
   workspaces: Iterable<WorkspaceInfo>,
@@ -25,7 +30,7 @@ export function resolveSessionSceneTarget(
   // An unresolved legacy session remains individually addressable. Never group
   // it with another workspace through a guessed folder key.
   const workspaceKey = workspaceId
-    ? JSON.stringify(['workspace', workspaceId])
+    ? sessionSceneWorkspaceKey(workspaceId)
     : JSON.stringify(['unresolved-workspace', session.sessionId]);
   return { surfaceId, workspaceKey, sessionId: session.sessionId };
 }

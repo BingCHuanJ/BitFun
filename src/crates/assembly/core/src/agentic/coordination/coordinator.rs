@@ -16832,12 +16832,26 @@ mod tests {
     #[tokio::test]
     async fn control_conversation_reset_preserves_history_and_retries_one_selection() {
         let workspace = tempfile::tempdir().expect("control workspace");
+        // Installs the global workspace service the control conversation
+        // registers its app-owned folder with.
+        crate::service::workspace::legacy_compat::register_local_fixture(workspace.path(), None)
+            .await;
         let (coordinator, manager) = test_persistent_coordinator();
         let original = coordinator
             .select_control_conversation_in_workspace(workspace.path(), None)
             .await
             .unwrap();
         assert_eq!(original.session_id, "openbitfun-control");
+        assert!(!original.workspace_id.is_empty());
+        assert_eq!(
+            manager
+                .get_session(&original.session_id)
+                .unwrap()
+                .config
+                .workspace_id
+                .as_deref(),
+            Some(original.workspace_id.as_str())
+        );
         coordinator
             .record_voice_exchange(super::super::VoiceExchangeRequest {
                 session_id: original.session_id.clone(),

@@ -355,7 +355,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::activate_session_goal",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn activate_session_goal( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: ActivateSessionGoalRequest, ) -> Result<ActivateSessionGoalResponse, String>",
+      "signature": "fn activate_session_goal( coordinator: State<'_, Arc<ConversationCoordinator>>, request: ActivateSessionGoalRequest, ) -> Result<ActivateSessionGoalResponse, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -1231,7 +1231,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::clear_session_thread_goal",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn clear_session_thread_goal( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: ClearSessionThreadGoalRequest, ) -> Result<(), String>",
+      "signature": "fn clear_session_thread_goal( coordinator: State<'_, Arc<ConversationCoordinator>>, request: ClearSessionThreadGoalRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -1279,7 +1279,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::compact_session",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn compact_session( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: CompactSessionRequest, ) -> Result<StartDialogTurnResponse, String>",
+      "signature": "fn compact_session( coordinator: State<'_, Arc<ConversationCoordinator>>, request: CompactSessionRequest, ) -> Result<StartDialogTurnResponse, String>",
       "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
@@ -2247,7 +2247,7 @@
       "visibility": "implementation",
       "rustPath": "api::agentic_api::ensure_assistant_bootstrap",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn ensure_assistant_bootstrap( coordinator: State<'_, Arc<ConversationCoordinator>>, request: EnsureAssistantBootstrapRequest, ) -> Result<EnsureAssistantBootstrapResponse, String>",
+      "signature": "fn ensure_assistant_bootstrap( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: EnsureAssistantBootstrapRequest, ) -> Result<EnsureAssistantBootstrapResponse, String>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -3736,7 +3736,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::get_session_thread_goal",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn get_session_thread_goal( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, startup_trace: State<'_, DesktopStartupTrace>, request: GetSessionThreadGoalRequest, ) -> Result<GetSessionThreadGoalResponse, String>",
+      "signature": "fn get_session_thread_goal( coordinator: State<'_, Arc<ConversationCoordinator>>, startup_trace: State<'_, DesktopStartupTrace>, request: GetSessionThreadGoalRequest, ) -> Result<GetSessionThreadGoalResponse, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -8016,7 +8016,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::run_init_agents_md",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn run_init_agents_md( coordinator: State<'_, Arc<ConversationCoordinator>>, scheduler: State<'_, Arc<DialogScheduler>>, app_state: State<'_, AppState>, request: RunInitAgentsMdRequest, ) -> Result<StartDialogTurnResponse, String>",
+      "signature": "fn run_init_agents_md( coordinator: State<'_, Arc<ConversationCoordinator>>, scheduler: State<'_, Arc<DialogScheduler>>, request: RunInitAgentsMdRequest, ) -> Result<StartDialogTurnResponse, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -8814,7 +8814,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::set_session_memory_mode",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn set_session_memory_mode( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: SetSessionMemoryModeRequest, ) -> Result<SetSessionMemoryModeResponse, String>",
+      "signature": "fn set_session_memory_mode( coordinator: State<'_, Arc<ConversationCoordinator>>, request: SetSessionMemoryModeRequest, ) -> Result<SetSessionMemoryModeResponse, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -8830,7 +8830,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::set_session_thread_goal_status",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn set_session_thread_goal_status( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: SetSessionThreadGoalStatusRequest, ) -> Result<ThreadGoal, String>",
+      "signature": "fn set_session_thread_goal_status( coordinator: State<'_, Arc<ConversationCoordinator>>, request: SetSessionThreadGoalStatusRequest, ) -> Result<ThreadGoal, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -10262,7 +10262,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::update_session_thread_goal_objective",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn update_session_thread_goal_objective( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: UpdateSessionThreadGoalObjectiveRequest, ) -> Result<ThreadGoal, String>",
+      "signature": "fn update_session_thread_goal_objective( coordinator: State<'_, Arc<ConversationCoordinator>>, request: UpdateSessionThreadGoalObjectiveRequest, ) -> Result<ThreadGoal, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -10448,7 +10448,7 @@
       "visibility": "documented",
       "rustPath": "api::worktree_api::worktree_create",
       "sourceFile": "src/apps/desktop/src/api/worktree_api.rs",
-      "signature": "fn worktree_create( request: WorktreeCreateRequest, ) -> Result<WorktreeCreateResult, WorktreeError>",
+      "signature": "fn worktree_create( mut request: WorktreeCreateRequest, ) -> Result<WorktreeCreateResult, WorktreeError>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -10464,7 +10464,7 @@
       "visibility": "documented",
       "rustPath": "api::worktree_api::worktree_create_branch",
       "sourceFile": "src/apps/desktop/src/api/worktree_api.rs",
-      "signature": "fn worktree_create_branch( request: WorktreeCreateBranchRequest, ) -> Result<WorktreeMutationResult, WorktreeError>",
+      "signature": "fn worktree_create_branch( mut request: WorktreeCreateBranchRequest, ) -> Result<WorktreeMutationResult, WorktreeError>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -10480,7 +10480,7 @@
       "visibility": "documented",
       "rustPath": "api::worktree_api::worktree_list",
       "sourceFile": "src/apps/desktop/src/api/worktree_api.rs",
-      "signature": "fn worktree_list( request: WorktreeListRequest, ) -> Result<Vec<WorktreeSummary>, WorktreeError>",
+      "signature": "fn worktree_list( mut request: WorktreeListRequest, ) -> Result<Vec<WorktreeSummary>, WorktreeError>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -10514,7 +10514,7 @@
       "visibility": "documented",
       "rustPath": "api::worktree_api::worktree_promote",
       "sourceFile": "src/apps/desktop/src/api/worktree_api.rs",
-      "signature": "fn worktree_promote( request: WorktreePromoteRequest, ) -> Result<WorktreeMutationResult, WorktreeError>",
+      "signature": "fn worktree_promote( mut request: WorktreePromoteRequest, ) -> Result<WorktreeMutationResult, WorktreeError>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -10530,7 +10530,7 @@
       "visibility": "documented",
       "rustPath": "api::worktree_api::worktree_recreate",
       "sourceFile": "src/apps/desktop/src/api/worktree_api.rs",
-      "signature": "fn worktree_recreate( request: WorktreeRecreateRequest, ) -> Result<WorktreeMutationResult, WorktreeError>",
+      "signature": "fn worktree_recreate( mut request: WorktreeRecreateRequest, ) -> Result<WorktreeMutationResult, WorktreeError>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -10548,7 +10548,7 @@
       "visibility": "documented",
       "rustPath": "api::worktree_api::worktree_remove",
       "sourceFile": "src/apps/desktop/src/api/worktree_api.rs",
-      "signature": "fn worktree_remove( request: WorktreeRemoveRequest, ) -> Result<WorktreeRemoveResult, WorktreeError>",
+      "signature": "fn worktree_remove( mut request: WorktreeRemoveRequest, ) -> Result<WorktreeRemoveResult, WorktreeError>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {

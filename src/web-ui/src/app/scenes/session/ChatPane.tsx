@@ -17,7 +17,6 @@ import path from 'path-browserify';
 import { createLogger } from '@/shared/utils/logger';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { sessionWorkspaceId } from '../../../flow_chat/session-drivers/sessionFileNavigation';
-import { flowChatStore } from '../../../flow_chat/store/FlowChatStore';
 
 import './ChatPane.scss';
 import { ConversationViewProvider } from '@/flow_chat/contexts/ConversationViewProvider';

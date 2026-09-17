@@ -45,6 +45,9 @@ export interface VoiceSessionCallTarget {
   kind: 'control' | 'session';
   surfaceId: string;
   sessionId: string;
+  /** Owning workspace of the bound conversation; required to persist voice history. */
+  workspaceId?: string;
+  /** IO root shown to the realtime model as context; never used as identity. */
   workspacePath: string;
 }
 export type VoiceCallTarget = VoiceMiniAppCallTarget | VoiceSessionCallTarget;

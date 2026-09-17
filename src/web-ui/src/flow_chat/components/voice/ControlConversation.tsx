@@ -69,6 +69,7 @@ export function ControlConversation({ session, sessionRef, voiceTarget, active, 
   const visibleRows = rows.slice(firstVisibleIndex);
   const entries: VoiceTranscriptEntry[] = [];
   const renderAssistant = (content: string, isStreaming = false) => <MarkdownRenderer content={content}
+    workspaceId={session.workspaceId ?? session.config.workspaceId}
     basePath={session.workspacePath} remoteConnectionId={session.remoteConnectionId} remoteSshHost={session.remoteSshHost}
     isStreaming={isStreaming} />;
   for (const row of visibleRows) {
@@ -116,14 +117,7 @@ export function ControlConversation({ session, sessionRef, voiceTarget, active, 
     setHistoryError('');
     try {
       if (session.historyState === 'failed') {
-        await flowChatStore.loadSessionHistory(
-          session.sessionId,
-          session.projectWorkspacePath ?? session.config.projectWorkspacePath ?? session.workspacePath ?? '',
-          undefined,
-          session.remoteConnectionId ?? session.config.remoteConnectionId,
-          session.remoteSshHost ?? session.config.remoteSshHost,
-          { includeInternal: true },
-        );
+        await flowChatStore.loadSessionHistory(session.sessionId, { includeInternal: true });
         scope.assertCurrent('retry control conversation history');
         if (flowChatStore.getState().sessions.get(session.sessionId)?.historyState !== 'ready') {
           throw new Error(t('historyState.failedTitle'));
