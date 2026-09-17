@@ -1339,7 +1339,11 @@ extension MobileAppModel {
                 workspaceName: session.workspaceName,
                 workspaceIdentity: session.workspaceScope.map {
                     RemoteWorkspaceIdentity(path: $0.path, remoteConnectionId: $0.remoteConnectionId, remoteSshHost: $0.remoteSshHost)
-                }
+                },
+                // These rows are already past the visibility filter, so they
+                // have no parent left to declare.
+                parentSessionId: nil,
+                relationshipKind: nil
             )
         }
     }
