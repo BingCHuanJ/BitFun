@@ -97,7 +97,9 @@ import {
   CloudAccountDevice,
   CloudProvisionedDevice,
   CloudAccountRequestError,
-  CloudAccountSession
+  CloudAccountSession,
+  CloudAccountTransportError,
+  retryableAuthorizationPollError
 } from '../main/ets/services/CloudAccountClient';
 import {
   CloudAccountSessionStore,
@@ -587,6 +589,22 @@ class AccountDeviceSwitchHarness {
 
 export default function transportAndGeneralChatUnitTest() {
   describe('Account device links', () => {
+    /**
+     * The sign-in poll runs for the minutes the user spends in a browser and a
+     * mail app, which is where a phone most reliably drops a connection. A
+     * single failure there used to end the sign-in and send them back to the
+     * start, so a transport failure or a relay that is briefly unwilling has to
+     * cost one interval, while a refusal the relay meant still stops the loop.
+     */
+    it('keeps polling for sign-in through transport failures but not refusals', 0, () => {
+      expect(retryableAuthorizationPollError(new CloudAccountTransportError(2300007))).assertTrue();
+      expect(retryableAuthorizationPollError(new CloudAccountRequestError('too many polls', 429))).assertTrue();
+      expect(retryableAuthorizationPollError(new CloudAccountRequestError('relay down', 503))).assertTrue();
+      expect(retryableAuthorizationPollError(new CloudAccountRequestError('denied', 401))).assertFalse();
+      expect(retryableAuthorizationPollError(new CloudAccountRequestError('bad request', 400))).assertFalse();
+      expect(retryableAuthorizationPollError(new Error('unparseable relay response'))).assertFalse();
+    });
+
     it('uses the same device selector for official and LAN endpoints', 0, () => {
       for (const endpoint of ['https://remote.openbitfun.com/v/1.0.1', 'http://192.168.1.10:9700']) {
         const parsed = accountDeviceLink(`${endpoint}/#/pair?did=desktop-1`);
