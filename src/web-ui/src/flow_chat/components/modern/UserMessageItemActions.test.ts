@@ -48,7 +48,7 @@ describe('UserMessageItem metadata visibility', () => {
     expect(stylesheet).not.toContain('min-height: 5.5rem;');
   });
 
-  it('shows the copy, edit, and rollback actions as one always-available cluster', () => {
+  it('reveals the copy, edit, and rollback actions as one hover or focus cluster', () => {
     const stylesheet = readFileSync(
       fileURLToPath(new URL('./UserMessageItem.scss', import.meta.url)),
       'utf8',
@@ -56,9 +56,12 @@ describe('UserMessageItem metadata visibility', () => {
     const actions = extractBlock(stylesheet, '\n.user-message-item__actions {');
     const shell = extractBlock(stylesheet, '.user-message-item-shell {');
 
-    expect(actions).toContain('opacity: 1;');
-    expect(actions).toContain('pointer-events: auto;');
+    expect(actions).toContain('opacity: 0;');
+    expect(actions).toContain('pointer-events: none;');
+    expect(actions).not.toContain('visibility: hidden;');
     expect(shell).not.toContain('.user-message-item__actions');
+    expect(stylesheet).toContain('.user-message-item-shell:hover .user-message-item__actions,');
+    expect(stylesheet).toContain('.user-message-item-shell:focus-within .user-message-item__actions {\n  opacity: 1;\n  pointer-events: auto;');
 
     expect(stylesheet).toContain([
       '.user-message-item__copy-btn,',
@@ -68,7 +71,7 @@ describe('UserMessageItem metadata visibility', () => {
     expect(stylesheet).not.toContain('.user-message-item__edit-btn {\n  opacity: 1;');
   });
 
-  it('keeps visible metadata in normal flow on the transcript reading column', () => {
+  it('reveals the timestamp beside the actions without shifting the action cluster', () => {
     const stylesheet = readFileSync(
       fileURLToPath(new URL('./UserMessageItem.scss', import.meta.url)),
       'utf8',
@@ -81,9 +84,12 @@ describe('UserMessageItem metadata visibility', () => {
     );
     const metaLayout = extractBlock(sharedLayout, '@mixin metadata-row {');
 
-    expect(timestamp).toContain('opacity: 1;');
+    expect(timestamp).toContain('opacity: 0;');
+    expect(timestamp).toContain('visibility: hidden;');
     expect(timestamp).toContain('pointer-events: none;');
-    expect(timestamp).toContain('margin-inline-end: auto;');
+    expect(timestamp).not.toContain('margin-inline-end: auto;');
+    expect(stylesheet).toContain('.user-message-item-shell:hover .user-message-item__timestamp,');
+    expect(stylesheet).toContain('.user-message-item-shell:focus-within .user-message-item__timestamp {\n  opacity: 1;\n  visibility: visible;');
     const meta = extractBlock(stylesheet, '\n.user-message-item__meta {');
     expect(metaLayout).toContain('display: flex;');
     expect(meta + metaLayout).not.toMatch(/position:\s*(absolute|fixed);/);

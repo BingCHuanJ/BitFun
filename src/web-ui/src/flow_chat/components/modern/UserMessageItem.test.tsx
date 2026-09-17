@@ -297,6 +297,7 @@ describe('UserMessageItem steering tag', () => {
     expect(editLayout?.contains(imageGallery ?? null)).toBe(false);
     expect(editLayout?.firstElementChild).toBe(editComposer);
     expect(container.querySelectorAll('.user-message-item__images')).toHaveLength(1);
+    expect(container.querySelector('[data-testid="chat-user-message-timestamp"]')).toBeNull();
   });
 
   it('places sent image attachments above the right-aligned text bubble', () => {
