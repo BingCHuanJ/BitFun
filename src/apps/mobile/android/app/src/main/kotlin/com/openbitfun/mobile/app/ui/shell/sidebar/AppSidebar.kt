@@ -42,6 +42,7 @@ import com.openbitfun.mobile.core.feature.connection.RemoteControlSource
 import com.openbitfun.mobile.core.feature.session.SessionActionPolicy
 import com.openbitfun.mobile.core.feature.session.SessionActionScope
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
+import com.openbitfun.mobile.core.feature.session.WorkspaceSessionDirectoryUiState
 import com.openbitfun.mobile.core.feature.layout.SettingsPlacement
 import com.openbitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
@@ -75,6 +76,7 @@ internal fun AppSidebar(
     remoteDeviceName: String,
     remoteState: RemoteSessionUiState,
     workspaceState: RemoteWorkspaceUiState,
+    workspaceDirectory: WorkspaceSessionDirectoryUiState,
     remoteActive: Boolean,
     remoteSelectedSessionId: String?,
     query: String,
@@ -90,6 +92,8 @@ internal fun AppSidebar(
     onOpenRemoteSession: (String) -> Unit,
     onCreateRemoteInWorkspace: (String, String?, String?, String) -> Unit,
     onOpenRemoteWorkspace: (String) -> Unit,
+    onExpandRemoteWorkspace: (String, String?, String?) -> Unit,
+    onRetryRemoteWorkspaceSessions: (String, String?, String?) -> Unit,
     onAddRemoteWorkspace: (() -> Unit)? = null,
     onWorkspaceTool: (String, String?, Boolean) -> Unit,
     onDeleteRemoteSession: (String) -> Unit,
@@ -127,6 +131,7 @@ internal fun AppSidebar(
                         deviceName = remoteDeviceName,
                         remoteState = remoteState,
                         workspaceState = workspaceState,
+                        workspaceDirectory = workspaceDirectory,
                         selectedSessionId = remoteSelectedSessionId.takeIf { remoteActive },
                         onConnect = onScanDesktop,
                         onRetryActive = onRetryRemoteDevice,
@@ -141,6 +146,8 @@ internal fun AppSidebar(
                         },
                         onCreateInWorkspace = onCreateRemoteInWorkspace,
                         onOpenWorkspace = onOpenRemoteWorkspace,
+                        onExpandWorkspace = onExpandRemoteWorkspace,
+                        onRetryWorkspaceSessions = onRetryRemoteWorkspaceSessions,
                         onAddWorkspace = onAddRemoteWorkspace,
                         onWorkspaceTool = onWorkspaceTool,
                     )

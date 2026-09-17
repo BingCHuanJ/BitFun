@@ -322,6 +322,8 @@
     <string name="sidebar_connect_desktop">连接电脑</string>
     <string name="sidebar_add_connection">添加连接</string>
     <string name="sidebar_empty_workspaces">这台电脑还没有工作区</string>
+    <string name="sidebar_workspace_empty_sessions">此工作区暂无会话</string>
+    <string name="sidebar_workspace_load_failed">这个工作区暂时无法读取</string>
     <string name="sidebar_more_workspaces">还有 %1$d 个工作区</string>
     <string name="sidebar_more_devices">还有 %1$d 台设备</string>
     <string name="sidebar_new_in_workspace">在此工作区新建</string>
