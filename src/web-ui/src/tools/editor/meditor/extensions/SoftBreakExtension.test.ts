@@ -34,6 +34,14 @@ describe('SoftBreakExtension', () => {
     expect([...breaks].map(node => node.textContent)).toEqual(['\n', '\n']);
   });
 
+  it('marks the whole CRLF line ending, not just the newline', () => {
+    const instance = createEditor('alpha line one\r\nbeta line two');
+    const breaks = instance.view.dom.querySelectorAll('.m-editor-soft-break');
+
+    expect(breaks).toHaveLength(1);
+    expect([...breaks].map(node => node.textContent)).toEqual(['\r\n']);
+  });
+
   it('leaves the document unchanged so the source keeps its wrapping', () => {
     const markdown = 'alpha line one\nbeta line two';
     const instance = createEditor(markdown);
