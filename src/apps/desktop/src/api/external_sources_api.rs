@@ -21,7 +21,6 @@ use openbitfun_core::external_sources::{
     NativePromptCommandDescriptor, PromptCommandInvocationOutcome,
     PromptCommandShellReviewDecision,
 };
-use openbitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use openbitfun_core::service::remote_ssh::workspace_state::{
     canonicalize_local_workspace_root, local_workspace_roots_equal,
 };
@@ -39,6 +38,9 @@ use super::AppState;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceSnapshotRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub force_refresh: bool,
@@ -47,6 +49,7 @@ pub struct ExternalSourceSnapshotRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkspaceReferenceSnapshotRequest {
+    #[serde(default)]
     pub workspace_path: String,
     #[serde(default)]
     pub workspace_id: Option<String>,
@@ -57,6 +60,9 @@ pub struct WorkspaceReferenceSnapshotRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceControlCommandRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub control: ExternalSourceControlRequestV1,
 }
@@ -64,6 +70,9 @@ pub struct ExternalSourceControlCommandRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalSourceEnabledRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub source_key: String,
     pub enabled: bool,
@@ -73,6 +82,9 @@ pub struct SetExternalSourceEnabledRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RevealExternalSourceLocationRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub source_key: String,
 }
@@ -80,6 +92,9 @@ pub struct RevealExternalSourceLocationRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalEcosystemAwarenessRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
 }
 
@@ -92,6 +107,9 @@ pub struct ExternalEcosystemAwarenessResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AcknowledgeExternalEcosystemsRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub ecosystem_ids: Vec<String>,
 }
@@ -99,6 +117,9 @@ pub struct AcknowledgeExternalEcosystemsRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateExternalIntegrationPolicyRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub mutation: ExternalIntegrationPolicyMutation,
 }
@@ -106,6 +127,9 @@ pub struct UpdateExternalIntegrationPolicyRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalSourceConflictChoiceRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub conflict_key: String,
     pub candidate_id: String,
@@ -115,6 +139,9 @@ pub struct SetExternalSourceConflictChoiceRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativePromptCommandConflictsRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub native_commands: Vec<NativePromptCommandDescriptor>,
 }
@@ -122,6 +149,9 @@ pub struct NativePromptCommandConflictsRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetNativePromptCommandConflictChoiceRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub native_commands: Vec<NativePromptCommandDescriptor>,
     pub selected_candidate_id: String,
@@ -131,6 +161,9 @@ pub struct SetNativePromptCommandConflictChoiceRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExpandExternalPromptCommandRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub name: String,
     #[serde(default)]
@@ -149,6 +182,9 @@ pub struct ExpandExternalPromptCommandRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalToolTargetDecisionRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub approval_key: String,
     pub decision_key: String,
@@ -166,6 +202,9 @@ pub struct ExternalToolDecisionRef {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalToolTargetsEnabledRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub decisions: Vec<ExternalToolDecisionRef>,
     pub enabled: bool,
@@ -176,6 +215,9 @@ pub struct SetExternalToolTargetsEnabledRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalToolConflictChoiceRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub conflict_key: String,
     pub candidate_id: String,
@@ -185,6 +227,9 @@ pub struct SetExternalToolConflictChoiceRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalSubagentActivationRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub candidate_id: String,
     pub approved: bool,
@@ -203,6 +248,9 @@ pub struct ExternalCandidateDecisionRef {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalSubagentsEnabledRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub decisions: Vec<ExternalCandidateDecisionRef>,
     pub enabled: bool,
@@ -213,6 +261,9 @@ pub struct SetExternalSubagentsEnabledRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalSubagentModelBindingRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub binding_key: String,
     pub target: Option<ExternalSubagentModelBindingTarget>,
@@ -223,6 +274,9 @@ pub struct SetExternalSubagentModelBindingRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ChooseExternalSubagentConflictRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub conflict_key: String,
     pub candidate_id: String,
@@ -235,6 +289,9 @@ pub struct ChooseExternalSubagentConflictRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalMcpServerDecisionRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub candidate_id: String,
     pub decision_key: String,
@@ -246,6 +303,9 @@ pub struct SetExternalMcpServerDecisionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalMcpServersEnabledRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub decisions: Vec<ExternalCandidateDecisionRef>,
     pub enabled: bool,
@@ -256,6 +316,9 @@ pub struct SetExternalMcpServersEnabledRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ChooseExternalMcpConflictRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub conflict_key: String,
     pub candidate_id: String,
@@ -268,12 +331,18 @@ pub struct ChooseExternalMcpConflictRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlanExternalMcpImportRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ApplyExternalMcpImportRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Upgrade-only input for pre-ID clients.
     pub workspace_path: Option<String>,
     pub import_request: ExternalMcpImportApplyRequestV1,
 }
@@ -288,9 +357,11 @@ pub type WorkspaceReferenceResponse = WorkspaceReferenceSnapshot;
 pub async fn plan_external_mcp_import_command(
     request: PlanExternalMcpImportRequest,
 ) -> ExternalSourceOperationResult<ExternalMcpImportPlanV1> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref())
-        .await?
-        .map(Path::to_path_buf);
+    let workspace = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
     openbitfun_core::external_mcp_import::plan_external_mcp_import(workspace).await
 }
 
@@ -298,9 +369,11 @@ pub async fn plan_external_mcp_import_command(
 pub async fn apply_external_mcp_import_command(
     request: ApplyExternalMcpImportRequest,
 ) -> ExternalSourceOperationResult<ExternalMcpImportApplyResultV1> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref())
-        .await?
-        .map(Path::to_path_buf);
+    let workspace = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
     openbitfun_core::external_mcp_import::apply_external_mcp_import(
         workspace,
         request.import_request,
@@ -309,32 +382,42 @@ pub async fn apply_external_mcp_import_command(
 }
 
 pub(super) async fn require_local_workspace(
-    workspace_path: Option<&str>,
-) -> ExternalSourceOperationResult<Option<&Path>> {
-    let Some(workspace_path) = workspace_path else {
+    workspace_id: Option<&str>,
+    legacy_path: Option<&str>,
+) -> ExternalSourceOperationResult<Option<String>> {
+    if workspace_id.is_none() && legacy_path.is_none() {
         return Ok(None);
-    };
-    if is_remote_path(workspace_path).await {
-        return Err(ExternalSourceOperationError::new(
-            ExternalSourceOperationErrorCode::HostUnavailable,
-            "The remote workspace is not running the external compatibility service",
-            true,
-        ));
     }
-    let path = Path::new(workspace_path);
-    if !path.is_absolute() {
-        return Err(ExternalSourceOperationError::invalid_request(
-            "External AI application sources require an absolute workspace path",
-        ));
-    }
-    Ok(Some(path))
+    let service =
+        openbitfun_core::service::workspace::get_global_workspace_service().ok_or_else(|| {
+            ExternalSourceOperationError::invalid_request("Workspace service is unavailable")
+        })?;
+    let record = service
+        .resolve_legacy_workspace_reference(
+            workspace_id,
+            legacy_path.unwrap_or_default(),
+            None,
+            None,
+        )
+        .await
+        .map_err(|error| ExternalSourceOperationError::invalid_request(error.to_string()))?
+        .ok_or_else(|| {
+            ExternalSourceOperationError::invalid_request("Unknown workspace reference")
+        })?;
+    ensure_registered_workspace_reference_kind(Some(&record.workspace_kind))?;
+    Ok(Some(record.id))
 }
 
 #[tauri::command]
 pub async fn update_external_integration_policy_command(
     request: UpdateExternalIntegrationPolicyRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     update_external_integration_policy(workspace, request.mutation)
         .await
         .map(Into::into)
@@ -345,7 +428,12 @@ pub async fn update_external_integration_policy_command(
 pub async fn get_external_source_snapshot(
     request: ExternalSourceSnapshotRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     external_source_snapshot(workspace, request.force_refresh)
         .await
         .map(|snapshot| ExternalSourcePublicSnapshot::from(snapshot).into_legacy_v0_compatible())
@@ -356,8 +444,28 @@ pub async fn get_external_source_snapshot(
 pub async fn get_instruction_source_catalog(
     request: ExternalSourceSnapshotRequest,
 ) -> ExternalSourceOperationResult<openbitfun_core::external_sources::InstructionSourceCatalog> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
-    Ok(openbitfun_core::external_sources::instruction_source_catalog(workspace).await)
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
+    let root = if let Some(id) = workspace {
+        let service = openbitfun_core::service::workspace::get_global_workspace_service()
+            .ok_or_else(|| {
+                ExternalSourceOperationError::invalid_request("Workspace service is unavailable")
+            })?;
+        Some(
+            service
+                .require_workspace(id)
+                .await
+                .map_err(|error| ExternalSourceOperationError::invalid_request(error.to_string()))?
+                .root_path,
+        )
+    } else {
+        None
+    };
+    Ok(openbitfun_core::external_sources::instruction_source_catalog(root.as_deref()).await)
 }
 
 #[tauri::command]
@@ -365,63 +473,24 @@ pub async fn get_workspace_reference_snapshot(
     state: State<'_, AppState>,
     request: WorkspaceReferenceSnapshotRequest,
 ) -> ExternalSourceOperationResult<WorkspaceReferenceResponse> {
-    let requested_workspace = Path::new(&request.workspace_path);
-    if !requested_workspace.is_absolute() {
-        return Err(ExternalSourceOperationError::invalid_request(
-            "Workspace references require an absolute workspace path",
-        ));
-    }
-    let workspace_id = request
-        .workspace_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|workspace_id| !workspace_id.is_empty());
-    let workspace_info = match workspace_id {
-        Some(workspace_id) => state.workspace_service.get_workspace(workspace_id).await,
-        None => {
-            state
-                .workspace_service
-                .get_workspace_by_path(requested_workspace)
-                .await
-        }
-    };
-    ensure_registered_workspace_reference_kind(
-        workspace_info
-            .as_ref()
-            .map(|workspace| &workspace.workspace_kind),
-    )?;
-    let workspace_info = workspace_info.expect("registered workspace was validated above");
-    let path_matches_registered_workspace = if workspace_reference_path_matches_registered_root(
-        &workspace_info.root_path,
-        requested_workspace,
-    ) {
-        true
-    } else {
-        state
-            .workspace_service
-            .is_live_worktree_root_in_same_repository(
-                &workspace_info.root_path,
-                requested_workspace,
-            )
-            .await
-            .unwrap_or(false)
-    };
-    if !path_matches_registered_workspace {
-        return Err(ExternalSourceOperationError::invalid_request(
-            "Workspace reference path does not match the registered workspace or one of its Git worktrees",
-        ));
-    }
-    let workspace = require_local_workspace(Some(&request.workspace_path))
-        .await?
-        .ok_or_else(|| {
-            ExternalSourceOperationError::invalid_request(
-                "Workspace references require a local workspace path",
-            )
-        })?;
-    let native_related_paths = workspace_info.related_paths;
-    workspace_reference_snapshot(workspace, &native_related_paths, request.force_refresh)
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        (!request.workspace_path.is_empty()).then_some(request.workspace_path.as_str()),
+    )
+    .await?
+    .ok_or_else(|| ExternalSourceOperationError::invalid_request("Workspace ID is required"))?;
+    let workspace = state
+        .workspace_service
+        .require_workspace(&workspace_id)
         .await
-        .map_err(openbitfun_core::external_sources::sanitize_external_source_operation_error)
+        .map_err(|error| ExternalSourceOperationError::invalid_request(error.to_string()))?;
+    workspace_reference_snapshot(
+        &workspace.id,
+        &workspace.related_paths,
+        request.force_refresh,
+    )
+    .await
+    .map_err(openbitfun_core::external_sources::sanitize_external_source_operation_error)
 }
 
 fn ensure_registered_workspace_reference_kind(
@@ -456,7 +525,12 @@ fn workspace_reference_path_matches_registered_root(
 pub async fn reveal_external_source_location(
     request: RevealExternalSourceLocationRequest,
 ) -> ExternalSourceOperationResult<()> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     let path = external_source_location_for_host_action(workspace, &request.source_key)
         .await
         .map_err(openbitfun_core::external_sources::sanitize_external_source_operation_error)?;
@@ -468,7 +542,12 @@ pub async fn reveal_external_source_location(
 pub async fn get_external_source_control_snapshot(
     request: ExternalSourceSnapshotRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceControlResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     core_get_external_source_control_snapshot(
         workspace,
         request.force_refresh,
@@ -481,7 +560,12 @@ pub async fn get_external_source_control_snapshot(
 pub async fn get_external_source_discovery_snapshot(
     request: ExternalSourceSnapshotRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceDiscoverySnapshotV1> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     external_source_discovery_snapshot(
         workspace,
         request.force_refresh,
@@ -495,7 +579,12 @@ pub async fn get_external_source_discovery_snapshot(
 pub async fn apply_external_source_control_action_command(
     request: ExternalSourceControlCommandRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceControlResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     apply_external_source_control_action(workspace, request.control).await
 }
 
@@ -505,7 +594,12 @@ pub async fn apply_external_source_control_action_command(
 pub async fn get_external_ecosystem_awareness_command(
     request: ExternalEcosystemAwarenessRequest,
 ) -> ExternalSourceOperationResult<ExternalEcosystemAwarenessResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     unacknowledged_external_ecosystems(workspace)
         .await
         .map(
@@ -524,7 +618,12 @@ pub async fn get_external_ecosystem_awareness_command(
 pub async fn acknowledge_external_ecosystems_command(
     request: AcknowledgeExternalEcosystemsRequest,
 ) -> ExternalSourceOperationResult<()> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     acknowledge_external_ecosystems(workspace, request.ecosystem_ids)
         .await
         .map_err(openbitfun_core::external_sources::sanitize_external_source_operation_error)
@@ -534,7 +633,12 @@ pub async fn acknowledge_external_ecosystems_command(
 pub async fn set_external_source_enabled_command(
     request: SetExternalSourceEnabledRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_source_enabled(
         workspace,
         &request.source_key,
@@ -550,7 +654,12 @@ pub async fn set_external_source_enabled_command(
 pub async fn set_external_source_conflict_choice_command(
     request: SetExternalSourceConflictChoiceRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_prompt_command_conflict_choice(
         workspace,
         &request.conflict_key,
@@ -566,7 +675,12 @@ pub async fn set_external_source_conflict_choice_command(
 pub async fn get_native_prompt_command_conflicts_command(
     request: NativePromptCommandConflictsRequest,
 ) -> ExternalSourceOperationResult<NativePromptCommandConflictsResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     native_prompt_command_conflicts(workspace, request.native_commands)
         .await
         .map_err(openbitfun_core::external_sources::sanitize_external_source_operation_error)
@@ -576,7 +690,12 @@ pub async fn get_native_prompt_command_conflicts_command(
 pub async fn set_native_prompt_command_conflict_choice_command(
     request: SetNativePromptCommandConflictChoiceRequest,
 ) -> ExternalSourceOperationResult<NativePromptCommandConflictsResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_native_prompt_command_conflict_choice(
         workspace,
         request.native_commands,
@@ -591,7 +710,12 @@ pub async fn set_native_prompt_command_conflict_choice_command(
 pub async fn expand_external_prompt_command_command(
     request: ExpandExternalPromptCommandRequest,
 ) -> ExternalSourceOperationResult<ExpandExternalPromptCommandResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     expand_external_prompt_command(
         workspace,
         &request.name,
@@ -611,7 +735,12 @@ pub async fn expand_external_prompt_command_command(
 pub async fn set_external_tool_target_decision_command(
     request: SetExternalToolTargetDecisionRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_tool_target_decision(
         workspace,
         &request.approval_key,
@@ -628,7 +757,12 @@ pub async fn set_external_tool_target_decision_command(
 pub async fn set_external_tool_targets_enabled_command(
     request: SetExternalToolTargetsEnabledRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_tool_targets_enabled(
         workspace,
         request
@@ -649,7 +783,12 @@ pub async fn set_external_tool_targets_enabled_command(
 pub async fn set_external_tool_conflict_choice_command(
     request: SetExternalToolConflictChoiceRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_tool_conflict_choice(
         workspace,
         &request.conflict_key,
@@ -665,7 +804,12 @@ pub async fn set_external_tool_conflict_choice_command(
 pub async fn set_external_subagent_activation_command(
     request: SetExternalSubagentActivationRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_subagent_activation(
         workspace,
         &request.candidate_id,
@@ -683,7 +827,12 @@ pub async fn set_external_subagent_activation_command(
 pub async fn set_external_subagents_enabled_command(
     request: SetExternalSubagentsEnabledRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_subagents_enabled(
         workspace,
         request
@@ -704,7 +853,12 @@ pub async fn set_external_subagents_enabled_command(
 pub async fn set_external_subagent_model_binding_command(
     request: SetExternalSubagentModelBindingRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_subagent_model_binding(
         workspace,
         &request.binding_key,
@@ -721,7 +875,12 @@ pub async fn set_external_subagent_model_binding_command(
 pub async fn choose_external_subagent_conflict_command(
     request: ChooseExternalSubagentConflictRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     choose_external_subagent_conflict(
         workspace,
         &request.conflict_key,
@@ -739,7 +898,12 @@ pub async fn choose_external_subagent_conflict_command(
 pub async fn set_external_mcp_server_decision_command(
     request: SetExternalMcpServerDecisionRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_mcp_server_decision(
         workspace,
         &request.candidate_id,
@@ -757,7 +921,12 @@ pub async fn set_external_mcp_server_decision_command(
 pub async fn set_external_mcp_servers_enabled_command(
     request: SetExternalMcpServersEnabledRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     set_external_mcp_servers_enabled(
         workspace,
         request
@@ -778,7 +947,12 @@ pub async fn set_external_mcp_servers_enabled_command(
 pub async fn choose_external_mcp_conflict_command(
     request: ChooseExternalMcpConflictRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
-    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let workspace_id = require_local_workspace(
+        request.workspace_id.as_deref(),
+        request.workspace_path.as_deref(),
+    )
+    .await?;
+    let workspace = workspace_id.as_deref();
     choose_external_mcp_conflict(
         workspace,
         &request.conflict_key,
@@ -798,6 +972,7 @@ mod tests {
     async fn instruction_catalog_rejects_nonlocal_request_paths_before_discovery() {
         for path in ["relative/workspace", "ssh://host/workspace"] {
             let request = super::ExternalSourceSnapshotRequest {
+                workspace_id: None,
                 workspace_path: Some(path.into()),
                 force_refresh: false,
             };

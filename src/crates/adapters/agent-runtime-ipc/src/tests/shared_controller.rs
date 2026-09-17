@@ -570,6 +570,7 @@ async fn generated_session_is_claimed_before_another_connection_can_restore_it()
             2,
             RuntimeIpcOperation::RestoreSession {
                 request: RuntimeSessionRestoreRequest {
+                    workspace_id: None,
                     workspace_path: "fixture-workspace".to_string(),
                     session_id: "session-a".to_string(),
                 },
@@ -636,6 +637,8 @@ fn restored(session_id: &str) -> RuntimeIpcOperationResult {
 
 fn workspace_binding() -> AgentSessionWorkspaceBinding {
     AgentSessionWorkspaceBinding {
+        workspace_kind: None,
+        project_workspace_id: None,
         workspace_id: Some("workspace-fixture".to_string()),
         workspace_path: "/workspace".to_string(),
         project_workspace_path: Some("/workspace".to_string()),
@@ -659,6 +662,7 @@ fn test_identity(workspace: &Path) -> RuntimeInstanceIdentity {
 fn restore_operation(workspace: &Path, session_id: &str) -> RuntimeIpcOperation {
     RuntimeIpcOperation::RestoreSession {
         request: RuntimeSessionRestoreRequest {
+            workspace_id: None,
             workspace_path: workspace.to_string_lossy().to_string(),
             session_id: session_id.to_string(),
         },
@@ -740,6 +744,7 @@ fn compact_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
 fn undo_operation(workspace: &Path, session_id: &str) -> RuntimeIpcOperation {
     RuntimeIpcOperation::UndoSession {
         request: AgentSessionRevertRequest {
+            workspace_id: None,
             workspace_path: workspace.to_string_lossy().to_string(),
             session_id: session_id.to_string(),
             remote_connection_id: None,

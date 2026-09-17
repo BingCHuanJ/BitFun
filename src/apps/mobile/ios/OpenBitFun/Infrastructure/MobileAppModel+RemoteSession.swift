@@ -144,6 +144,7 @@ extension MobileAppModel {
                 let directory = entry.workspace(path: workspace.path, remoteConnectionId: workspace.remoteConnectionId, remoteSshHost: workspace.remoteSshHost)
                 let ownedSessionIDs = Set(entry.sessionsForWorkspace(path: workspace.path, remoteConnectionId: workspace.remoteConnectionId, remoteSshHost: workspace.remoteSshHost).map { $0.id })
                 return MobileWorkspaceGroup(
+                    workspaceId: workspace.workspaceId,
                     path: workspace.path,
                     name: workspace.name.isEmpty ? workspace.path : workspace.displayName,
                     selected: remoteExpectedDeviceKey == deviceKey &&
@@ -169,7 +170,7 @@ extension MobileAppModel {
                 sessions: sessions,
                 catalogSource: entry.catalogSource?.name,
                 recentWorkspaces: entry.recentWorkspaces.map { workspace in
-                    MobileWorkspaceGroup(path: workspace.path, name: workspace.displayName,
+                    MobileWorkspaceGroup(workspaceId: workspace.workspaceId, path: workspace.path, name: workspace.displayName,
                         selected: false, sessions: [], deviceKey: deviceKey,
                         remoteConnectionId: workspace.remoteConnectionId, remoteSshHost: workspace.remoteSshHost)
                 }
@@ -197,7 +198,7 @@ extension MobileAppModel {
         expanded: Bool
     ) {
         guard device.online else { return }
-        coreAdapter?.setDirectoryWorkspaceExpanded(device.id, path: workspace.path, expanded: expanded, connectionId: workspace.remoteConnectionId, sshHost: workspace.remoteSshHost)
+        coreAdapter?.setDirectoryWorkspaceExpanded(device.id, path: workspace.path, expanded: expanded, connectionId: workspace.remoteConnectionId, sshHost: workspace.remoteSshHost, workspaceId: workspace.workspaceId)
     }
 
     func retryDirectoryWorkspace(
@@ -205,7 +206,7 @@ extension MobileAppModel {
         workspace: MobileWorkspaceGroup
     ) {
         guard device.online else { return }
-        coreAdapter?.retryDirectoryWorkspace(device.id, path: workspace.path, connectionId: workspace.remoteConnectionId, sshHost: workspace.remoteSshHost)
+        coreAdapter?.retryDirectoryWorkspace(device.id, path: workspace.path, connectionId: workspace.remoteConnectionId, sshHost: workspace.remoteSshHost, workspaceId: workspace.workspaceId)
     }
 
     private func directoryTargetKey(forRawDeviceKey rawDeviceKey: String) -> String {
@@ -533,7 +534,7 @@ extension MobileAppModel {
         drawerOpen = false
         workspaceSelectionBusy = true
         pendingRemoteSessionRefreshWorkspace = MobileWorkspaceScope(path: normalizedSessionWorkspacePath(workspace.path), remoteConnectionId: workspace.remoteConnectionId, remoteSshHost: workspace.remoteSshHost)
-        coreAdapter?.selectRemoteWorkspace(path: workspace.path, remoteConnectionId: workspace.remoteConnectionId, remoteSshHost: workspace.remoteSshHost)
+        coreAdapter?.selectRemoteWorkspace(path: workspace.path, remoteConnectionId: workspace.remoteConnectionId, remoteSshHost: workspace.remoteSshHost, workspaceId: workspace.workspaceId)
     }
 
     func createRemoteSession(in workspace: MobileWorkspaceGroup, agentType: String) {
@@ -1224,6 +1225,7 @@ extension MobileAppModel {
         let projectedWorkspaces = rows.map { workspace in
             let ownedIDs = Set(workspace.sessions.map { $0.id })
             return MobileWorkspaceGroup(
+                workspaceId: workspace.workspaceId,
                 path: workspace.path,
                 name: workspace.name.isEmpty ? workspace.path : workspace.name,
                 selected: workspace.selected,

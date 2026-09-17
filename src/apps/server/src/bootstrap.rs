@@ -132,16 +132,10 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     };
 
     // 5. Open workspace if specified
-    let initial_workspace_path = if let Some(ws_path) = workspace {
+    let initial_workspace = if let Some(ws_path) = workspace {
         let path = std::path::PathBuf::from(&ws_path);
         let info = coordinator
-            .open_workspace_with_runtime_ownership(
-                workspace_service.as_ref(),
-                path,
-                None,
-                None,
-                "server bootstrap",
-            )
+            .create_local_workspace_with_runtime_ownership(workspace_service.as_ref(), path)
             .await
             .map_err(|error| {
                 anyhow::anyhow!("Failed to open workspace '{}': {}", ws_path, error)
@@ -151,15 +145,15 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
             info.name,
             info.root_path.display()
         );
-        Some(info.root_path)
+        Some(info)
     } else {
         // Try to restore last workspace
-        workspace_service
-            .get_current_workspace()
-            .await
-            .map(|w| w.root_path)
+        workspace_service.get_current_workspace().await
     };
 
+    let initial_workspace_path = initial_workspace
+        .as_ref()
+        .map(|workspace| workspace.root_path.clone());
     if let Err(error) = openbitfun_core::plugin_host::initialize_configured_plugin_host(
         openbitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
     )
@@ -167,7 +161,7 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     {
         openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
             "server startup",
-            initial_workspace_path.as_deref(),
+            initial_workspace.as_ref().map(|record| record.id.as_str()),
             error,
         )
         .await;
@@ -175,15 +169,16 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     if let Some(workspace_path) = initial_workspace_path.as_ref() {
         if let Err(error) = openbitfun_core::plugin_host::ensure_configured_plugin_instance(
             openbitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
-            workspace_path.clone(),
-            workspace_path.clone(),
-            None,
+            &initial_workspace
+                .as_ref()
+                .expect("workspace path has a record")
+                .id,
         )
         .await
         {
             openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                 "server workspace activation",
-                Some(workspace_path),
+                initial_workspace.as_ref().map(|record| record.id.as_str()),
                 error,
             )
             .await;

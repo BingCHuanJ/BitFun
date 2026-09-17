@@ -161,6 +161,7 @@ public class RemoteSessionStore internal constructor(
      * missing, so it is resolved before either is sent rather than passed down
      * from the UI — the same shape as `RemoteSessionManager.workspace`.
      */
+    private var workspaceId: String? = null
     private var workspaceConnectionId: String? = null
     private var workspaceSshHost: String? = null
     private var workspacePath: String = ""
@@ -359,16 +360,16 @@ public class RemoteSessionStore internal constructor(
     }
 
     /** Loads one disclosed workspace without changing the desktop's active workspace. */
-    internal suspend fun sessionsForWorkspace(path: String, remoteConnectionId: String? = null, remoteSshHost: String? = null): List<RemoteSession> {
-        val identity = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost)
-        val normalizedPath = path.trim()
+    internal suspend fun sessionsForWorkspace(identity: RemoteWorkspaceIdentity): List<RemoteSession> {
+        val normalizedPath = identity.path.trim()
         if (normalizedPath.isEmpty()) return emptyList()
         val response = transport.send<SessionListResponse>(
             RemoteCommand(
                 cmd = "list_sessions",
-                workspacePath = normalizedPath,
-                remoteConnectionId = remoteConnectionId,
-                remoteSshHost = remoteSshHost,
+                workspaceId = identity.workspaceId,
+                workspacePath = normalizedPath.takeIf { identity.workspaceId == null },
+                remoteConnectionId = identity.remoteConnectionId.takeIf { identity.workspaceId == null },
+                remoteSshHost = identity.remoteSshHost.takeIf { identity.workspaceId == null },
                 limit = DIRECTORY_WORKSPACE_PAGE_SIZE,
                 offset = 0,
             ),
@@ -377,7 +378,7 @@ public class RemoteSessionStore internal constructor(
             .map(RemoteResponseMapper::session)
             .filter { SessionAgentTypes.isMobileVisible(it.agentType) }
             .map { session ->
-                session.copy(workspacePath = session.workspacePath?.takeIf { it.isNotBlank() } ?: normalizedPath, workspaceIdentity = identity)
+                session.copy(workspacePath = session.workspacePath?.takeIf { it.isNotBlank() } ?: normalizedPath, workspaceIdentity = session.workspaceIdentity ?: identity)
             }
         val serverIds = server.mapTo(mutableSetOf()) { it.id }
         serverIds.forEach(locallyCreatedSessions::remove)
@@ -407,7 +408,7 @@ public class RemoteSessionStore internal constructor(
         }
         val job = scope.launch {
             try {
-                val loaded = sessionsForWorkspace(normalizedPath, remoteConnectionId, remoteSshHost)
+                val loaded = sessionsForWorkspace(identity)
                 if (workspaceDirectoryGenerations[key] != generation) return@launch
                 if (persistenceEnabled) {
                     val cached = cachedSessions()
@@ -686,6 +687,7 @@ public class RemoteSessionStore internal constructor(
         val info = transport.send<WorkspaceInfoResponse>(RemoteCommand(cmd = "get_workspace_info"))
         if (!isCurrentWork(operationToken)) return false
         workspacePath = (info.path ?: info.workspacePath).orEmpty().trim()
+        workspaceId = info.workspaceId
         workspaceConnectionId = info.remoteConnectionId
         workspaceSshHost = info.remoteSshHost
         hostCapabilities = info.capabilities
@@ -694,7 +696,7 @@ public class RemoteSessionStore internal constructor(
 
     private suspend fun listSessions(offset: Int, query: String, filter: SessionAgentFilter, count: Int = PAGE_SIZE): SessionPage {
         val trimmedQuery = query.trim()
-        val identity = RemoteWorkspaceIdentity(workspacePath, workspaceConnectionId, workspaceSshHost)
+        val identity = RemoteWorkspaceIdentity(workspacePath, workspaceConnectionId, workspaceSshHost, workspaceId)
         // `list_sessions` cannot apply either the mobile ACP visibility rule or
         // the agent tab. Pull from the start until there are enough visible rows
         // so an invisible server row never creates a short page or a dishonest
@@ -706,7 +708,7 @@ public class RemoteSessionStore internal constructor(
         val pageSize = if (filter == SessionAgentFilter.ALL) PAGE_SIZE else FILTER_PAGE_SIZE
         while (hasMore && filtered.size < targetCount) {
             val response = sendListSessions(pageSize, pageOffset, trimmedQuery, identity)
-            val sessions = response.sessions.map(RemoteResponseMapper::session).map { it.copy(workspaceIdentity = identity) }
+            val sessions = response.sessions.map(RemoteResponseMapper::session).map { it.copy(workspaceIdentity = it.workspaceIdentity ?: identity) }
             sessions.filterTo(filtered) {
                 SessionAgentTypes.isMobileVisible(it.agentType) && filter.matches(it.agentType)
             }
@@ -786,7 +788,8 @@ public class RemoteSessionStore internal constructor(
         transport.send(
             RemoteCommand(
                 cmd = "list_sessions",
-                workspacePath = identity.path,
+                workspaceId = identity.workspaceId,
+                workspacePath = identity.path.takeIf { identity.workspaceId == null },
                 remoteConnectionId = identity.remoteConnectionId,
                 remoteSshHost = identity.remoteSshHost,
                 limit = limit,
@@ -1769,7 +1772,7 @@ public class RemoteSessionStore internal constructor(
         id = s.sessionId, title = s.title, agentType = s.agentType, status = s.status,
         updatedAt = s.updatedAt, createdAt = s.createdAt, messageCount = s.messageCount,
         workspacePath = s.workspacePath, workspaceName = s.workspaceName,
-        workspaceIdentity = s.workspaceIdentity?.let { RemoteWorkspaceIdentity(it.path, it.remoteConnectionId, it.remoteSshHost) },
+        workspaceIdentity = s.workspaceIdentity?.let { RemoteWorkspaceIdentity(it.path, it.remoteConnectionId, it.remoteSshHost, it.workspaceId) },
     )
 
     private fun toPersistedSession(s: RemoteSession): PersistedRemoteSession = PersistedRemoteSession(
@@ -1777,7 +1780,7 @@ public class RemoteSessionStore internal constructor(
         updatedAt = s.updatedAt, createdAt = s.createdAt, messageCount = s.messageCount,
         lastMessageId = "", workspacePath = s.workspacePath, workspaceName = s.workspaceName,
         pendingConfirmed = s.id in locallyCreatedSessions,
-        workspaceIdentity = s.workspaceIdentity?.let { PersistedWorkspaceIdentity(it.path, it.remoteConnectionId, it.remoteSshHost) },
+        workspaceIdentity = s.workspaceIdentity?.let { PersistedWorkspaceIdentity(it.path, it.remoteConnectionId, it.remoteSshHost, it.workspaceId) },
     )
 
 
@@ -1928,6 +1931,7 @@ internal object RemoteResponseMapper {
             messageCount = item.messageCount ?: 0,
             workspacePath = item.workspacePath,
             workspaceName = item.workspaceName,
+            workspaceIdentity = item.workspaceId?.let { RemoteWorkspaceIdentity(item.workspacePath.orEmpty(), null, null, it) },
         )
     }
 

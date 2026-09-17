@@ -81,6 +81,7 @@ pub(super) fn restore_session_request(
     request: RestoreSessionMessage,
 ) -> AgentSessionRestoreRequest {
     AgentSessionRestoreRequest {
+        workspace_id: request.workspace_id,
         workspace_path: request.workspace_path,
         session_id: request.session_id,
         include_internal: request.include_internal,

@@ -6,7 +6,6 @@ use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, AgentSubagentOverrideConfig};
 use crate::util::errors::OpenBitFunResult;
 use std::collections::HashMap;
-use std::path::Path;
 
 pub(super) async fn get_mode_configs() -> HashMap<String, AgentProfileConfig> {
     if let Ok(config_service) = GlobalConfigManager::get_service().await {
@@ -34,9 +33,10 @@ pub(super) async fn get_subagent_overrides() -> AgentSubagentOverrideConfig {
 }
 
 pub(super) async fn load_project_subagent_overrides_local(
-    workspace_root: &Path,
+    workspace_id: &str,
 ) -> OpenBitFunResult<AgentSubagentOverrideConfig> {
-    let document = load_project_agent_profiles_document_local(workspace_root).await?;
+    let record = require_local_workspace(workspace_id).await?;
+    let document = load_project_agent_profiles_document_local(&record.root_path).await?;
     Ok(document
         .keys()
         .map(|profile_id| {
@@ -50,10 +50,11 @@ pub(super) async fn load_project_subagent_overrides_local(
 }
 
 pub(super) async fn save_project_subagent_overrides_local(
-    workspace_root: &Path,
+    workspace_id: &str,
     overrides: &AgentSubagentOverrideConfig,
 ) -> OpenBitFunResult<()> {
-    let mut document = load_project_agent_profiles_document_local(workspace_root).await?;
+    let record = require_local_workspace(workspace_id).await?;
+    let mut document = load_project_agent_profiles_document_local(&record.root_path).await?;
 
     let existing_profile_ids: Vec<String> = document.keys().cloned().collect();
     for profile_id in existing_profile_ids {
@@ -65,7 +66,7 @@ pub(super) async fn save_project_subagent_overrides_local(
         set_project_subagent_overrides(&mut document, profile_id, profile_overrides.clone());
     }
 
-    save_project_agent_profiles_document_local(workspace_root, &document).await
+    save_project_agent_profiles_document_local(&record.root_path, &document).await
 }
 
 pub(super) fn merge_dynamic_mcp_tools(
@@ -88,4 +89,18 @@ pub(super) fn merge_dynamic_mcp_tools(
     }
 
     configured_tools
+}
+
+pub(super) async fn require_local_workspace(
+    id: &str,
+) -> OpenBitFunResult<crate::service::workspace::WorkspaceInfo> {
+    let service = crate::service::workspace::get_global_workspace_service()
+        .ok_or_else(|| crate::OpenBitFunError::service("Workspace service is unavailable"))?;
+    let record = service.require_workspace(id).await?;
+    if record.workspace_kind == crate::service::workspace::WorkspaceKind::Remote {
+        return Err(crate::OpenBitFunError::service(
+            "Local agent discovery cannot read a remote workspace",
+        ));
+    }
+    Ok(record)
 }

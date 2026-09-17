@@ -1,5 +1,6 @@
 package com.openbitfun.mobile.core.feature.directory
 
+import com.openbitfun.mobile.core.domain.LegacyWorkspaceCompatibility
 import com.openbitfun.mobile.core.domain.identity
 import com.openbitfun.mobile.core.domain.belongsTo
 import com.openbitfun.mobile.core.domain.RemoteWorkspaceIdentity
@@ -41,9 +42,10 @@ public data class WorkspaceDirectoryEntry public constructor(
     public val status: WorkspaceDirectoryStatus,
     public val remoteConnectionId: String?,
     public val remoteSshHost: String?,
+    public val workspaceId: String? = null,
 ) {
     public constructor(path: String, expanded: Boolean, status: WorkspaceDirectoryStatus) : this(path, expanded, status, null, null)
-    public val identity: RemoteWorkspaceIdentity get() = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost)
+    public val identity: RemoteWorkspaceIdentity get() = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost, workspaceId)
 }
 
 /** Why a device's directory content cannot be shown. */
@@ -81,14 +83,14 @@ public data class DeviceDirectoryEntry public constructor(
     public val recentWorkspaces: List<RecentWorkspace>,
 ) {
     public fun sessionsForWorkspace(path: String, remoteConnectionId: String?, remoteSshHost: String?): List<RemoteSession> {
-        val identity = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost)
+        val identity = LegacyWorkspaceCompatibility.resolve(RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost), workspaces.map { it.identity() }) ?: return emptyList()
         return sessions.filter { it.belongsTo(identity, workspaces.map { row -> row.identity() }) }
     }
 
     public fun workspace(path: String): WorkspaceDirectoryEntry? = workspace(path, null, null)
 
     public fun workspace(path: String, remoteConnectionId: String?, remoteSshHost: String?): WorkspaceDirectoryEntry? {
-        val identity = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost)
+        val identity = LegacyWorkspaceCompatibility.resolve(RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost), workspaces.map { it.identity() }) ?: return null
         return workspaceDirectory.firstOrNull { it.identity.matches(identity) }
     }
 
@@ -150,6 +152,7 @@ public sealed interface DeviceDirectoryIntent {
         public val expanded: Boolean,
         public val remoteConnectionId: String?,
         public val remoteSshHost: String?,
+        public val workspaceId: String? = null,
     ) : DeviceDirectoryIntent {
         public constructor(deviceId: String, path: String, expanded: Boolean) : this(deviceId, path, expanded, null, null)
     }
@@ -159,6 +162,7 @@ public sealed interface DeviceDirectoryIntent {
         public val path: String,
         public val remoteConnectionId: String?,
         public val remoteSshHost: String?,
+        public val workspaceId: String? = null,
     ) : DeviceDirectoryIntent {
         public constructor(deviceId: String, path: String) : this(deviceId, path, null, null)
     }

@@ -128,6 +128,8 @@ impl ChatMode {
 
         let execution_target = result.execution_target.clone();
         let binding = openbitfun_runtime_ports::AgentSessionWorkspaceBinding {
+            workspace_kind: Some(openbitfun_core::service::workspace::WorkspaceKind::Normal),
+            project_workspace_id: result.project_workspace_id,
             workspace_id: result.workspace_id,
             workspace_path: result.workspace_path,
             project_workspace_path: Some(result.project_workspace_path),

@@ -46,9 +46,7 @@ export async function activateGlobalSearchTarget(
       await context.setActiveWorkspace(target.workspaceId);
       const available = await flowChatStore.ensurePersistedSessionMetadata(
         target.sessionId,
-        target.workspacePath,
-        target.remoteConnectionId,
-        target.remoteSshHost,
+        target.workspaceId,
       );
       if (!available) {
         throw new Error(context.tCommon('nav.search.errors.sessionUnavailable'));

@@ -192,7 +192,7 @@ async function collectPeerDirectoryEntries(
   while (pending.length > 0) {
     const current = pending.shift()!;
     await mkdir(current.destination, { recursive: true });
-    const children = await workspaceAPI.getDirectoryChildren(current.source, remoteConnectionId);
+    const children = await workspaceAPI.getDirectoryChildren(current.source, remoteConnectionId ?? '');
     for (const child of children) {
       if (!isSafePeerTransferEntryName(child.name)) {
         throw new Error(`Unsafe peer file name: '${child.name}'`);
@@ -630,7 +630,7 @@ export async function downloadWorkspaceFileToDisk(
         }
       }, transferId);
     } else {
-      await workspaceAPI.exportLocalFileToPath(filePath, dest);
+      await workspaceAPI.exportLocalFileToPath(filePath, dest, workspace?.id);
     }
     onProgress({
       phase: "download",
@@ -802,6 +802,7 @@ export async function uploadLocalPathsToWorkspaceDirectory(
     normalizedLocalPaths,
     normalizedTargetDirectory,
     isCut,
+    workspace?.id,
   );
 
   onProgress({

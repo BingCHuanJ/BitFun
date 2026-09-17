@@ -64,6 +64,7 @@ const log = createLogger('ReviewPlatformPanel');
 
 interface ReviewPlatformPanelProps {
   workspacePath?: string;
+  workspaceId: string;
   initialRemoteId?: string;
   initialPullRequestId?: string;
   initialPullRequestUrl?: string;
@@ -659,6 +660,7 @@ function canExpandCiItem(remote: ReviewPlatformRemote | null, item: ReviewPlatfo
 
 export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   workspacePath,
+  workspaceId,
   initialRemoteId,
   initialPullRequestId,
   initialPullRequestUrl,
@@ -841,7 +843,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             requestedState,
           );
       const next = options?.userInitiated
-        ? await withGitRepositoryTrustRecovery(fetchSnapshot, { userInitiated: true })
+        ? await withGitRepositoryTrustRecovery(fetchSnapshot, { workspaceId, repositoryPath: workspacePath }, { userInitiated: true })
         : await fetchSnapshot();
       if (snapshotRequestSeq.current !== requestSeq) return;
       setSnapshot(next);
@@ -1572,6 +1574,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       }
       const prepared = await prepareReviewLaunchFromPullRequest({
         workspacePath,
+        workspaceId,
         remote: selectedRemote,
         repository,
         reviewTarget,

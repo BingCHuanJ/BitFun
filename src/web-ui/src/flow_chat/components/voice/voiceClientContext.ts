@@ -62,17 +62,12 @@ function latestTurnStatus(session: Session): string {
   return session.dialogTurns[session.dialogTurns.length - 1]?.status ?? 'empty';
 }
 
-function workspaceForSession(
+export function workspaceForSession(
   session: Session,
   workspaces: WorkspaceInfo[],
 ): WorkspaceInfo | undefined {
-  const workspacePath = session.config.projectWorkspacePath ?? session.config.workspacePath;
-  if (!workspacePath) return undefined;
-  return workspaces.find(workspace =>
-    workspace.rootPath === workspacePath
-    && (!session.config.remoteConnectionId
-      || workspace.connectionId === session.config.remoteConnectionId),
-  );
+  const id = session.workspaceId ?? session.config.workspaceId;
+  return id ? workspaces.find(workspace => workspace.id === id) : undefined;
 }
 
 /**

@@ -427,6 +427,7 @@ struct SidebarView: View {
         let visibleWorkspaceCount = visibleDeviceWorkspaceCounts[device.id] ?? 3
         ForEach(device.workspaces.prefix(visibleWorkspaceCount)) { workspace in
             let scopedWorkspace = MobileWorkspaceGroup(
+                workspaceId: workspace.workspaceId,
                 path: workspace.path,
                 name: workspace.name,
                 selected: workspace.selected,
@@ -555,7 +556,7 @@ struct SidebarView: View {
             let sources = model.remoteWorkspaces.filter { normalizedWorkspacePath($0.path) == normalizedWorkspacePath(section.path) }
             if sources.isEmpty { return [] }
             return sources.map { source in
-                MobileWorkspaceGroup(path: source.path, name: source.name, selected: source.selected,
+                MobileWorkspaceGroup(workspaceId: source.workspaceId, path: source.path, name: source.name, selected: source.selected,
                     sessions: section.sessions, deviceKey: normalizedDeviceKey(model.remoteExpectedDeviceKey),
                     remoteConnectionId: source.remoteConnectionId, remoteSshHost: source.remoteSshHost)
             }

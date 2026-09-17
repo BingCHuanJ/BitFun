@@ -39,6 +39,7 @@ public data class SessionItemResponse(
     val messageCount: Int? = null,
     val workspacePath: String? = null,
     val workspaceName: String? = null,
+    val workspaceId: String? = null,
 )
 
 public object SessionItemResponseSerializer : KSerializer<SessionItemResponse> {
@@ -56,6 +57,7 @@ public object SessionItemResponseSerializer : KSerializer<SessionItemResponse> {
             messageCount = json.wireInt("message_count"),
             workspacePath = json.wireString("workspace_path"),
             workspaceName = json.wireString("workspace_name"),
+            workspaceId = json.wireString("workspace_id"),
         )
     }
 
@@ -77,6 +79,7 @@ public object SessionItemResponseSerializer : KSerializer<SessionItemResponse> {
                 value.messageCount?.let { put("message_count", it) }
                 value.workspacePath?.let { put("workspace_path", it) }
                 value.workspaceName?.let { put("workspace_name", it) }
+                value.workspaceId?.let { put("workspace_id", it) }
             },
         )
     }
@@ -92,6 +95,7 @@ public data class SessionListResponse(
 
 @Serializable
 public data class InitialSyncResponse(
+    @SerialName("workspace_id") val workspaceId: String? = null,
     @SerialName("resp") override val resp: String? = null,
     @SerialName("message") override val message: String? = null,
     @SerialName("has_workspace") val hasWorkspace: Boolean? = null,

@@ -105,6 +105,7 @@ const controlIdentity = await moduleUrl('../src/services/controlClientIdentity.t
 const managerUrl = await moduleUrl('../src/services/RemoteSessionManager.ts', {
   '../../../shared/agent-harness/wire': agentWire,
   './controlClientIdentity': controlIdentity,
+  './SessionSynchronizer': 'data:text/javascript,export class SessionSynchronizer {}',
   './workspaceIdentity': `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`,
 });
 const { RemoteSessionManager, RemoteControlTargetChangedError } = await import(managerUrl);
@@ -119,7 +120,7 @@ function catalogClient(handler) {
   return client;
 }
 
-test('manager consumes the advertised opened catalog without issuing a legacy assistant read', async () => {
+test('manager preserves opened membership while enriching assistant labels', async () => {
   const calls = [];
   const manager = new RemoteSessionManager(catalogClient(async (device, cmd) => {
     calls.push(cmd.cmd);
@@ -127,7 +128,7 @@ test('manager consumes the advertised opened catalog without issuing a legacy as
   }));
   const catalog = await manager.listWorkspaceCatalog();
   assert.deepEqual(catalog.workspaces, [assistant]);
-  assert.deepEqual(calls, ['list_recent_workspaces']);
+  assert.deepEqual(calls, ['list_recent_workspaces', 'list_assistants']);
 });
 
 test('legacy catalog reads stay on one device generation across both requests', async () => {
@@ -164,4 +165,14 @@ test('question activity is capability-gated and scoped to its owning session', a
   assert.equal(calls[0][1].session_id, 'session-a');
   assert.equal(calls[0][1].tool_id, 'tool-a');
   assert.equal(calls[0][1].answers, undefined);
+});
+
+
+test('workspace IDs remain authoritative when paths move or collide', () => {
+  const first = { workspace_id: 'first', path: '/shared' };
+  const second = { workspace_id: 'second', path: '/shared' };
+  assert.notEqual(workspaceIdentityKey(first), workspaceIdentityKey(second));
+  assert.equal(workspaceIdentityKey(first), workspaceIdentityKey({ ...first, path: '/moved' }));
+  assert.equal(sessionMatchesWorkspace(row('session', first), second), false);
+  assert.equal(sessionMatchesWorkspace(row('legacy'), first), false);
 });

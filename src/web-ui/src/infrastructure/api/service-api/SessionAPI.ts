@@ -1,3 +1,4 @@
+import { sessionWorkspaceIdRequest } from './legacyWorkspaceCompatibility';
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
@@ -6,7 +7,6 @@ import type {
   SessionMetadata,
   SessionActivitySummary,
 } from '@/shared/types/session-history';
-import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
 
 function isAbortError(error: unknown): boolean {
   return typeof error === 'object'
@@ -25,13 +25,11 @@ export type UiSessionMetadataField =
   | 'titleMetadata';
 
 export interface SessionMetadataPageRequest {
-  workspacePath: string;
+  workspaceId: string;
   limit: number;
   cursor?: string;
   /** Read only these summaries (max 128), without returning metadata rows. */
   sessionIds?: string[];
-  remoteConnectionId?: string;
-  remoteSshHost?: string;
 }
 
 export interface SessionMetadataPage {
@@ -46,9 +44,7 @@ export interface SessionMetadataPage {
 
 export interface SessionLineageRequest {
   sessionId: string;
-  workspacePath: string;
-  remoteConnectionId?: string;
-  remoteSshHost?: string;
+  workspaceId: string;
 }
 
 export interface SessionLineageSnapshot {
@@ -129,9 +125,7 @@ export interface SessionContentSearchResponse {
 
 export interface SessionUsageReportRequest {
   sessionId: string;
-  workspacePath: string;
-  remoteConnectionId?: string;
-  remoteSshHost?: string;
+  workspaceId: string;
   includeHiddenSubagents?: boolean;
 }
 
@@ -277,21 +271,6 @@ export interface SessionUsageReport {
   };
 }
 
-function remoteSessionFields(
-  remoteConnectionId?: string,
-  remoteSshHost?: string
-): Record<string, string> {
-  const scope = normalizeRemoteSessionScope(remoteConnectionId, remoteSshHost);
-  const o: Record<string, string> = {};
-  if (scope.remoteConnectionId) {
-    o.remote_connection_id = scope.remoteConnectionId;
-  }
-  if (scope.remoteSshHost) {
-    o.remote_ssh_host = scope.remoteSshHost;
-  }
-  return o;
-}
-
 export class SessionAPI {
   async searchSessionContent(
     request: SessionContentSearchRequest,
@@ -338,44 +317,29 @@ export class SessionAPI {
   async forkSession(
     sourceSessionId: string,
     sourceTurnId: string,
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<{ sessionId: string; sessionName: string; agentType: string }> {
     try {
-      const normalizedRemoteFields = remoteSessionFields(remoteConnectionId, remoteSshHost);
       return await api.invoke('fork_session', {
         request: {
           source_session_id: sourceSessionId,
           source_turn_id: sourceTurnId,
-          workspace_path: workspacePath,
-          ...normalizedRemoteFields,
+          ...await sessionWorkspaceIdRequest(workspaceId),
         }
       });
     } catch (error) {
       throw createTauriCommandError('fork_session', error, {
         sourceSessionId,
         sourceTurnId,
-        workspacePath,
+        workspaceId,
       });
     }
   }
 
-  async listSessions(
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
-  ): Promise<SessionMetadata[]> {
-    try {
-      return await api.invoke('list_persisted_sessions', {
-        request: {
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
-        }
-      });
-    } catch (error) {
-      throw createTauriCommandError('list_persisted_sessions', error, { workspacePath });
-    }
+  async listSessions(workspaceId: string): Promise<SessionMetadata[]> {
+    return api.invoke('list_persisted_sessions', {
+      request: await sessionWorkspaceIdRequest(workspaceId),
+    });
   }
 
   async listSessionsPage(
@@ -384,16 +348,15 @@ export class SessionAPI {
     try {
       return await api.invoke('list_persisted_sessions_page', {
         request: {
-          workspace_path: request.workspacePath,
+          ...await sessionWorkspaceIdRequest(request.workspaceId),
           limit: request.limit,
           ...(request.cursor ? { cursor: request.cursor } : {}),
           ...(request.sessionIds ? { session_ids: request.sessionIds } : {}),
-          ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
         }
       });
     } catch (error) {
       throw createTauriCommandError('list_persisted_sessions_page', error, {
-        workspacePath: request.workspacePath,
+        workspaceId: request.workspaceId,
         limit: request.limit,
         cursor: request.cursor,
       });
@@ -407,30 +370,28 @@ export class SessionAPI {
       return await api.invoke('get_session_lineage', {
         request: {
           session_id: request.sessionId,
-          workspace_path: request.workspacePath,
-          ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
+          ...await sessionWorkspaceIdRequest(request.workspaceId),
+
         }
       });
     } catch (error) {
       throw createTauriCommandError('get_session_lineage', error, {
         sessionId: request.sessionId,
-        workspacePath: request.workspacePath,
+        workspaceId: request.workspaceId,
       });
     }
   }
 
   async loadSessionTurns(
     sessionId: string,
-    workspacePath: string,
-    limit?: number,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string,
+    limit?: number
   ): Promise<DialogTurnData[]> {
     try {
       const request: Record<string, unknown> = {
         session_id: sessionId,
-        workspace_path: workspacePath,
-        ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        ...await sessionWorkspaceIdRequest(workspaceId),
+
       };
 
       if (limit !== undefined) {
@@ -441,104 +402,94 @@ export class SessionAPI {
         request
       });
     } catch (error) {
-      throw createTauriCommandError('load_session_turns', error, { sessionId, workspacePath, limit });
+      throw createTauriCommandError('load_session_turns', error, { sessionId, workspaceId, limit });
     }
   }
 
   async saveSessionTurn(
     turnData: DialogTurnData,
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<void> {
     try {
       await api.invoke('save_session_turn', {
         request: {
           turn_data: turnData,
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('save_session_turn', error, { turnData, workspacePath });
+      throw createTauriCommandError('save_session_turn', error, { turnData, workspaceId });
     }
   }
 
   async saveSessionMetadata(
     metadata: SessionMetadata,
-    workspacePath: string,
-    fields: UiSessionMetadataField[],
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string,
+    fields: UiSessionMetadataField[]
   ): Promise<void> {
     try {
       await api.invoke('save_session_metadata', {
         request: {
           metadata,
           fields,
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('save_session_metadata', error, { metadata, workspacePath });
+      throw createTauriCommandError('save_session_metadata', error, { metadata, workspaceId });
     }
   }
 
   async deleteSession(
     sessionId: string,
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<void> {
     try {
       await api.invoke('delete_persisted_session', {
         request: {
           session_id: sessionId,
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('delete_persisted_session', error, { sessionId, workspacePath });
+      throw createTauriCommandError('delete_persisted_session', error, { sessionId, workspaceId });
     }
   }
 
   async touchSessionActivity(
     sessionId: string,
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<void> {
     try {
       await api.invoke('touch_session_activity', {
         request: {
           session_id: sessionId,
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('touch_session_activity', error, { sessionId, workspacePath });
+      throw createTauriCommandError('touch_session_activity', error, { sessionId, workspaceId });
     }
   }
 
   async loadSessionMetadata(
     sessionId: string,
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<SessionMetadata | null> {
     try {
       return await api.invoke('load_persisted_session_metadata', {
         request: {
           session_id: sessionId,
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('load_persisted_session_metadata', error, { sessionId, workspacePath });
+      throw createTauriCommandError('load_persisted_session_metadata', error, { sessionId, workspaceId });
     }
   }
 
@@ -549,105 +500,95 @@ export class SessionAPI {
       return await api.invoke('get_session_usage_report', {
         request: {
           session_id: request.sessionId,
-          workspace_path: request.workspacePath,
+          ...await sessionWorkspaceIdRequest(request.workspaceId),
           include_hidden_subagents: request.includeHiddenSubagents ?? true,
-          ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
+
         }
       });
     } catch (error) {
       throw createTauriCommandError('get_session_usage_report', error, {
         sessionId: request.sessionId,
-        workspacePath: request.workspacePath,
+        workspaceId: request.workspaceId,
       });
     }
   }
 
   async archiveSession(
     sessionId: string,
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<void> {
     try {
       await api.invoke('archive_session', {
         request: {
           session_id: sessionId,
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('archive_session', error, { sessionId, workspacePath });
+      throw createTauriCommandError('archive_session', error, { sessionId, workspaceId });
     }
   }
 
   async unarchiveSession(
     sessionId: string,
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<void> {
     try {
       await api.invoke('unarchive_session', {
         request: {
           session_id: sessionId,
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('unarchive_session', error, { sessionId, workspacePath });
+      throw createTauriCommandError('unarchive_session', error, { sessionId, workspaceId });
     }
   }
 
   async archiveAllSessions(
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<number> {
     try {
       return await api.invoke('archive_all_sessions', {
         request: {
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('archive_all_sessions', error, { workspacePath });
+      throw createTauriCommandError('archive_all_sessions', error, { workspaceId });
     }
   }
 
   async listArchivedSessions(
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<SessionMetadata[]> {
     try {
       return await api.invoke('list_archived_sessions', {
         request: {
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('list_archived_sessions', error, { workspacePath });
+      throw createTauriCommandError('list_archived_sessions', error, { workspaceId });
     }
   }
 
   async deleteAllArchivedSessions(
-    workspacePath: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    workspaceId: string
   ): Promise<number> {
     try {
       return await api.invoke('delete_all_archived_sessions', {
         request: {
-          workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...await sessionWorkspaceIdRequest(workspaceId),
+
         }
       });
     } catch (error) {
-      throw createTauriCommandError('delete_all_archived_sessions', error, { workspacePath });
+      throw createTauriCommandError('delete_all_archived_sessions', error, { workspaceId });
     }
   }
 }

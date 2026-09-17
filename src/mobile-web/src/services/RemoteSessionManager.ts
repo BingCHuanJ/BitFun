@@ -1,3 +1,4 @@
+import { normalizeWorkspaceRouting } from './workspaceIdentity';
 import type { SessionStreamHandle, SessionHistoryState } from '../../../shared/relay-transport/SessionStream';
 import { translateAgentIdentityFields } from '../../../shared/agent-harness/wire';
 /**
@@ -50,6 +51,7 @@ interface RemoteRequestOptions {
 }
 
 export interface WorkspaceInfo {
+  workspace_id?: string;
   has_workspace: boolean;
   path?: string;
   project_name?: string;
@@ -64,11 +66,13 @@ export interface WorkspaceInfo {
 }
 
 export interface RemoteWorkspaceIdentity {
+  workspaceId?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
 }
 
 export interface RecentWorkspaceEntry {
+  workspace_id?: string;
   path: string;
   name: string;
   last_opened: string;
@@ -78,12 +82,14 @@ export interface RecentWorkspaceEntry {
 }
 
 export interface AssistantEntry {
+  workspace_id?: string;
   path: string;
   name: string;
   assistant_id?: string;
 }
 
 export interface SessionInfo {
+  workspace_id?: string;
   session_id: string;
   name: string;
   agent_type: string;
@@ -306,14 +312,15 @@ export class RemoteSessionManager {
     });
     this.replaceHostCapabilities(resp.capabilities);
     return {
+      workspace_id: resp.workspace_id,
       has_workspace: resp.has_workspace,
       path: resp.path,
       project_name: resp.project_name,
       git_branch: resp.git_branch,
       workspace_kind: resp.workspace_kind,
       assistant_id: resp.assistant_id,
-      remote_connection_id: resp.remote_connection_id,
-      remote_ssh_host: resp.remote_ssh_host,
+      remote_connection_id: normalizeWorkspaceRouting(resp).remote_connection_id,
+      remote_ssh_host: normalizeWorkspaceRouting(resp).remote_ssh_host,
       capabilities: resp.capabilities,
     };
   }
@@ -323,7 +330,7 @@ export class RemoteSessionManager {
       resp: string;
       workspaces: RecentWorkspaceEntry[];
     }>({ cmd: 'list_recent_workspaces' });
-    return resp.workspaces || [];
+    return (resp.workspaces || []).map(normalizeWorkspaceRouting);
   }
 
   async listWorkspaceCatalog(): Promise<WorkspaceCatalog> {
@@ -339,26 +346,18 @@ export class RemoteSessionManager {
     return projectWorkspaceCatalog(resp, assistants);
   }
 
-  async setWorkspace(
-    path: string,
-    options?: {
-      remoteConnectionId?: string;
-      remoteSshHost?: string;
-    },
-  ): Promise<{
-    success: boolean;
-    path?: string;
-    project_name?: string;
-    remote_connection_id?: string;
-    remote_ssh_host?: string;
-    error?: string;
+  async setWorkspace(workspace: RecentWorkspaceEntry): Promise<{
+    success: boolean; workspace_id?: string; path?: string; project_name?: string;
+    remote_connection_id?: string; remote_ssh_host?: string; error?: string;
   }> {
-    return this.request({
-      cmd: 'set_workspace',
-      path,
-      remote_connection_id: options?.remoteConnectionId,
-      remote_ssh_host: options?.remoteSshHost,
-    });
+    return this.request(workspace.workspace_id
+      ? { cmd: 'set_workspace', workspace_id: workspace.workspace_id }
+      : {
+        // Upgrade-only protocol adapter for 1.0.0 hosts. Remove with legacy support.
+        cmd: 'set_workspace', path: workspace.path,
+        remote_connection_id: workspace.remote_connection_id,
+        remote_ssh_host: workspace.remote_ssh_host,
+      });
   }
 
   async subscribeSessionStream(sessionId: string,
@@ -389,14 +388,16 @@ export class RemoteSessionManager {
   }
 
   async setAssistant(
-    path: string,
+    assistant: AssistantEntry,
   ): Promise<{
     success: boolean;
     path?: string;
     name?: string;
     error?: string;
   }> {
-    return this.request({ cmd: 'set_assistant', path });
+    return this.request(assistant.workspace_id
+      ? { cmd: 'set_assistant', workspace_id: assistant.workspace_id }
+      : { cmd: 'set_assistant', path: assistant.path });
   }
 
   async listSessions(
@@ -412,6 +413,7 @@ export class RemoteSessionManager {
       has_more: boolean;
     }>({
       cmd: 'list_sessions',
+      workspace_id: identity?.workspaceId,
       workspace_path: workspacePath ?? null,
       remote_connection_id: identity?.remoteConnectionId,
       remote_ssh_host: identity?.remoteSshHost,
@@ -424,6 +426,7 @@ export class RemoteSessionManager {
         ...session,
         workspace_path: session.workspace_path || workspacePath,
         workspace_identity: {
+          workspace_id: identity?.workspaceId,
           path: workspacePath,
           remote_connection_id: identity?.remoteConnectionId,
           remote_ssh_host: identity?.remoteSshHost,
@@ -439,9 +442,10 @@ export class RemoteSessionManager {
     workspacePath?: string,
     identity?: RemoteWorkspaceIdentity,
   ): Promise<string> {
-    if (!workspacePath?.trim()) throw new Error('Workspace path is required to create a session');
+    if (!identity?.workspaceId && !workspacePath?.trim()) throw new Error('Workspace path is required to create a session');
     const resp = await this.request<{ resp: string; session_id: string }>({
       cmd: 'create_session',
+      workspace_id: identity?.workspaceId,
       agent_type: agentType || undefined,
       session_name: sessionName || undefined,
       workspace_path: workspacePath ?? null,

@@ -210,7 +210,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     setPullRequestOverview({ status: 'loading', items: [], totalCount: 0 });
 
     try {
-      const isGitRepository = await gitAPI.isGitRepository(repositoryPath);
+      const isGitRepository = await gitAPI.isGitRepository({ workspaceId: currentWorkspace!.id });
       if (pullRequestOverviewRequestRef.current !== requestId) return;
       if (!isGitRepository) {
         setPullRequestOverview({ status: 'not-git', items: [], totalCount: 0 });
@@ -382,12 +382,15 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   };
 
   const handleOpenPullRequests = useCallback(() => {
-    createReviewPlatformTab(currentWorkspace?.rootPath);
+    if (!currentWorkspace) return;
+    createReviewPlatformTab(currentWorkspace.id, currentWorkspace.rootPath);
     closeSessionOverview(false);
   }, [closeSessionOverview, currentWorkspace?.rootPath]);
 
   const handleOpenPullRequest = useCallback((pullRequest: ReviewPlatformPullRequest) => {
+    if (!currentWorkspace) return;
     createReviewPlatformPullRequestDetailTab({
+      workspaceId: currentWorkspace.id,
       workspacePath: currentWorkspace?.rootPath,
       remoteId: pullRequest.providerId ?? undefined,
       pullRequestId: pullRequest.id,
@@ -775,7 +778,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   {sessionId ? (
                     <SessionTreePopover
                       sessionId={sessionId}
-                      fallbackWorkspacePath={currentWorkspace?.rootPath}
+                      fallbackWorkspaceId={currentWorkspace?.id}
                       onSelectSession={onOpenSessionTreeSession}
                       hasActiveDescendants={hasActiveSessionTreeDescendants}
                       onCancelSession={onCancelSessionTreeSession}

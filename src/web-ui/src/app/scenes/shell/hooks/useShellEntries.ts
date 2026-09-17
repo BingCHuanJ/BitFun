@@ -44,12 +44,12 @@ export function useShellEntries(targetWorkspace?: WorkspaceInfo | null): UseShel
   const workspacePath = workspace?.rootPath ?? '';
   const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
   const isRemote = workspace?.workspaceKind === 'remote';
-  const currentConnectionId = workspace?.connectionId ?? null;
-  // Keep legacy local keys; never load controller profiles on another target.
-  const profileKey = scope.surfaceId === 'local' && !isRemote
-    ? workspacePath : scope.key('terminal-profiles', currentConnectionId, workspacePath);
+  const currentConnectionId = isRemote ? workspace?.connectionId ?? null : null;
+  const profileWorkspace = useMemo(() => workspace ? { surfaceId: scope.surfaceId, workspaceId: workspace.id } : undefined,
+    [scope.surfaceId, workspace?.id]);
+  const profileKey = scope.key('terminal-profiles', workspace?.id);
   const workspaces = useMemo(() => openedWorkspacesList.map(item => ({
-    rootPath: item.rootPath, isRemote: item.workspaceKind === 'remote', connectionId: item.connectionId,
+    workspaceId: item.id, rootPath: item.rootPath, isRemote: item.workspaceKind === 'remote', connectionId: item.connectionId,
   })), [openedWorkspacesList]);
 
   const [editingState, setEditingTerminal] = useState<EditingTerminalState | null>(null);
@@ -66,7 +66,7 @@ export function useShellEntries(targetWorkspace?: WorkspaceInfo | null): UseShel
     removeProfile,
     getProfileById,
     getProfileBySessionId,
-  } = useManualTerminalProfiles(workspacePath ? profileKey : undefined);
+  } = useManualTerminalProfiles(profileWorkspace);
   const savedSessionIds = useMemo(() => new Set(profiles.map(profile => profile.sessionId)), [profiles]);
   const {
     assertCurrent,
@@ -82,6 +82,7 @@ export function useShellEntries(targetWorkspace?: WorkspaceInfo | null): UseShel
     renameSessionLocally,
     hasSession,
   } = useTerminalSessions({
+    workspaceId: workspace?.id,
     workspacePath,
     isRemote,
     currentConnectionId,

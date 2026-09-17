@@ -84,9 +84,9 @@ public class RemoteWorkspaceStore internal constructor(
                         a.await() to b.await()
                     }
                     updateReady { it.copy(workspaces = recent.workspaces.map { item ->
-                        RecentWorkspace(item.path.orEmpty(), item.name ?: basename(item.path.orEmpty()), item.lastOpened, item.workspaceKind.orEmpty(), item.remoteSshHost, item.remoteConnectionId)
-                    }, assistants = assistants.assistants.map { item -> WorkspaceAssistant(item.path, item.name, item.assistantId) },
-                        catalog = recent.sidebarCatalog(assistants.assistants.map { item -> WorkspaceAssistant(item.path, item.name, item.assistantId) }), loadFailure = false) }
+                        RecentWorkspace(item.path.orEmpty(), item.name ?: basename(item.path.orEmpty()), item.lastOpened, item.workspaceKind.orEmpty(), item.remoteSshHost, item.remoteConnectionId, item.workspaceId)
+                    }, assistants = assistants.assistants.map { item -> WorkspaceAssistant(item.path, item.name, item.assistantId, item.workspaceId) },
+                        catalog = recent.sidebarCatalog(assistants.assistants.map { item -> WorkspaceAssistant(item.path, item.name, item.assistantId, item.workspaceId) }), loadFailure = false) }
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Throwable) { updateReady { it.copy(loadFailure = true) } }
             }
@@ -269,13 +269,14 @@ public class RemoteWorkspaceStore internal constructor(
                 path = item.path.orEmpty(),
                 name = item.name?.takeIf(String::isNotBlank) ?: basename(item.path.orEmpty()),
                 lastOpened = item.lastOpened,
+                workspaceId = item.workspaceId,
                 kind = item.workspaceKind.orEmpty(),
-                remoteSshHost = item.remoteSshHost,
-                remoteConnectionId = item.remoteConnectionId,
+                remoteSshHost = item.remoteSshHost.takeUnless { item.workspaceKind == "normal" || item.workspaceKind == "assistant" },
+                remoteConnectionId = item.remoteConnectionId.takeUnless { item.workspaceKind == "normal" || item.workspaceKind == "assistant" },
             )
         }.filter { it.path.isNotEmpty() }
         val loadedAssistants = assistants.assistants.map { item ->
-            WorkspaceAssistant(item.path, item.name, item.assistantId)
+            WorkspaceAssistant(item.path, item.name, item.assistantId, item.workspaceId)
         }
         if (persistenceEnabled) {
             try {
@@ -328,13 +329,14 @@ public class RemoteWorkspaceStore internal constructor(
                                     path = item.path.orEmpty(),
                                     name = item.name?.takeIf(String::isNotBlank) ?: basename(item.path.orEmpty()),
                                     lastOpened = item.lastOpened,
-                                    kind = item.workspaceKind.orEmpty(),
-                                    remoteSshHost = item.remoteSshHost,
-                remoteConnectionId = item.remoteConnectionId,
+                                    workspaceId = item.workspaceId,
+                kind = item.workspaceKind.orEmpty(),
+                                    remoteSshHost = item.remoteSshHost.takeUnless { item.workspaceKind == "normal" || item.workspaceKind == "assistant" },
+                remoteConnectionId = item.remoteConnectionId.takeUnless { item.workspaceKind == "normal" || item.workspaceKind == "assistant" },
                                 )
                             }.filter { it.path.isNotEmpty() }
                             val loadedAssistants = assistants.assistants.map { item ->
-                                WorkspaceAssistant(item.path, item.name, item.assistantId)
+                                WorkspaceAssistant(item.path, item.name, item.assistantId, item.workspaceId)
                             }
                             if (persistenceEnabled) {
                                 try {
@@ -394,6 +396,10 @@ public class RemoteWorkspaceStore internal constructor(
     }
 
     private fun selectWorkspace(intent: RemoteWorkspaceIntent.SelectWorkspace) {
+        if (intent.workspaceId != null) {
+            runSelection(RemoteCommand(cmd = "set_workspace", workspaceId = intent.workspaceId), false)
+            return
+        }
         val normalized = intent.path.trim()
         if (normalized.isEmpty()) return
         val candidates = if (intent.inferSavedIdentity) {
@@ -404,7 +410,7 @@ public class RemoteWorkspaceStore internal constructor(
             return
         }
         val known = candidates.singleOrNull()
-        runSelection(RemoteCommand(cmd = "set_workspace", path = normalized,
+        runSelection(RemoteCommand(cmd = "set_workspace", workspaceId = known?.workspaceId, path = normalized,
             remoteConnectionId = intent.remoteConnectionId ?: known?.remoteConnectionId,
             remoteSshHost = intent.remoteSshHost ?: known?.remoteSshHost), false)
     }
@@ -890,10 +896,11 @@ public class RemoteWorkspaceStore internal constructor(
             path = path,
             name = resolvedName?.takeIf(String::isNotBlank) ?: basename(path),
             gitBranch = gitBranch.orEmpty(),
+            workspaceId = workspaceId,
             kind = workspaceKind.orEmpty(),
             assistantId = assistantId,
-            remoteConnectionId = remoteConnectionId,
-            remoteSshHost = remoteSshHost,
+            remoteConnectionId = remoteConnectionId.takeUnless { workspaceKind == "normal" || workspaceKind == "assistant" },
+            remoteSshHost = remoteSshHost.takeUnless { workspaceKind == "normal" || workspaceKind == "assistant" },
         )
     }
 
@@ -919,10 +926,10 @@ public class RemoteWorkspaceStore internal constructor(
 
     private fun cachedReady(rows: List<PersistedRemoteWorkspace>): RemoteWorkspaceUiState.Ready {
         val assistants = rows.filter { it.workspaceKind == ASSISTANT_KIND }.map { row ->
-            WorkspaceAssistant(row.path, row.name.ifEmpty { basename(row.path) }, null)
+            WorkspaceAssistant(row.path, row.name.ifEmpty { basename(row.path) }, null, row.workspaceId)
         }
         val workspaces = rows.filterNot { it.workspaceKind == ASSISTANT_KIND }.map { row ->
-            RecentWorkspace(row.path, row.name.ifEmpty { basename(row.path) }, row.lastOpened, row.workspaceKind, row.remoteSshHost, row.remoteConnectionId)
+            RecentWorkspace(row.path, row.name.ifEmpty { basename(row.path) }, row.lastOpened, row.workspaceKind, row.remoteSshHost, row.remoteConnectionId, row.workspaceId)
         }
         return RemoteWorkspaceUiState.Ready(
             workspaces = workspaces,
@@ -940,7 +947,7 @@ public class RemoteWorkspaceStore internal constructor(
         assistants: List<WorkspaceAssistant>,
     ): List<PersistedRemoteWorkspace> {
         val rows = workspaces.map { workspace ->
-            PersistedRemoteWorkspace(workspace.path, workspace.name, workspace.lastOpened, workspace.kind, workspace.remoteSshHost, workspace.remoteConnectionId)
+            PersistedRemoteWorkspace(workspace.path, workspace.name, workspace.lastOpened, workspace.kind, workspace.remoteSshHost, workspace.remoteConnectionId, workspace.workspaceId)
         }.toMutableList()
         assistants.forEach { assistant ->
             if (rows.none { it.path == assistant.path }) {

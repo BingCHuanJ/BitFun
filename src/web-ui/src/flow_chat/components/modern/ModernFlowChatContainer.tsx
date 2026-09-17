@@ -1,3 +1,4 @@
+import { requireSessionWorkspaceId } from '../../utils/sessionWorkspace';
 /**
  * Modern FlowChat container.
  * Uses virtual scrolling with Zustand and syncs legacy store state.
@@ -649,14 +650,16 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       return false;
     }
 
+    if (!activeSession?.workspaceId) return false;
     createReviewPlatformPullRequestDetailTab({
+      workspaceId: activeSession.workspaceId,
       workspacePath: activeSession?.workspacePath || workspacePath,
       pullRequestId: pullRequestTarget.pullRequestId,
       pullRequestUrl: pullRequestTarget.webUrl,
       title: `PR #${pullRequestTarget.pullRequestId}`,
     });
     return true;
-  }, [activeSession?.workspacePath, workspacePath]);
+  }, [activeSession?.workspaceId, activeSession?.workspacePath, workspacePath]);
   const {
     searchQuery,
     onSearchChange: setSearchQuery,
@@ -2448,9 +2451,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       return false;
     }
     const scope = getActiveSurfaceScope();
-    const workspacePath = selection.workspacePath || activeSession?.workspacePath;
-    const remoteConnectionId = selection.remoteConnectionId || activeSession?.remoteConnectionId;
-    const remoteSshHost = selection.remoteSshHost || activeSession?.remoteSshHost;
     try {
       const confirmed = await confirmDanger(
         t('flowChatHeader.agentTreeDelete'),
@@ -2458,8 +2458,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         { confirmText: t('flowChatHeader.agentTreeDelete') },
       );
       if (!confirmed) return false;
-      if (!workspacePath) throw new Error('Agent session workspace path is missing');
-      await deleteSessionTreeBranch({ sessionId: selection.sessionId, workspacePath, remoteConnectionId, remoteSshHost }, scope);
+      await deleteSessionTreeBranch({ sessionId: selection.sessionId, workspaceId: requireSessionWorkspaceId(flowChatStore.getState().sessions.get(selection.sessionId) || activeSession!) }, scope);
       return true;
     } catch (error) {
       if (!isSurfaceChangedError(error)) {

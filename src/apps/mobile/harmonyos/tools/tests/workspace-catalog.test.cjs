@@ -92,3 +92,13 @@ test('workspace list and creation commands preserve SSH scope without changing l
   assert.equal(JSON.stringify(legacy).includes('remote_connection_id'), false);
   assert.equal(JSON.stringify(legacy).includes('remote_ssh_host'), false);
 });
+
+test('1.0.0 localhost markers follow workspace kind without losing real SSH identity', () => {
+  const catalog = projectWorkspaceCatalog({ workspaces: [
+    { path: '/local', workspace_kind: 'normal', remote_ssh_host: 'localhost' },
+    { path: '/remote', workspace_kind: 'remote', remote_connection_id: 'saved', remote_ssh_host: 'localhost' },
+  ] }, []);
+  assert.equal(catalog.workspaces[0].remoteSshHost, undefined);
+  assert.equal(catalog.workspaces[1].remoteSshHost, 'localhost');
+  assert.equal(catalog.workspaces[1].remoteConnectionId, 'saved');
+});

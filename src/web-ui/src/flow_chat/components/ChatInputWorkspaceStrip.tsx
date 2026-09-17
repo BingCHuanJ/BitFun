@@ -36,6 +36,7 @@ import './ChatInputWorkspaceStrip.scss';
 export interface ChatInputWorkspaceStripProps {
   /** Repo root for git status; may come from session when global workspace is unset. */
   repositoryPath: string;
+  workspaceId: string;
   /** Resolved display name (workspace title or folder basename). */
   workspaceLabel: string;
   /** Session usage report (/usage) — context ring on the right rail. */
@@ -135,6 +136,7 @@ const PERMISSION_MODE_ICONS: Record<ChatInputPermissionMode, typeof Shield> = {
 
 export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = ({
   repositoryPath,
+  workspaceId,
   workspaceLabel,
   usageReport,
   permissionControl,
@@ -180,7 +182,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const label = workspaceLabel.trim();
 
   const { currentBranch, isRepository, repositoryTrustRequired, refreshBasic } = useGitState({
-    repositoryPath: trimmedPath,
+    repositoryPath: { workspaceId, repositoryPath: trimmedPath },
     layers: ['basic'],
     isActive: !deferPassiveGitRefresh,
     refreshOnMount: !deferPassiveGitRefresh,
@@ -534,7 +536,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         <BranchQuickSwitch
           isOpen={branchMenuOpen}
           onClose={() => setBranchMenuOpen(false)}
-          repositoryPath={trimmedPath}
+          repositoryPath={{ workspaceId, repositoryPath: trimmedPath }}
           currentBranch={currentBranch.trim()}
           anchorRef={branchTriggerRef}
           onSwitchSuccess={() => {
@@ -782,7 +784,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         {showDispatchPicker && dispatchControl ? (
           <DispatchTargetPicker
             target={dispatchControl.target}
-            sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
+            sourceWorkspaceId={workspaceId} sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
             locked={dispatchPickerLocked}
             localWorktreeControl={showWorktreeToggle && worktreeControl ? {
               enabled: worktreeEnabled,

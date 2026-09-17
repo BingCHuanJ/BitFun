@@ -830,6 +830,7 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
     async fn handle_workspace_command(&self, _command: &RemoteCommand) -> RemoteResponse {
         self.events.lock().unwrap().push("workspace".to_string());
         RemoteResponse::WorkspaceInfo {
+            workspace_id: None,
             has_workspace: false,
             path: None,
             project_name: None,
@@ -1919,6 +1920,7 @@ fn remote_connect_execution_response_helpers_preserve_wire_shape() {
 #[test]
 fn remote_connect_workspace_response_helpers_own_wire_shape() {
     let workspace = RemoteWorkspaceFacts {
+        workspace_id: "test-workspace".to_string(),
         path: "D:/workspace/project".to_string(),
         name: "project".to_string(),
         git_branch: Some("main".to_string()),
@@ -1942,6 +1944,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
     assert_eq!(
         info_json["capabilities"],
         serde_json::json!([
+            "workspace_id_references_v1",
             REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
             REMOTE_CAPABILITY_DIALOG_STEER_V1,
             REMOTE_CAPABILITY_PLAN_BUILD_V1,
@@ -1967,6 +1970,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
 
     let recent_json = serde_json::to_value(remote_recent_workspaces_response(vec![
         RemoteRecentWorkspaceFacts {
+            workspace_id: "test-workspace".to_string(),
             path: workspace.path.clone(),
             name: workspace.name.clone(),
             last_opened: "2026-05-25T00:00:00Z".to_string(),
@@ -1990,6 +1994,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
 
     let assistant_json = serde_json::to_value(remote_assistant_list_response(vec![
         RemoteAssistantWorkspaceFacts {
+            workspace_id: "test-workspace".to_string(),
             path: "D:/workspace/assistant".to_string(),
             name: "assistant".to_string(),
             assistant_id: Some("assistant-2".to_string()),
@@ -2004,12 +2009,14 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
 
     assert_eq!(
         remote_workspace_updated_response(Ok(RemoteWorkspaceUpdate {
+            workspace_id: "test-workspace".to_string(),
             path: "D:/workspace/project".to_string(),
             name: "project".to_string(),
             remote_connection_id: None,
             remote_ssh_host: None,
         })),
         RemoteResponse::WorkspaceUpdated {
+            workspace_id: Some("test-workspace".to_string()),
             success: true,
             path: Some("D:/workspace/project".to_string()),
             project_name: Some("project".to_string()),
@@ -2021,6 +2028,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
     assert_eq!(
         remote_assistant_updated_response(Err("open failed".to_string())),
         RemoteResponse::AssistantUpdated {
+            workspace_id: None,
             success: false,
             path: None,
             name: None,
@@ -2033,6 +2041,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
 fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
     let metadata = vec![
         RemoteSessionMetadata {
+            workspace_id: None,
             session_id: "session-1".to_string(),
             name: "first".to_string(),
             agent_type: "Standard".to_string(),
@@ -2041,6 +2050,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             turn_count: 3,
         },
         RemoteSessionMetadata {
+            workspace_id: None,
             session_id: "session-2".to_string(),
             name: "second".to_string(),
             agent_type: "Cowork".to_string(),
@@ -2049,6 +2059,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             turn_count: 5,
         },
         RemoteSessionMetadata {
+            workspace_id: None,
             session_id: "session-3".to_string(),
             name: "third".to_string(),
             agent_type: "Cowork".to_string(),
@@ -2085,6 +2096,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
 
     let initial = remote_initial_sync_response(
         Some(RemoteWorkspaceFacts {
+            workspace_id: "test-workspace".to_string(),
             path: "D:/workspace/project".to_string(),
             name: "project".to_string(),
             git_branch: Some("main".to_string()),
@@ -2110,6 +2122,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
     assert_eq!(
         initial_json["capabilities"],
         serde_json::json!([
+            "workspace_id_references_v1",
             REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
             REMOTE_CAPABILITY_DIALOG_STEER_V1,
             REMOTE_CAPABILITY_PLAN_BUILD_V1,
@@ -2314,6 +2327,7 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(cancel["turn_id"], "turn-1");
 
     let list = serde_json::to_value(RemoteCommand::ListSessions {
+        workspace_id: None,
         workspace_path: Some("/workspace/project".to_string()),
         remote_connection_id: Some("conn-1".to_string()),
         remote_ssh_host: Some("host-1".to_string()),

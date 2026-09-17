@@ -241,7 +241,7 @@ public sealed interface RemoteWorkspaceIntent {
     public data object CloseTerminal : RemoteWorkspaceIntent
     public data class WriteTerminal(public val data: String) : RemoteWorkspaceIntent
     /** Explicit location pickers disable inference: null then means the controlled host itself. */
-    public data class SelectWorkspace public constructor(public val path: String, public val remoteConnectionId: String?, public val remoteSshHost: String?, public val inferSavedIdentity: Boolean) : RemoteWorkspaceIntent {
+    public data class SelectWorkspace public constructor(public val path: String, public val remoteConnectionId: String?, public val remoteSshHost: String?, public val inferSavedIdentity: Boolean, public val workspaceId: String? = null) : RemoteWorkspaceIntent {
         public constructor(path: String, remoteConnectionId: String?, remoteSshHost: String?) : this(path, remoteConnectionId, remoteSshHost, true)
         public constructor(path: String) : this(path, null, null)
     }

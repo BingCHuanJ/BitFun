@@ -890,7 +890,7 @@ async fn initialize_core_services_for_deployment(
         {
             openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                 "CLI startup configuration",
-                Some(workspace_root),
+                None,
                 error,
             )
             .await;
@@ -908,7 +908,7 @@ async fn initialize_core_services_for_deployment(
             Err(error) => {
                 openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                     "CLI startup",
-                    Some(workspace_root),
+                    None,
                     error,
                 )
                 .await;
@@ -958,9 +958,10 @@ async fn initialize_core_services_for_deployment(
     .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
     tracing::info!("Agentic system initialized");
 
+    let workspace = create_cli_local_workspace(workspace_root).await?;
     let runtime = std::sync::Arc::new(runtime::CliRuntimeContext::build(
         agentic_system,
-        workspace_root,
+        workspace,
         approval_policy,
     )?);
     // Restore on the executing host for TUI, exec, Shared and detached jobs alike.
@@ -1068,7 +1069,7 @@ async fn run_interactive(
         }
         Arc::new(agent::runtime_client::CliAgentRuntimeClient::new_shared(
             client,
-            Some(workspace_path.clone()),
+            &create_cli_local_workspace(&workspace_path).await?,
         ))
     };
     let account_runtime = runtime
@@ -2355,4 +2356,29 @@ mod daemon_command_tests {
             .to_string();
         assert!(!daemon_help.contains("__dispatch_"));
     }
+}
+
+/// Explicit CLI folder selection creates/opens a local workspace once. Existing
+/// session and protocol routing must use the resulting record ID.
+async fn create_cli_local_workspace(
+    path: &std::path::Path,
+) -> Result<openbitfun_core::service::workspace::WorkspaceInfo> {
+    use openbitfun_core::service::workspace::{
+        get_global_workspace_service, set_global_workspace_service, WorkspaceService,
+    };
+    let service = if let Some(service) = get_global_workspace_service() {
+        service
+    } else {
+        let service = std::sync::Arc::new(
+            WorkspaceService::new()
+                .await
+                .map_err(|error| anyhow!(error.to_string()))?,
+        );
+        set_global_workspace_service(service.clone());
+        service
+    };
+    service
+        .open_workspace(path.to_owned())
+        .await
+        .map_err(|error| anyhow!(error.to_string()))
 }

@@ -256,6 +256,7 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
                 handle_remote_workspace_command(
                     &host,
                     &RemoteCommand::SetWorkspace {
+                        workspace_id: None,
                         path: path.to_string_lossy().to_string(),
                         remote_connection_id: None,
                         remote_ssh_host: None,
@@ -649,6 +650,7 @@ mod tests {
         assert_eq!(cancel["turn_id"], "turn-1");
 
         let list = serde_json::to_value(RemoteCommand::ListSessions {
+            workspace_id: None,
             workspace_path: Some("/workspace/project".to_string()),
             remote_connection_id: None,
             remote_ssh_host: None,

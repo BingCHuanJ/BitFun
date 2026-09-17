@@ -1,3 +1,5 @@
+import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { resolveLegacySessionWorkspace } from '@/infrastructure/api/service-api/legacyWorkspaceCompatibility';
 import { OverflowText, Button, ConfirmDialog, Icon, IconButton, Input, NumberInput, Switch, Tooltip } from '@openbitfun/ui';
 import React, {
   useCallback,
@@ -404,6 +406,9 @@ const WorktreeSettingsPage: React.FC = () => {
 
     setOpeningSessionId(session.sessionId);
     try {
+      const workspaceId = session.workspaceId ?? resolveLegacySessionWorkspace({ workspacePath: projectWorkspacePath },
+        [...workspaceManager.getState().openedWorkspaces.values()])?.id;
+      if (!workspaceId) throw new Error('Workspace ID is unavailable');
       if (session.archived) {
         const shouldRestore = await confirmWarning(
           t('management.sessions.restoreTitle'),
@@ -412,16 +417,16 @@ const WorktreeSettingsPage: React.FC = () => {
         if (!shouldRestore) {
           return;
         }
-        await sessionAPI.unarchiveSession(session.sessionId, projectWorkspacePath);
+        await sessionAPI.unarchiveSession(session.sessionId, workspaceId);
         await flowChatManager.refreshWorkspaceSessions({
-          rootPath: projectWorkspacePath,
+          id: workspaceId,
         });
       }
 
       let opened = await openAgentCompanionSession(session.sessionId);
       if (!opened) {
         await flowChatManager.refreshWorkspaceSessions({
-          rootPath: projectWorkspacePath,
+          id: workspaceId,
         });
         opened = await openAgentCompanionSession(session.sessionId);
       }

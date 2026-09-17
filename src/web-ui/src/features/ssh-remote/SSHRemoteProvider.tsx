@@ -1,3 +1,4 @@
+import { resolveLegacySessionWorkspace } from '@/infrastructure/api/service-api/legacyWorkspaceCompatibility';
 /**
  * SSH Remote Feature - React Context Provider
  */
@@ -66,26 +67,12 @@ function getActiveRemoteWorkspaceForConnection(connectionId: string): RemoteWork
   }
 
   return {
+    workspaceId: activeWorkspace.id,
     connectionId: normalizedConnectionId,
     connectionName: activeWorkspace.connectionName?.trim() || 'Remote',
     remotePath: normalizeRemoteWorkspacePath(activeWorkspace.rootPath),
     sshHost: activeWorkspace.sshHost?.trim() || undefined,
   };
-}
-
-/** Match opened `WorkspaceInfo` so list_sessions maps to ~/.openbitfun/remote_ssh/... */
-function sshHostForRemoteWorkspace(connectionId: string, remotePath: string): string | undefined {
-  const norm = normalizeRemoteWorkspacePath(remotePath);
-  const cid = connectionId.trim();
-  for (const w of workspaceManager.getState().openedWorkspaces.values()) {
-    if (w.workspaceKind !== WorkspaceKind.Remote) continue;
-    if ((w.connectionId ?? '').trim() !== cid) continue;
-    if (normalizeRemoteWorkspacePath(w.rootPath) === norm) {
-      const h = w.sshHost?.trim();
-      if (h) return h;
-    }
-  }
-  return undefined;
 }
 
 /** After parallel reconnects: prefer the user's active remote workspace, else last in sidebar order (matches legacy serial last-write). */
@@ -566,12 +553,11 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       type ConnectedEntry = { workspace: RemoteWorkspace; connectionId: string };
       const results = await Promise.all(
         reconnectList.map(async workspace => {
-          const isAlreadyOpened = openedRemote.some(
-            ws =>
-              ws.connectionId === workspace.connectionId &&
-              normalizeRemoteWorkspacePath(ws.rootPath) ===
-                normalizeRemoteWorkspacePath(workspace.remotePath)
-          );
+          // Upgrade-only restore of pre-ID SSH workspace cache entries.
+          const openedRecord = resolveLegacySessionWorkspace({
+            workspaceId: workspace.workspaceId, workspacePath: workspace.remotePath,
+            remoteConnectionId: workspace.connectionId, remoteSshHost: workspace.sshHost,
+          }, openedRemote);
 
           const alreadyConnected = await sshApi.isConnected(workspace.connectionId).catch(() => false);
 
@@ -581,18 +567,9 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             setWorkspaceStatus(workspace.connectionId, 'connected');
             refreshRemoteAcpCapabilities(workspace.connectionId);
 
-            if (!isAlreadyOpened) {
-              await workspaceManager.openRemoteWorkspace(workspace).catch(() => {});
-            }
-            void flowChatStore
-              .initializeFromDisk(
-                workspace.remotePath,
-                workspace.connectionId,
-                workspace.sshHost?.trim() ||
-                  sshHostForRemoteWorkspace(workspace.connectionId, workspace.remotePath),
-                'ssh_remote_auto_restore_existing'
-              )
-              .catch(() => {});
+            const record = openedRecord ?? await workspaceManager.openRemoteWorkspace(workspace);
+            workspace.workspaceId = record.id;
+            void flowChatStore.initializeFromDisk(record.id, 'ssh_remote_auto_restore_existing').catch(() => {});
 
             return { ok: true as const, connected: { workspace, connectionId: workspace.connectionId } };
           }
@@ -628,21 +605,9 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             setWorkspaceStatus(result.workspace.connectionId, 'connected');
             refreshRemoteAcpCapabilities(result.connectionId);
 
-            if (!isAlreadyOpened) {
-              await workspaceManager.openRemoteWorkspace(result.workspace).catch(() => {});
-            }
-            void flowChatStore
-              .initializeFromDisk(
-                result.workspace.remotePath,
-                result.workspace.connectionId,
-                result.workspace.sshHost?.trim() ||
-                  sshHostForRemoteWorkspace(
-                    result.workspace.connectionId,
-                    result.workspace.remotePath
-                  ),
-                'ssh_remote_auto_restore_reconnected'
-              )
-              .catch(() => {});
+            const record = openedRecord ?? await workspaceManager.openRemoteWorkspace(result.workspace);
+            result.workspace.workspaceId = record.id;
+            void flowChatStore.initializeFromDisk(record.id, 'ssh_remote_auto_restore_reconnected').catch(() => {});
 
             return {
               ok: true as const,

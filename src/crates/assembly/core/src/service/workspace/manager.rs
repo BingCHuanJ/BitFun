@@ -39,7 +39,6 @@ pub(crate) trait WorkspaceIdentityRuntimeExt: Sized {
     async fn load_from_workspace_root(workspace_root: &Path) -> Result<Option<Self>, String>;
     fn from_markdown(content: &str) -> Result<Self, String>;
     fn is_empty(&self) -> bool;
-    #[cfg(any(feature = "agent-runtime", test))]
     fn collect_changed_fields(
         previous: Option<&WorkspaceIdentity>,
         current: Option<&WorkspaceIdentity>,
@@ -92,7 +91,6 @@ impl WorkspaceIdentityRuntimeExt for WorkspaceIdentity {
             && self.emoji.is_none()
     }
 
-    #[cfg(any(feature = "agent-runtime", test))]
     fn collect_changed_fields(
         previous: Option<&WorkspaceIdentity>,
         current: Option<&WorkspaceIdentity>,
@@ -450,6 +448,7 @@ impl WorkspaceInfoRuntimeExt for WorkspaceInfo {
                 .into_iter()
                 .find(|worktree| worktree.path == normalized_workspace_path)
                 .map(|worktree| WorkspaceWorktreeInfo {
+                    main_workspace_id: None,
                     path: worktree.path,
                     branch: worktree.branch,
                     main_repo_path: main_repo_path.clone(),
@@ -1220,21 +1219,18 @@ impl WorkspaceManager {
     }
 
     /// Cleans up invalid workspaces.
+    /// Compatibility entry point. Unavailable paths are recoverable (offline
+    /// mounts, moved folders, credentials); only explicit removal deletes IDs.
     pub async fn cleanup_invalid_workspaces(&mut self) -> OpenBitFunResult<usize> {
-        let mut invalid_workspaces = Vec::new();
-
         for (workspace_id, workspace) in &self.workspaces {
             if !workspace.is_valid().await {
-                invalid_workspaces.push(workspace_id.clone());
+                log::warn!(
+                    "Workspace is unavailable; preserving its record: workspace_id={}",
+                    workspace_id
+                );
             }
         }
-
-        let count = invalid_workspaces.len();
-        for workspace_id in invalid_workspaces {
-            self.remove_workspace(&workspace_id)?;
-        }
-
-        Ok(count)
+        Ok(0)
     }
 
     /// Updates the recent-workspaces list.

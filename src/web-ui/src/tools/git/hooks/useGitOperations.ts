@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
+import type { GitWorkspaceScope } from '@/infrastructure/api/service-api/GitAPI';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { 
   GitOperationResult,
   GitAddParams,
@@ -15,7 +16,7 @@ import { useI18n } from '@/infrastructure/i18n';
 const log = createLogger('useGitOperations');
 
 interface UseGitOperationsOptions {
-  repositoryPath: string;
+  repositoryPath: GitWorkspaceScope;
   autoRefresh?: boolean;
 }
 
@@ -35,7 +36,7 @@ interface UseGitOperationsReturn {
 }
 
 export function useGitOperations(options: UseGitOperationsOptions): UseGitOperationsReturn {
-  const { repositoryPath } = options;
+  const repositoryPath = useMemo(() => options.repositoryPath, [options.repositoryPath.workspaceId]);
   const [isOperating, setIsOperating] = useState(false);
   const [currentOperation, setCurrentOperation] = useState<GitOperationType | null>(null);
   const [error, setError] = useState<string | null>(null);

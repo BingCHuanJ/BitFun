@@ -144,6 +144,7 @@ public data class PersistedWorkspaceIdentity(
     public val path: String = "",
     public val remoteConnectionId: String? = null,
     public val remoteSshHost: String? = null,
+    public val workspaceId: String? = null,
 )
 
 @Serializable
@@ -191,6 +192,7 @@ public data class PersistedRemoteWorkspace public constructor(
     public val workspaceKind: String = "",
     public val remoteSshHost: String? = null,
     public val remoteConnectionId: String? = null,
+    public val workspaceId: String? = null,
 )
 
 public interface RemoteSessionListStore {

@@ -52,7 +52,6 @@ use openbitfun_core::service::config::project_permission_store::{
     deserialize_project_permission_config, project_permission_file_path,
     project_permission_file_path_for_remote, ProjectPermissionConfig,
 };
-use openbitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use openbitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
 use openbitfun_core::service::session::{
     DialogTurnData, SessionContextUsage, SessionMemoryMode, SessionMetadata, SessionRelationship,
@@ -99,6 +98,7 @@ fn desktop_session_scope(
     remote_ssh_host: Option<String>,
 ) -> DesktopSessionScopeRequest {
     DesktopSessionScopeRequest {
+        workspace_id: None,
         workspace_path,
         remote_connection_id,
         remote_ssh_host,
@@ -480,6 +480,9 @@ pub struct UpdateSessionThreadGoalObjectiveRequest {
 #[serde(rename_all = "camelCase")]
 pub struct EnsureCoordinatorSessionRequest {
     pub session_id: String,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -970,6 +973,9 @@ pub struct CancelToolRequest {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSessionRequest {
     pub session_id: String,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -981,6 +987,9 @@ pub struct DeleteSessionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct RestoreSessionRequest {
     pub session_id: String,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -992,6 +1001,17 @@ pub struct RestoreSessionRequest {
     pub trace_id: Option<String>,
     #[serde(default)]
     pub tail_turn_count: Option<usize>,
+}
+
+impl RestoreSessionRequest {
+    fn scope(&self) -> DesktopSessionScopeRequest {
+        DesktopSessionScopeRequest {
+            workspace_id: self.workspace_id.clone(),
+            workspace_path: self.workspace_path.clone(),
+            remote_connection_id: self.remote_connection_id.clone(),
+            remote_ssh_host: self.remote_ssh_host.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -1019,6 +1039,9 @@ pub struct LoadSessionTurnWindowRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListSessionsRequest {
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -1698,7 +1721,7 @@ pub async fn create_session(
     {
         openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
             "Desktop session creation",
-            Some(std::path::Path::new(&resolved_execution_target.root_path)),
+            request.workspace_id.as_deref(),
             error,
         )
         .await;
@@ -1715,7 +1738,7 @@ pub async fn create_session(
             remote_conn.as_deref(),
             remote_ssh_host.as_deref(),
         )
-        .await;
+        .await?;
         let existing = coordinator
             .get_session_manager()
             .load_session_metadata(&effective_path, session_id)
@@ -1749,7 +1772,7 @@ pub async fn create_session(
             remote_conn.as_deref(),
             remote_ssh_host.as_deref(),
         )
-        .await;
+        .await?;
         let existing = coordinator
             .get_session_manager()
             .load_session_metadata(&effective_path, session_id)
@@ -2291,11 +2314,12 @@ pub async fn ensure_coordinator_session(
     runtime
         .session_application()
         .ensure_session_loaded(
-            desktop_session_scope(
-                request.workspace_path.clone(),
-                request.remote_connection_id.clone(),
-                request.remote_ssh_host.clone(),
-            ),
+            DesktopSessionScopeRequest {
+                workspace_id: request.workspace_id.clone(),
+                workspace_path: request.workspace_path.clone(),
+                remote_connection_id: request.remote_connection_id.clone(),
+                remote_ssh_host: request.remote_ssh_host.clone(),
+            },
             session_id,
             request.include_internal,
         )
@@ -2443,7 +2467,7 @@ pub async fn compact_session(
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
-        .await;
+        .await?;
         coordinator
             .restore_session_from_storage_path(&effective, session_id)
             .await
@@ -2498,7 +2522,7 @@ pub async fn activate_session_goal(
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
-        .await;
+        .await?;
         coordinator
             .restore_session_from_storage_path(&effective, session_id)
             .await
@@ -2555,7 +2579,7 @@ async fn ensure_session_for_thread_goal(
             remote_connection_id,
             remote_ssh_host,
         )
-        .await;
+        .await?;
         coordinator
             .restore_session_from_storage_path(&effective, session_id)
             .await
@@ -2606,7 +2630,7 @@ async fn resolve_thread_goal_storage_path(
         remote_connection_id,
         remote_ssh_host,
     )
-    .await)
+    .await?)
 }
 
 #[tauri::command]
@@ -2873,7 +2897,7 @@ pub async fn run_init_agents_md(
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
-        .await;
+        .await?;
         coordinator
             .restore_session_from_storage_path(&effective, session_id)
             .await
@@ -3499,11 +3523,12 @@ pub async fn delete_session(
     runtime
         .session_application()
         .delete_session(
-            desktop_session_scope(
-                request.workspace_path,
-                request.remote_connection_id,
-                request.remote_ssh_host,
-            ),
+            DesktopSessionScopeRequest {
+                workspace_id: request.workspace_id,
+                workspace_path: request.workspace_path,
+                remote_connection_id: request.remote_connection_id,
+                remote_ssh_host: request.remote_ssh_host,
+            },
             request.session_id,
         )
         .await
@@ -3518,11 +3543,7 @@ pub async fn restore_session(
     let session = runtime
         .session_application()
         .restore_session(
-            desktop_session_scope(
-                request.workspace_path.clone(),
-                request.remote_connection_id.clone(),
-                request.remote_ssh_host.clone(),
-            ),
+            request.scope(),
             &request.session_id,
             request.include_internal,
         )
@@ -3552,11 +3573,7 @@ pub async fn restore_session_view(
         let restored = runtime
             .session_application()
             .restore_session_view(
-                desktop_session_scope(
-                    request.workspace_path.clone(),
-                    request.remote_connection_id.clone(),
-                    request.remote_ssh_host.clone(),
-                ),
+                request.scope(),
                 &request.session_id,
                 request.include_internal,
                 tail_turn_count,
@@ -3770,11 +3787,7 @@ pub async fn restore_session_with_turns(
     let restored = runtime
         .session_application()
         .restore_session_with_turns(
-            desktop_session_scope(
-                request.workspace_path.clone(),
-                request.remote_connection_id.clone(),
-                request.remote_ssh_host.clone(),
-            ),
+            request.scope(),
             &request.session_id,
             request.include_internal,
             |resolve_storage_path_duration_ms| {
@@ -3831,13 +3844,22 @@ pub async fn list_sessions(
     app_state: State<'_, AppState>,
     request: ListSessionsRequest,
 ) -> Result<Vec<SessionResponse>, String> {
-    let effective_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
+    let effective_path = if let Some(id) = request.workspace_id.as_deref() {
+        use openbitfun_runtime_ports::SessionStorePort;
+        openbitfun_core::agentic::session::CoreSessionStorePort::default()
+            .resolve_workspace_storage(id)
+            .await
+            .map_err(|error| error.to_string())?
+            .effective_storage_path
+    } else {
+        desktop_effective_session_storage_path(
+            &app_state,
+            &request.workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await?
+    };
     let summaries = coordinator
         .list_sessions(&effective_path)
         .await
@@ -3886,13 +3908,27 @@ pub async fn get_available_modes(
 ) -> Result<Vec<ModeInfoDTO>, String> {
     let trace_started = Instant::now();
     let request = request.unwrap_or_default();
-    let workspace_path = request
-        .workspace_path
-        .as_deref()
-        .filter(|path| !path.trim().is_empty())
-        .map(PathBuf::from);
-    let local_scope = local_mode_catalog_scope(&request, workspace_path.as_deref()).await;
-    let external_sources_supported = local_scope.is_some();
+    let workspace = if request.workspace_id.is_some() || request.workspace_path.is_some() {
+        state
+            .workspace_service
+            .resolve_legacy_workspace_reference(
+                request.workspace_id.as_deref(),
+                request.workspace_path.as_deref().unwrap_or_default(),
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or("Unknown workspace reference")
+            .map(Some)?
+    } else {
+        None
+    };
+    let workspace_path = workspace.as_ref().map(|record| record.root_path.clone());
+    let external_sources_supported = workspace.as_ref().is_some_and(|record| {
+        record.workspace_kind != openbitfun_core::service::workspace::WorkspaceKind::Remote
+    });
+    let local_scope = workspace.as_ref().and_then(local_mode_catalog_scope);
     if let Some(scope) = local_scope {
         if let Err(error) = runtime
             .session_application()
@@ -3901,14 +3937,14 @@ pub async fn get_available_modes(
         {
             openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                 "Desktop mode catalog",
-                workspace_path.as_deref(),
+                workspace.as_ref().map(|record| record.id.as_str()),
                 error,
             )
             .await;
         }
         if let Err(error) =
             openbitfun_core::external_sources::ensure_external_source_workspace_snapshot(
-                workspace_path.as_deref(),
+                workspace.as_ref().map(|record| record.id.as_str()),
             )
             .await
         {
@@ -3917,7 +3953,10 @@ pub async fn get_available_modes(
     }
     let mode_infos = state
         .agent_registry
-        .get_modes_info_for_workspace(workspace_path.as_deref(), external_sources_supported)
+        .get_modes_info_for_workspace(
+            workspace.as_ref().map(|record| record.id.as_str()),
+            external_sources_supported,
+        )
         .await;
 
     let dtos: Vec<ModeInfoDTO> = mode_infos
@@ -3952,47 +3991,24 @@ pub async fn get_available_modes(
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAvailableModesRequest {
+    pub workspace_id: Option<String>,
     pub workspace_path: Option<String>,
     pub remote_connection_id: Option<String>,
     pub remote_ssh_host: Option<String>,
 }
 
-async fn local_mode_catalog_scope(
-    request: &GetAvailableModesRequest,
-    workspace_path: Option<&Path>,
+fn local_mode_catalog_scope(
+    record: &openbitfun_core::service::workspace::WorkspaceInfo,
 ) -> Option<DesktopSessionScopeRequest> {
-    if !mode_catalog_supports_external_sources(request, workspace_path).await {
+    if record.workspace_kind == openbitfun_core::service::workspace::WorkspaceKind::Remote {
         return None;
     }
-    workspace_path.map(|path| {
-        desktop_session_scope(
-            path.to_string_lossy().into_owned(),
-            request.remote_connection_id.clone(),
-            request.remote_ssh_host.clone(),
-        )
+    Some(DesktopSessionScopeRequest {
+        workspace_id: Some(record.id.clone()),
+        workspace_path: record.root_path.to_string_lossy().into_owned(),
+        remote_connection_id: None,
+        remote_ssh_host: None,
     })
-}
-
-async fn mode_catalog_supports_external_sources(
-    request: &GetAvailableModesRequest,
-    workspace_path: Option<&Path>,
-) -> bool {
-    let has_remote_identity = request
-        .remote_connection_id
-        .as_deref()
-        .is_some_and(|value| !value.trim().is_empty())
-        || request
-            .remote_ssh_host
-            .as_deref()
-            .is_some_and(|value| !value.trim().is_empty());
-    if has_remote_identity {
-        return false;
-    }
-
-    match workspace_path {
-        Some(path) => path.is_absolute() && !is_remote_path(&path.to_string_lossy()).await,
-        None => false,
-    }
 }
 
 #[tauri::command]
@@ -4114,33 +4130,23 @@ mod tests {
     use serde_json::json;
 
     #[tokio::test]
-    async fn remote_mode_catalog_never_scans_an_absolute_desktop_host_path() {
-        let desktop_host_path = std::env::current_dir().expect("desktop host working directory");
-        assert!(desktop_host_path.is_absolute());
-        let request = GetAvailableModesRequest {
-            workspace_path: Some(desktop_host_path.to_string_lossy().into_owned()),
-            remote_connection_id: Some("remote-1".to_string()),
-            remote_ssh_host: Some("build-host".to_string()),
+    async fn mode_catalog_uses_record_kind_even_when_local_and_remote_paths_are_identical() {
+        use openbitfun_core::service::workspace::{
+            WorkspaceInfo, WorkspaceInfoRuntimeExt, WorkspaceKind, WorkspaceOpenOptions,
         };
-
-        assert!(local_mode_catalog_scope(&request, Some(&desktop_host_path))
-            .await
-            .is_none());
-    }
-
-    #[tokio::test]
-    async fn local_mode_catalog_builds_the_plugin_activation_scope() {
-        let workspace = tempfile::tempdir().expect("workspace");
-        let request = GetAvailableModesRequest {
-            workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
-            remote_connection_id: None,
-            remote_ssh_host: None,
-        };
-
-        let scope = local_mode_catalog_scope(&request, Some(workspace.path()))
-            .await
-            .expect("local mode catalog scope");
-        assert_eq!(scope.workspace_path, request.workspace_path.unwrap());
+        let folder = tempfile::tempdir().unwrap();
+        let local = WorkspaceInfo::new_without_worktree(
+            folder.path().to_owned(),
+            WorkspaceOpenOptions::default(),
+        )
+        .await
+        .unwrap();
+        let scope = local_mode_catalog_scope(&local).unwrap();
+        assert_eq!(scope.workspace_id.as_deref(), Some(local.id.as_str()));
+        let mut remote = local.clone();
+        remote.workspace_kind = WorkspaceKind::Remote;
+        remote.id = "remote-record".into();
+        assert!(local_mode_catalog_scope(&remote).is_none());
     }
 
     #[test]

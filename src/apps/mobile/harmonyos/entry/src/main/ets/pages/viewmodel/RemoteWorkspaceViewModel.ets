@@ -56,8 +56,8 @@ export class RemoteWorkspaceViewModel {
     await this.loadAssistants();
   }
 
-  async selectWorkspace(path: string, connectionId?: string, sshHost?: string): Promise<boolean> {
-    return await this.select(path, false, connectionId, sshHost);
+  async selectWorkspace(path: string, connectionId?: string, sshHost?: string, workspaceId?: string): Promise<boolean> {
+    return await this.select(path, false, connectionId, sshHost, workspaceId);
   }
 
   async selectAssistant(path: string): Promise<boolean> {
@@ -164,7 +164,7 @@ export class RemoteWorkspaceViewModel {
     }
   }
 
-  private async select(path: string, assistant: boolean, connectionId?: string, sshHost?: string): Promise<boolean> {
+  private async select(path: string, assistant: boolean, connectionId?: string, sshHost?: string, workspaceId?: string): Promise<boolean> {
     if (this.hooks.isBusy() || path.trim().length === 0 || !this.hooks.isRemoteAvailable()) {
       return false;
     }
@@ -173,7 +173,7 @@ export class RemoteWorkspaceViewModel {
       this.hooks.onStatus(RemoteI18n.t(assistant ?
         'status.switchingAssistant' : 'status.switchingWorkspace'));
       const workspace = assistant ?
-        await this.coordinator.switchAssistant(path) : await this.coordinator.switchWorkspace(path, connectionId, sshHost);
+        await this.coordinator.switchAssistant(path) : await this.coordinator.switchWorkspace(path, connectionId, sshHost, workspaceId);
       this.hooks.onWorkspaceSelected(workspace);
       this.pageState.closePickers();
       this.pageState.clear();

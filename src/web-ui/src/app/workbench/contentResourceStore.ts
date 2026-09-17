@@ -36,8 +36,8 @@ export function contentResourceIdentity(content: PanelContent, scope: ContentRes
   const identity = target.kind === 'file'
     ? resourcePathKey(target.path, scope)
     : target.kind === 'terminal' ? target.sessionId : target.key;
-  return { target, key: JSON.stringify([scope.surfaceId, scope.remoteConnectionId ?? '', target.kind,
-    target.kind === 'content' ? [content.type, scope.workspaceId ?? scope.workspacePath ?? ''] : '', identity]) };
+  return { target, key: JSON.stringify([scope.surfaceId, scope.workspaceId ?? '', scope.remoteConnectionId ?? '', target.kind,
+    target.kind === 'content' ? [content.type, scope.workspaceId ?? ''] : '', identity]) };
 }
 
 interface ResourceState {
@@ -61,7 +61,7 @@ export const useContentResourceStore = create<ResourceState>((set, get) => ({
     const id = `resource-${++sequence}`;
     const content = { ...input, data: input.data !== null && typeof input.data === 'object' ? { ...input.data,
       ...(target.kind === 'file' ? { filePath: target.path } : {}),
-      workspacePath: scope.workspacePath, remoteConnectionId: scope.remoteConnectionId } : input.data };
+      workspaceId: scope.workspaceId, workspacePath: scope.workspacePath, remoteConnectionId: scope.remoteConnectionId } : input.data };
     set(state => ({ resources: { ...state.resources,
       [id]: { id, key, scope, target, content, documentId: documentId ?? id, isDirty: false, fileMissing: false } } }));
     return id;

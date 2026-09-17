@@ -12,8 +12,6 @@
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::keyed_lock::KeyedAsyncLock;
 use crate::agentic::session::{SessionExecutionBindingError, SessionExecutionBindingUpdate};
-use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
-use crate::service::workspace::get_global_workspace_service;
 use crate::service::worktree::{
     WorktreeCreateRequest, WorktreeListRequest, WorktreeRemoveRequest, WorktreeService,
 };
@@ -48,6 +46,8 @@ pub struct WorktreeSessionBindingRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeSessionBindingResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_id: Option<String>,
     pub session_id: String,
     pub workspace_path: String,
     pub project_workspace_path: String,
@@ -61,6 +61,8 @@ pub struct WorktreeSessionBindingResult {
 
 /// Session facts the binding decision depends on.
 struct SessionBindingContext {
+    workspace_id: Option<String>,
+    project_workspace_id: Option<String>,
     project_workspace_path: String,
     execution_target: SessionExecutionTarget,
     /// Why an actual transition is forbidden. An already-satisfied binding
@@ -95,8 +97,15 @@ async fn load_binding_context(
     let session_manager = coordinator.get_session_manager();
     let session = session_manager.get_session(&request.session_id);
 
-    let (workspace_path, project_workspace_path, execution_target, mut transition_blocker) =
-        if let Some(session) = session {
+    let workspace_id;
+    let project_workspace_id;
+    let (workspace_path, project_workspace_path, execution_target, transition_blocker) =
+        if let Some(mut session) = session {
+            crate::agentic::workspace::normalize_session_workspace(&mut session.config)
+                .await
+                .map_err(|error_| error(WorktreeErrorCode::IoFailed, error_.to_string()))?;
+            workspace_id = session.config.workspace_id.clone();
+            project_workspace_id = session.config.project_workspace_id.clone();
             let transition_blocker = if !session.dialog_turn_ids.is_empty() {
                 Some(error(
                     WorktreeErrorCode::WorktreeBusy,
@@ -107,7 +116,7 @@ async fn load_binding_context(
                     WorktreeErrorCode::WorktreeBusy,
                     "Worktree isolation cannot be changed while the session is processing",
                 ))
-            } else if session.config.remote_connection_id.is_some() {
+            } else if session.config.is_remote_workspace() {
                 Some(error(
                     WorktreeErrorCode::RemoteUnsupported,
                     "Managed worktrees are not supported for remote SSH workspaces yet",
@@ -169,15 +178,30 @@ async fn load_binding_context(
                         format!("Session not found: {}", request.session_id),
                     )
                 })?;
+            let mut config = crate::agentic::core::SessionConfig {
+                workspace_id: metadata.workspace_id.clone(),
+                project_workspace_id: metadata.project_workspace_id.clone(),
+                workspace_path: metadata
+                    .workspace_path
+                    .clone()
+                    .or_else(|| Some(project_workspace_path.clone())),
+                project_workspace_path: metadata.project_workspace_path.clone(),
+                remote_ssh_host: metadata.workspace_hostname.clone(),
+                ..Default::default()
+            };
+            crate::agentic::workspace::normalize_session_workspace(&mut config)
+                .await
+                .map_err(|error_| error(WorktreeErrorCode::IoFailed, error_.to_string()))?;
+            workspace_id = config.workspace_id.clone();
+            project_workspace_id = config.project_workspace_id.clone();
             let transition_blocker = if metadata.turn_count > 0 {
                 Some(error(
                     WorktreeErrorCode::WorktreeBusy,
                     "Worktree isolation can only be changed before the session's first message",
                 ))
-            } else if persisted_session_is_remote(metadata.workspace_hostname.as_deref()) {
-                // The persisted record carries the remote marker itself, so a
-                // build without the SSH registry still refuses here instead
-                // of creating a controller-local worktree for a remote path.
+            } else if config.is_remote_workspace() {
+                // The owning workspace record determines location after the
+                // historical metadata has crossed the upgrade adapter.
                 Some(error(
                     WorktreeErrorCode::RemoteUnsupported,
                     "Managed worktrees are not supported for remote SSH workspaces yet",
@@ -206,16 +230,6 @@ async fn load_binding_context(
             )
         };
 
-    if transition_blocker.is_none()
-        && crate::service::remote_ssh::workspace_state::is_remote_path(&project_workspace_path)
-            .await
-    {
-        transition_blocker = Some(error(
-            WorktreeErrorCode::RemoteUnsupported,
-            "Managed worktrees are not supported for remote SSH workspaces yet",
-        ));
-    }
-
     if workspace_path.trim().is_empty() {
         return Err(error(
             WorktreeErrorCode::InvalidPath,
@@ -224,6 +238,8 @@ async fn load_binding_context(
     }
 
     Ok(SessionBindingContext {
+        workspace_id,
+        project_workspace_id,
         project_workspace_path,
         execution_target,
         transition_blocker,
@@ -232,12 +248,6 @@ async fn load_binding_context(
 
 /// A persisted session names its workspace host; anything but the local host
 /// marks the session as remote even when no SSH connection is registered.
-fn persisted_session_is_remote(workspace_hostname: Option<&str>) -> bool {
-    workspace_hostname
-        .map(str::trim)
-        .is_some_and(|host| !host.is_empty() && host != LOCAL_WORKSPACE_SSH_HOST)
-}
-
 fn binding_action(
     context: &SessionBindingContext,
     enabled: bool,
@@ -258,17 +268,12 @@ fn binding_action(
     })
 }
 
-async fn current_workspace_id(root_path: &str) -> Option<String> {
-    get_global_workspace_service()?
-        .get_workspace_by_path(Path::new(root_path))
-        .await
-        .map(|workspace| workspace.id)
-}
-
 async fn rebind(
     session_id: &str,
     project_workspace_path: &str,
     execution_target: SessionExecutionTarget,
+    workspace_id: Option<String>,
+    project_workspace_id: Option<String>,
 ) -> Result<WorktreeSessionBindingResult, WorktreeError> {
     let coordinator = get_global_coordinator().ok_or_else(|| {
         error(
@@ -276,7 +281,12 @@ async fn rebind(
             "Session coordinator is not initialized",
         )
     })?;
-    let workspace_id = current_workspace_id(&execution_target.root_path).await;
+    let workspace_id = Some(workspace_id.ok_or_else(|| {
+        error(
+            WorktreeErrorCode::WorktreeNotFound,
+            "Workspace ID is required for a session binding",
+        )
+    })?);
 
     coordinator
         .get_session_manager()
@@ -304,6 +314,7 @@ async fn rebind(
         })?;
 
     Ok(WorktreeSessionBindingResult {
+        project_workspace_id,
         session_id: session_id.to_string(),
         workspace_path: execution_target.root_path.clone(),
         project_workspace_path: project_workspace_path.to_string(),
@@ -329,10 +340,11 @@ impl WorktreeService {
             SessionBindingAction::AlreadyBound => {
                 // Already in the requested state; report it rather than churn Git.
                 Ok(WorktreeSessionBindingResult {
+                    project_workspace_id: context.project_workspace_id.clone(),
                     session_id: request.session_id,
                     workspace_path: context.execution_target.root_path.clone(),
                     project_workspace_path: context.project_workspace_path,
-                    workspace_id: current_workspace_id(&context.execution_target.root_path).await,
+                    workspace_id: context.workspace_id.clone(),
                     execution_target: context.execution_target,
                     retained_worktree_path: None,
                 })
@@ -365,6 +377,8 @@ impl WorktreeService {
             &request.session_id,
             &created.worktree.project_workspace_path,
             created.execution_target,
+            created.worktree.workspace_id.clone(),
+            context.project_workspace_id.clone(),
         )
         .await
         {
@@ -410,6 +424,8 @@ impl WorktreeService {
             &request.session_id,
             &context.project_workspace_path,
             SessionExecutionTarget::local(context.project_workspace_path.clone()),
+            context.project_workspace_id.clone(),
+            context.project_workspace_id.clone(),
         )
         .await?;
 
@@ -457,20 +473,11 @@ impl WorktreeService {
 #[cfg(test)]
 mod tests {
     use super::{
-        binding_action, error, persisted_session_is_remote, SessionBindingAction,
-        SessionBindingContext, WorktreeSessionBindingRequest, SESSION_BINDING_LOCKS,
+        binding_action, error, SessionBindingAction, SessionBindingContext,
+        WorktreeSessionBindingRequest, SESSION_BINDING_LOCKS,
     };
     use openbitfun_core_types::{SessionExecutionTarget, WorktreeErrorCode};
     use std::time::Duration;
-
-    #[test]
-    fn persisted_workspace_hostname_marks_remote_sessions() {
-        assert!(!persisted_session_is_remote(None));
-        assert!(!persisted_session_is_remote(Some("localhost")));
-        assert!(!persisted_session_is_remote(Some("   ")));
-        assert!(persisted_session_is_remote(Some("build.example.test")));
-        assert!(persisted_session_is_remote(Some("_unresolved")));
-    }
 
     #[test]
     fn binding_request_keeps_legacy_callers_compatible() {
@@ -503,6 +510,8 @@ mod tests {
     #[test]
     fn already_satisfied_binding_is_a_no_op_after_the_first_message() {
         let context = SessionBindingContext {
+            workspace_id: Some("workspace".into()),
+            project_workspace_id: Some("workspace".into()),
             project_workspace_path: "/repo".to_string(),
             execution_target: SessionExecutionTarget::local("/repo"),
             transition_blocker: Some(error(

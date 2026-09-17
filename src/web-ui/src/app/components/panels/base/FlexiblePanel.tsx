@@ -661,7 +661,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitDiff')}</div>}>
             <GitDiffView 
-              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
+              repositoryPath={{ workspaceId: content.data?.workspaceId ?? content.metadata?.resourceScope?.workspaceId ?? '', repositoryPath: content.data?.repositoryPath || workspacePath }}
               sourceCommit={content.data?.sourceCommit}
               targetCommit={content.data?.targetCommit}
               filePath={content.data?.filePath}
@@ -673,7 +673,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitGraph')}</div>}>
             <GitGraphView 
-              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
+              repositoryPath={{ workspaceId: content.data?.workspaceId ?? content.metadata?.resourceScope?.workspaceId ?? '', repositoryPath: content.data?.repositoryPath || workspacePath }}
               maxCount={content.data?.maxCount}
             />
           </React.Suspense>
@@ -683,7 +683,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitBranchHistory')}</div>}>
             <GitBranchHistoryView 
-              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
+              repositoryPath={{ workspaceId: content.data?.workspaceId ?? content.metadata?.resourceScope?.workspaceId ?? '', repositoryPath: content.data?.repositoryPath || workspacePath }}
               branchName={content.data?.branchName || 'main'}
               currentBranch={content.data?.currentBranch}
               maxCount={content.data?.maxCount || 100}
@@ -751,7 +751,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitSettings')}</div>}>
             <GitSettingsView 
-              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
+              repositoryPath={{ workspaceId: content.data?.workspaceId ?? content.metadata?.resourceScope?.workspaceId ?? '', repositoryPath: content.data?.repositoryPath || workspacePath }}
             />
           </React.Suspense>
         );
@@ -863,7 +863,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
       case 'review-platform':
         return (
           <React.Suspense fallback={<div className="openbitfun-flexible-panel__loading" data-openbitfun-component="flexible-panel" data-openbitfun-part="loading" data-openbitfun-state="loading">Loading pull requests...</div>}>
-            <ReviewPlatformPanel workspacePath={content.data?.workspacePath || workspacePath} />
+            <ReviewPlatformPanel workspaceId={content.data?.workspaceId ?? content.metadata?.resourceScope?.workspaceId ?? ''} workspacePath={content.data?.workspacePath || workspacePath} />
           </React.Suspense>
         );
 
@@ -871,6 +871,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <React.Suspense fallback={<div className="openbitfun-flexible-panel__loading" data-openbitfun-component="flexible-panel" data-openbitfun-part="loading" data-openbitfun-state="loading">Loading pull request...</div>}>
             <ReviewPlatformPanel
+              workspaceId={content.data?.workspaceId ?? content.metadata?.resourceScope?.workspaceId ?? ''}
               workspacePath={content.data?.workspacePath || workspacePath}
               initialRemoteId={content.data?.remoteId}
               initialPullRequestId={content.data?.pullRequestId}
@@ -898,8 +899,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             <HtmlPreviewPanel
               isActive={isActive}
               filePath={content.data?.filePath || ''}
-              workspacePath={content.data?.workspacePath || workspacePath || ''}
-              remoteConnectionId={content.data?.remoteConnectionId}
+              workspaceId={content.data?.workspaceId ?? content.metadata?.resourceScope?.workspaceId ?? ''}
             />
           </React.Suspense>
         );
@@ -995,6 +995,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               source={content.data?.source}
               status={content.data?.status}
               diagnostics={content.data?.diagnostics}
+              workspaceId={content.data?.workspaceId}
               workspacePath={content.data?.workspacePath}
               remoteConnectionId={content.data?.remoteConnectionId}
               remoteSshHost={content.data?.remoteSshHost}

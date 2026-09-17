@@ -89,6 +89,8 @@ async fn transition(
     let execution_target = result.execution_target.clone();
     Ok(WorktreeBindingResponse {
         workspace_binding: AgentSessionWorkspaceBinding {
+            workspace_kind: Some(openbitfun_core::service::workspace::WorkspaceKind::Normal),
+            project_workspace_id: result.project_workspace_id,
             workspace_id: result.workspace_id,
             workspace_path: result.workspace_path,
             project_workspace_path: Some(result.project_workspace_path),

@@ -388,65 +388,25 @@ fn validate_session_workspace_identity(
     Ok(())
 }
 
-fn fork_workspace_identity(
+async fn fork_workspace_binding(
     session: &Session,
-    request: &SessionStoragePathRequest,
-) -> OpenBitFunResult<Option<WorkspaceSessionIdentity>> {
-    fn nonempty(value: Option<&str>) -> Option<&str> {
-        value.map(str::trim).filter(|value| !value.is_empty())
-    }
-    fn declares_remote(connection_id: Option<&str>, hostname: Option<&str>) -> bool {
-        connection_id.is_some()
-            || hostname.is_some_and(|host| {
-                host != openbitfun_services_core::workspace_identity::LOCAL_WORKSPACE_SSH_HOST
-            })
-    }
-    let connection_id = nonempty(request.remote_connection_id.as_deref());
-    let hostname = nonempty(request.remote_ssh_host.as_deref());
-    let config = &session.config;
-    let request_is_remote = declares_remote(connection_id, hostname);
-    let (workspace_path, connection_id, hostname) = if request_is_remote {
-        (
-            request.workspace_path.to_string_lossy().into_owned(),
-            connection_id.or_else(|| nonempty(config.remote_connection_id.as_deref())),
-            hostname.or_else(|| nonempty(config.remote_ssh_host.as_deref())),
-        )
-    } else {
-        // Legacy/plugin callers may provide only a resolved Session store or a
-        // project root (different from a worktree). Its durable execution
-        // identity remains authoritative; do not reinterpret that path locally.
-        let Some(workspace_path) = config.workspace_path.clone() else {
-            if declares_remote(
-                nonempty(config.remote_connection_id.as_deref()),
-                nonempty(config.remote_ssh_host.as_deref()),
-            ) {
-                return Err(OpenBitFunError::Validation(
-                    "Remote Session fork requires a persisted workspace path".to_string(),
-                ));
-            }
-            return Ok(None);
-        };
-        (
-            workspace_path,
-            nonempty(config.remote_connection_id.as_deref()),
-            nonempty(config.remote_ssh_host.as_deref()),
-        )
-    };
-    let identity = workspace_session_identity(&workspace_path, connection_id, hostname);
-    if (request_is_remote || declares_remote(connection_id, hostname))
-        && identity
-            .as_ref()
-            .is_none_or(|identity| identity.remote_connection_id.is_none())
+    requested_workspace_id: &str,
+) -> OpenBitFunResult<crate::agentic::WorkspaceBinding> {
+    let mut config = session.config.clone();
+    crate::agentic::workspace::normalize_session_workspace(&mut config).await?;
+    let id = config
+        .workspace_id
+        .as_deref()
+        .ok_or_else(|| OpenBitFunError::Validation("Session workspace ID is required".into()))?;
+    if requested_workspace_id != id
+        && config.project_workspace_id.as_deref() != Some(requested_workspace_id)
     {
-        return Err(OpenBitFunError::Validation(
-            "Remote Session fork requires a complete persisted connection and host identity"
-                .to_string(),
-        ));
+        return Err(OpenBitFunError::Validation(format!(
+            "Session workspace identity does not match the requested workspace ID: {}",
+            session.session_id
+        )));
     }
-    if let Some(identity) = identity.as_ref() {
-        validate_session_workspace_identity(session, identity)?;
-    }
-    Ok(identity)
+    crate::agentic::WorkspaceBinding::resolve(id).await
 }
 
 async fn begin_consistent_persisted_session_read(
@@ -635,15 +595,16 @@ fn validate_local_snapshot_workspace(workspace_path: &Path) -> PortResult<()> {
     Ok(())
 }
 
-async fn ensure_local_snapshot_manager(workspace_path: &Path) -> PortResult<Arc<SnapshotManager>> {
-    validate_local_snapshot_workspace(workspace_path)?;
-    if let Some(manager) = get_snapshot_manager_for_workspace(workspace_path) {
+async fn ensure_local_snapshot_manager(workspace_id: &str) -> PortResult<Arc<SnapshotManager>> {
+    let workspace_path = local_snapshot_root(workspace_id).await?;
+    validate_local_snapshot_workspace(&workspace_path)?;
+    if let Some(manager) = get_snapshot_manager_for_workspace(workspace_id) {
         return Ok(manager);
     }
-    initialize_snapshot_manager_for_workspace(workspace_path.to_path_buf(), None)
+    initialize_snapshot_manager_for_workspace(workspace_id, None)
         .await
         .map_err(snapshot_initialization_port_error)?;
-    get_snapshot_manager_for_workspace(workspace_path).ok_or_else(|| {
+    get_snapshot_manager_for_workspace(workspace_id).ok_or_else(|| {
         PortError::new(
             PortErrorKind::Backend,
             format!(
@@ -654,11 +615,10 @@ async fn ensure_local_snapshot_manager(workspace_path: &Path) -> PortResult<Arc<
     })
 }
 
-async fn local_snapshot_manager_for_view(
-    workspace_path: &Path,
-) -> PortResult<Arc<SnapshotManager>> {
-    validate_local_snapshot_workspace(workspace_path)?;
-    open_snapshot_manager_for_view(workspace_path)
+async fn local_snapshot_manager_for_view(workspace_id: &str) -> PortResult<Arc<SnapshotManager>> {
+    let workspace_path = local_snapshot_root(workspace_id).await?;
+    validate_local_snapshot_workspace(&workspace_path)?;
+    open_snapshot_manager_for_view(workspace_id)
         .await
         .map_err(snapshot_port_error)
 }
@@ -675,10 +635,30 @@ impl CoreLocalWorkspaceSnapshot {
     }
 }
 
+async fn local_snapshot_root(workspace_id: &str) -> PortResult<PathBuf> {
+    let service = crate::service::workspace::get_global_workspace_service().ok_or_else(|| {
+        PortError::new(
+            PortErrorKind::NotAvailable,
+            "Workspace service is unavailable",
+        )
+    })?;
+    let record = service
+        .require_workspace(workspace_id)
+        .await
+        .map_err(|e| PortError::new(PortErrorKind::InvalidRequest, e.to_string()))?;
+    if record.workspace_kind == crate::service::workspace::WorkspaceKind::Remote {
+        return Err(PortError::new(
+            PortErrorKind::InvalidRequest,
+            "Snapshot system not supported for remote workspace",
+        ));
+    }
+    Ok(record.root_path)
+}
+
 #[async_trait::async_trait]
 impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
-    async fn prepare_local_workspace(&self, workspace_path: PathBuf) -> PortResult<()> {
-        ensure_local_snapshot_manager(&workspace_path).await?;
+    async fn prepare_local_workspace(&self, workspace_id: String) -> PortResult<()> {
+        ensure_local_snapshot_manager(&workspace_id).await?;
         Ok(())
     }
 
@@ -687,7 +667,7 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
         request: LocalWorkspaceSnapshotSessionRequest,
     ) -> PortResult<Vec<PathBuf>> {
         validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
-        let manager = local_snapshot_manager_for_view(&request.workspace_path).await?;
+        let manager = local_snapshot_manager_for_view(&request.workspace_id).await?;
         manager
             .get_session_files_before(&request.session_id, request.max_turn_exclusive)
             .await
@@ -699,7 +679,7 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
         request: LocalWorkspaceSnapshotSessionRequest,
     ) -> PortResult<LocalWorkspaceSnapshotStats> {
         validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
-        let manager = local_snapshot_manager_for_view(&request.workspace_path).await?;
+        let manager = local_snapshot_manager_for_view(&request.workspace_id).await?;
         let stats = manager
             .get_session_stats_fact_before(&request.session_id, request.max_turn_exclusive)
             .await
@@ -717,7 +697,7 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
         request: LocalWorkspaceSnapshotTurnRequest,
     ) -> PortResult<Vec<PathBuf>> {
         validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
-        ensure_local_snapshot_manager(&request.workspace_path)
+        ensure_local_snapshot_manager(&request.workspace_id)
             .await?
             .rollback_workspace_files_to_boundary(&request.session_id, request.turn_index)
             .await
@@ -733,7 +713,7 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
 pub struct CoreProductAgentRuntime;
 
 pub(crate) async fn fork_session_for_plugin(
-    workspace_path: PathBuf,
+    workspace_id: String,
     source_session_id: String,
     source_message_id: Option<String>,
 ) -> Result<AgentSessionForkResult, String> {
@@ -763,7 +743,8 @@ pub(crate) async fn fork_session_for_plugin(
             AgentSessionForkPort::fork_session_at_turn(
                 &operations,
                 AgentSessionForkAtTurnRequest {
-                    workspace_path: workspace_path.to_string_lossy().into_owned(),
+                    workspace_id: Some(workspace_id.clone()),
+                    workspace_path: String::new(),
                     source_session_id,
                     source_turn_id,
                     remote_connection_id: None,
@@ -776,7 +757,8 @@ pub(crate) async fn fork_session_for_plugin(
         None => AgentSessionForkPort::fork_session(
             &operations,
             AgentSessionForkRequest {
-                workspace_path: workspace_path.to_string_lossy().into_owned(),
+                workspace_id: Some(workspace_id),
+                workspace_path: String::new(),
                 source_session_id,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -2103,6 +2085,37 @@ impl CoreSessionOperationsPort {
             .map(|resolution| resolution.effective_storage_path)
     }
 
+    async fn resolve_fork_workspace_id(
+        &self,
+        workspace_id: Option<&str>,
+        legacy_path: &str,
+        legacy_connection: Option<&str>,
+        legacy_host: Option<&str>,
+        source_session_id: &str,
+    ) -> PortResult<String> {
+        let service =
+            crate::service::workspace::get_global_workspace_service().ok_or_else(|| {
+                runtime_port_error(OpenBitFunError::service("Workspace service is unavailable"))
+            })?;
+        let record = match workspace_id {
+            Some(id) => service
+                .require_workspace(id)
+                .await
+                .map_err(runtime_port_error)?,
+            None => service
+                .resolve_legacy_fork_workspace_reference(
+                    self.coordinator.get_session_manager().as_ref(),
+                    legacy_path,
+                    legacy_connection,
+                    legacy_host,
+                    source_session_id,
+                )
+                .await
+                .map_err(runtime_port_error)?,
+        };
+        Ok(record.id)
+    }
+
     async fn validate_lineage_descendant(
         &self,
         storage_path: &Path,
@@ -2124,7 +2137,7 @@ impl CoreSessionOperationsPort {
         source_session_id: String,
         source_turn_id: Option<String>,
         boundary: SessionBranchBoundary,
-        workspace_scope: &SessionStoragePathRequest,
+        workspace_id: &str,
     ) -> PortResult<AgentSessionForkResult> {
         if source_turn_id
             .as_deref()
@@ -2149,24 +2162,27 @@ impl CoreSessionOperationsPort {
                 .load_session_header(storage_path, &source_session_id)
                 .await
                 .map_err(runtime_port_error)?;
-            let identity =
-                fork_workspace_identity(&persisted, workspace_scope).map_err(runtime_port_error)?;
-            if let Some(identity) = identity.as_ref() {
-                if let Some(loaded) = session_manager.get_session(&source_session_id) {
-                    validate_session_workspace_identity(&loaded, identity)
-                        .map_err(runtime_port_error)?;
-                }
-                if identity.remote_connection_id.is_some() {
-                    self.coordinator
-                        .ensure_workspace_runtime_ownership(
-                            Path::new(&identity.logical_workspace_path),
-                            identity.remote_connection_id.as_deref(),
-                            Some(&identity.hostname),
-                        )
-                        .map_err(runtime_port_error)?;
-                }
+            let binding = fork_workspace_binding(&persisted, workspace_id)
+                .await
+                .map_err(runtime_port_error)?;
+            let execution_id = binding.workspace_id.as_deref().expect("resolved binding");
+            if let Some(loaded) = session_manager.get_session(&source_session_id) {
+                fork_workspace_binding(&loaded, execution_id)
+                    .await
+                    .map_err(runtime_port_error)?;
             }
-            identity
+            self.coordinator
+                .ensure_workspace_runtime_ownership(
+                    binding.root_path(),
+                    binding.session_identity.remote_connection_id.as_deref(),
+                    if binding.is_remote() {
+                        Some(binding.session_identity.hostname.as_str())
+                    } else {
+                        None
+                    },
+                )
+                .map_err(runtime_port_error)?;
+            execution_id.to_owned()
         };
         if !session_manager
             .is_session_loaded_from_storage_path(storage_path, &source_session_id)
@@ -2187,19 +2203,20 @@ impl CoreSessionOperationsPort {
         session_manager
             .validate_session_storage_path_binding(&source_session_id, storage_path)
             .map_err(runtime_port_error)?;
-        if let Some(expected) = expected_workspace.as_ref() {
-            if let Some(loaded) = session_manager.get_session(&source_session_id) {
-                validate_session_workspace_identity(&loaded, expected)
-                    .map_err(runtime_port_error)?;
-            }
-            let persisted = self
-                .persistence
-                .load_session_header(storage_path, &source_session_id)
+        if let Some(loaded) = session_manager.get_session(&source_session_id) {
+            fork_workspace_binding(&loaded, &expected_workspace)
                 .await
                 .map_err(runtime_port_error)?;
-            validate_session_workspace_identity(&persisted, expected)
-                .map_err(runtime_port_error)?;
         }
+        let persisted = self
+            .persistence
+            .load_session_header(storage_path, &source_session_id)
+            .await
+            .map_err(runtime_port_error)?;
+        fork_workspace_binding(&persisted, &expected_workspace)
+            .await
+            .map_err(runtime_port_error)?;
+
         self.coordinator
             .reconcile_session_revert_locked(storage_path, &source_session_id)
             .await
@@ -2379,13 +2396,31 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
         request: AgentSessionLineageRequest,
     ) -> PortResult<Option<AgentSessionLineageSnapshot>> {
         validate_persisted_session_id(&request.anchor_session_id).map_err(runtime_port_error)?;
-        let storage_path = self
-            .resolve_session_storage_path(
-                request.workspace_path,
-                request.remote_connection_id.clone(),
-                request.remote_ssh_host.clone(),
+        let service =
+            crate::service::workspace::get_global_workspace_service().ok_or_else(|| {
+                PortError::new(
+                    PortErrorKind::NotAvailable,
+                    "Workspace service is unavailable",
+                )
+            })?;
+        // Upgrade-only ingress: convert old wire payloads once, then route by ID.
+        let workspace = service
+            .resolve_legacy_workspace_reference(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
             )
-            .await?;
+            .await
+            .map_err(runtime_port_error)?
+            .ok_or_else(|| {
+                PortError::new(PortErrorKind::InvalidRequest, "Workspace ID is unavailable")
+            })?;
+        let resolution =
+            CoreSessionStorePort::with_path_manager(self.persistence.path_manager().clone())
+                .resolve_workspace_storage(&workspace.id)
+                .await?;
+        let storage_path = resolution.effective_storage_path;
         let metadata = self
             .persistence
             .list_session_metadata_including_internal(&storage_path)
@@ -2397,8 +2432,8 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
         };
         let mut snapshot = runtime_lineage_snapshot(
             snapshot,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
+            resolution.remote_connection_id.as_deref(),
+            resolution.remote_ssh_host.as_deref(),
         );
         let session_manager = self.coordinator.get_session_manager();
         for entry in &mut snapshot.sessions {
@@ -2530,99 +2565,80 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
         &self,
         request: AgentSessionForkRequest,
     ) -> PortResult<AgentSessionForkResult> {
-        let AgentSessionForkRequest {
-            workspace_path,
-            source_session_id,
-            remote_connection_id,
-            remote_ssh_host,
-        } = request;
-        let workspace_scope = SessionStoragePathRequest {
-            workspace_path: PathBuf::from(&workspace_path),
-            remote_connection_id: remote_connection_id.clone(),
-            remote_ssh_host: remote_ssh_host.clone(),
-        };
-        self.coordinator
-            .ensure_workspace_runtime_ownership(
-                Path::new(&workspace_path),
-                remote_connection_id.as_deref(),
-                remote_ssh_host.as_deref(),
+        let workspace_id = self
+            .resolve_fork_workspace_id(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+                &request.source_session_id,
             )
-            .map_err(runtime_port_error)?;
-        let storage_path = self
-            .resolve_session_storage_path(workspace_path, remote_connection_id, remote_ssh_host)
             .await?;
+        let storage_path =
+            CoreSessionStorePort::with_path_manager(self.persistence.path_manager().clone())
+                .resolve_workspace_storage(&workspace_id)
+                .await?
+                .effective_storage_path;
         self.fork_at_persisted_turn(
             &storage_path,
-            source_session_id,
+            request.source_session_id,
             None,
             SessionBranchBoundary::ThroughTurn,
-            &workspace_scope,
+            &workspace_id,
         )
         .await
     }
-
     async fn fork_session_at_turn(
         &self,
         request: AgentSessionForkAtTurnRequest,
     ) -> PortResult<AgentSessionForkResult> {
-        let workspace_scope = SessionStoragePathRequest {
-            workspace_path: PathBuf::from(&request.workspace_path),
-            remote_connection_id: request.remote_connection_id.clone(),
-            remote_ssh_host: request.remote_ssh_host.clone(),
-        };
-        self.coordinator
-            .ensure_workspace_runtime_ownership(
-                Path::new(&request.workspace_path),
+        let workspace_id = self
+            .resolve_fork_workspace_id(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
                 request.remote_connection_id.as_deref(),
                 request.remote_ssh_host.as_deref(),
-            )
-            .map_err(runtime_port_error)?;
-        let storage_path = self
-            .resolve_session_storage_path(
-                request.workspace_path,
-                request.remote_connection_id,
-                request.remote_ssh_host,
+                &request.source_session_id,
             )
             .await?;
+        let storage_path =
+            CoreSessionStorePort::with_path_manager(self.persistence.path_manager().clone())
+                .resolve_workspace_storage(&workspace_id)
+                .await?
+                .effective_storage_path;
         self.fork_at_persisted_turn(
             &storage_path,
             request.source_session_id,
             Some(request.source_turn_id),
             SessionBranchBoundary::ThroughTurn,
-            &workspace_scope,
+            &workspace_id,
         )
         .await
     }
-
     async fn fork_session_before_turn(
         &self,
         request: AgentSessionForkBeforeTurnRequest,
     ) -> PortResult<AgentSessionForkResult> {
-        let workspace_scope = SessionStoragePathRequest {
-            workspace_path: PathBuf::from(&request.workspace_path),
-            remote_connection_id: request.remote_connection_id.clone(),
-            remote_ssh_host: request.remote_ssh_host.clone(),
-        };
-        self.coordinator
-            .ensure_workspace_runtime_ownership(
-                Path::new(&request.workspace_path),
+        let workspace_id = self
+            .resolve_fork_workspace_id(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
                 request.remote_connection_id.as_deref(),
                 request.remote_ssh_host.as_deref(),
-            )
-            .map_err(runtime_port_error)?;
-        let storage_path = self
-            .resolve_session_storage_path(
-                request.workspace_path,
-                request.remote_connection_id,
-                request.remote_ssh_host,
+                &request.source_session_id,
             )
             .await?;
+        let storage_path =
+            CoreSessionStorePort::with_path_manager(self.persistence.path_manager().clone())
+                .resolve_workspace_storage(&workspace_id)
+                .await?
+                .effective_storage_path;
         self.fork_at_persisted_turn(
             &storage_path,
             request.source_session_id,
             Some(request.source_turn_id),
             SessionBranchBoundary::BeforeTurn,
-            &workspace_scope,
+            &workspace_id,
         )
         .await
     }
@@ -2870,6 +2886,7 @@ mod tests {
     }
 
     struct TestWorkspace {
+        snapshot_id: std::sync::OnceLock<String>,
         path: PathBuf,
     }
 
@@ -2880,7 +2897,10 @@ mod tests {
                 Uuid::new_v4()
             ));
             std::fs::create_dir_all(&path).expect("test workspace should be created");
-            Self { path }
+            Self {
+                path,
+                snapshot_id: std::sync::OnceLock::new(),
+            }
         }
 
         fn path(&self) -> &Path {
@@ -2896,7 +2916,9 @@ mod tests {
 
     impl Drop for TestWorkspace {
         fn drop(&mut self) {
-            clear_snapshot_manager_for_test(&self.path);
+            if let Some(id) = self.snapshot_id.get() {
+                clear_snapshot_manager_for_test(id);
+            }
             let _ = std::fs::remove_dir_all(&self.path);
         }
     }
@@ -3552,19 +3574,24 @@ mod tests {
     #[tokio::test]
     async fn local_workspace_snapshot_port_concurrently_prepares_and_returns_typed_empty_facts() {
         let workspace = TestWorkspace::new();
+        let record = crate::service::workspace::legacy_compat::register_local_fixture(
+            workspace.path(),
+            None,
+        )
+        .await;
         let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
             WorkspaceRuntimeService::new(workspace.path_manager()),
         ));
         let port = CoreLocalWorkspaceSnapshot::build();
 
-        let first = port.prepare_local_workspace(workspace.path().to_path_buf());
-        let second = port.prepare_local_workspace(workspace.path().to_path_buf());
+        let first = port.prepare_local_workspace(record.id.clone());
+        let second = port.prepare_local_workspace(record.id.clone());
         let (first, second) = tokio::join!(first, second);
         first.expect("first local snapshot preparation should succeed");
         second.expect("concurrent local snapshot preparation should reuse the owner");
 
         let request = LocalWorkspaceSnapshotSessionRequest {
-            workspace_path: workspace.path().to_path_buf(),
+            workspace_id: record.id.clone(),
             session_id: "session-empty".to_string(),
             max_turn_exclusive: None,
         };
@@ -3583,7 +3610,7 @@ mod tests {
         assert_eq!(stats.total_changes, 0);
         assert!(port
             .rollback_workspace_files_to_turn(LocalWorkspaceSnapshotTurnRequest {
-                workspace_path: workspace.path().to_path_buf(),
+                workspace_id: record.id.clone(),
                 session_id: "session-empty".to_string(),
                 turn_index: 0,
             })
@@ -3595,14 +3622,20 @@ mod tests {
     #[tokio::test]
     async fn local_workspace_snapshot_views_do_not_initialize_a_writer() {
         let workspace = TestWorkspace::new();
+        let record = crate::service::workspace::legacy_compat::register_local_fixture(
+            workspace.path(),
+            None,
+        )
+        .await;
+        workspace.snapshot_id.set(record.id.clone()).unwrap();
         let port = CoreLocalWorkspaceSnapshot::build();
         let request = LocalWorkspaceSnapshotSessionRequest {
-            workspace_path: workspace.path().to_path_buf(),
+            workspace_id: record.id.clone(),
             session_id: "session-view-only".to_string(),
             max_turn_exclusive: None,
         };
 
-        assert!(get_snapshot_manager_for_workspace(workspace.path()).is_none());
+        assert!(get_snapshot_manager_for_workspace(&record.id).is_none());
         assert!(port
             .get_session_files(request.clone())
             .await
@@ -3615,17 +3648,23 @@ mod tests {
                 .total_changes,
             0
         );
-        assert!(get_snapshot_manager_for_workspace(workspace.path()).is_none());
+        assert!(get_snapshot_manager_for_workspace(&record.id).is_none());
     }
 
     #[tokio::test]
     async fn local_workspace_snapshot_port_rejects_non_local_inputs_before_backend_access() {
         let workspace = TestWorkspace::new();
+        let record = crate::service::workspace::legacy_compat::register_local_fixture(
+            workspace.path(),
+            None,
+        )
+        .await;
+        workspace.snapshot_id.set(record.id.clone()).unwrap();
         let port = CoreLocalWorkspaceSnapshot::build();
 
         let invalid_session = port
             .get_session_files(LocalWorkspaceSnapshotSessionRequest {
-                workspace_path: workspace.path().to_path_buf(),
+                workspace_id: record.id.clone(),
                 session_id: "../other-session".to_string(),
                 max_turn_exclusive: None,
             })
@@ -3633,7 +3672,25 @@ mod tests {
             .expect_err("path-like session ids must be rejected");
         assert_eq!(invalid_session.kind, PortErrorKind::InvalidRequest);
 
-        let missing_workspace = workspace.path().join("missing");
+        let remote = crate::service::workspace::legacy_compat::register_remote_fixture(
+            &record.root_path.to_string_lossy(),
+            "snapshot-test-connection",
+            "snapshot.example",
+        )
+        .await;
+        let remote_error = port
+            .get_session_files(LocalWorkspaceSnapshotSessionRequest {
+                workspace_id: remote.id,
+                session_id: "session-empty".into(),
+                max_turn_exclusive: None,
+            })
+            .await
+            .expect_err("remote ID must not open a same-named local directory");
+        assert!(remote_error
+            .message
+            .contains("not supported for remote workspace"));
+
+        let missing_workspace = "missing-workspace-id".to_string();
         let invalid_workspace = port
             .prepare_local_workspace(missing_workspace)
             .await
@@ -3768,6 +3825,12 @@ mod tests {
         // Two SSH hosts may use the same POSIX path. Forking is a Session-store
         // operation: no checkout, Git command, or controller path may be used.
         for (connection_id, host) in [("ssh-a", "host-a"), ("ssh-b", "host-b")] {
+            let record = crate::service::workspace::legacy_compat::register_remote_fixture(
+                &remote_path,
+                connection_id,
+                host,
+            )
+            .await;
             let storage_path = runtime_service
                 .context_for_remote_workspace(host, &remote_path)
                 .sessions_dir;
@@ -3842,6 +3905,7 @@ mod tests {
 
             let unverified_error = port
                 .fork_session(AgentSessionForkRequest {
+                    workspace_id: None,
                     workspace_path: remote_path.clone(),
                     source_session_id: source_session_id.clone(),
                     remote_connection_id: Some(connection_id.to_string()),
@@ -3863,6 +3927,7 @@ mod tests {
                 .expect("Workspace owner has verified this remote binding");
             let wrong_host_error = port
                 .fork_session_at_turn(AgentSessionForkAtTurnRequest {
+                    workspace_id: None,
                     workspace_path: remote_path.clone(),
                     source_session_id: source_session_id.clone(),
                     source_turn_id: "turn-0".to_string(),
@@ -3873,9 +3938,17 @@ mod tests {
                 .expect_err("a mismatched host cannot use a verified connection");
             assert!(wrong_host_error
                 .message
-                .contains("unverified_remote_workspace_scope"));
+                .contains("Legacy fork workspace reference is unavailable"));
 
             let other_connection_id = format!("{connection_id}-other-profile");
+            let other_record =
+                crate::service::workspace::legacy_compat::register_remote_fixture_with_id(
+                    &remote_path,
+                    &other_connection_id,
+                    host,
+                    Some(&Uuid::new_v4().to_string()),
+                )
+                .await;
             coordinator
                 .ensure_verified_remote_workspace_runtime_ownership(
                     Path::new(&remote_path),
@@ -3897,6 +3970,7 @@ mod tests {
                     let result = match variant {
                         0 => {
                             port.fork_session(AgentSessionForkRequest {
+                                workspace_id: None,
                                 workspace_path: remote_path.clone(),
                                 source_session_id: source_session_id.clone(),
                                 remote_connection_id: Some(other_connection_id.clone()),
@@ -3906,6 +3980,7 @@ mod tests {
                         }
                         1 => {
                             port.fork_session_at_turn(AgentSessionForkAtTurnRequest {
+                                workspace_id: None,
                                 workspace_path: remote_path.clone(),
                                 source_session_id: source_session_id.clone(),
                                 source_turn_id: "turn-0".to_string(),
@@ -3916,6 +3991,7 @@ mod tests {
                         }
                         _ => {
                             port.fork_session_before_turn(AgentSessionForkBeforeTurnRequest {
+                                workspace_id: None,
                                 workspace_path: remote_path.clone(),
                                 source_session_id: source_session_id.clone(),
                                 source_turn_id: "turn-0".to_string(),
@@ -3950,13 +4026,15 @@ mod tests {
                 .await
                 .unwrap();
             let mut changed_source = persisted_source.clone();
-            changed_source.config.remote_connection_id = Some(other_connection_id.clone());
+            changed_source.config.workspace_id = Some(other_record.id.clone());
+            changed_source.config.project_workspace_id = Some(other_record.id.clone());
             persistence
                 .save_session(&storage_path, &changed_source)
                 .await
                 .unwrap();
             let error = port
                 .fork_session(AgentSessionForkRequest {
+                    workspace_id: None,
                     workspace_path: remote_path.clone(),
                     source_session_id: source_session_id.clone(),
                     remote_connection_id: Some(other_connection_id),
@@ -3974,30 +4052,33 @@ mod tests {
                 let result = match variant {
                     0 => {
                         port.fork_session_at_turn(AgentSessionForkAtTurnRequest {
-                            workspace_path: remote_path.clone(),
+                            workspace_id: Some(record.id.clone()),
+                            workspace_path: String::new(),
                             source_session_id: source_session_id.clone(),
                             source_turn_id: "turn-0".to_string(),
-                            remote_connection_id: Some(connection_id.to_string()),
-                            remote_ssh_host: Some(host.to_string()),
+                            remote_connection_id: None,
+                            remote_ssh_host: None,
                         })
                         .await
                     }
                     1 => {
                         port.fork_session(AgentSessionForkRequest {
-                            workspace_path: remote_path.clone(),
+                            workspace_id: Some(record.id.clone()),
+                            workspace_path: String::new(),
                             source_session_id: source_session_id.clone(),
-                            remote_connection_id: Some(connection_id.to_string()),
-                            remote_ssh_host: Some(host.to_string()),
+                            remote_connection_id: None,
+                            remote_ssh_host: None,
                         })
                         .await
                     }
                     _ => {
                         port.fork_session_before_turn(AgentSessionForkBeforeTurnRequest {
-                            workspace_path: remote_path.clone(),
+                            workspace_id: Some(record.id.clone()),
+                            workspace_path: String::new(),
                             source_session_id: source_session_id.clone(),
                             source_turn_id: "turn-0".to_string(),
-                            remote_connection_id: Some(connection_id.to_string()),
-                            remote_ssh_host: Some(host.to_string()),
+                            remote_connection_id: None,
+                            remote_ssh_host: None,
                         })
                         .await
                     }
@@ -4033,6 +4114,7 @@ mod tests {
             }
             let legacy_fork = port
                 .fork_session(AgentSessionForkRequest {
+                    workspace_id: None,
                     workspace_path: storage_path.to_string_lossy().into_owned(),
                     source_session_id: source_session_id.clone(),
                     remote_connection_id: None,
@@ -4061,60 +4143,58 @@ mod tests {
         assert!(!Path::new(&remote_path).exists());
     }
 
-    #[test]
-    fn session_fork_legacy_scope_uses_durable_identity_without_local_downgrade() {
-        let source = crate::agentic::core::Session::new_with_id(
-            "remote-source".into(),
-            "Remote source".into(),
+    #[tokio::test]
+    async fn session_fork_binding_uses_record_ids_and_ignores_stale_io_projections() {
+        let directory = TestWorkspace::new();
+        let local = crate::service::workspace::legacy_compat::register_local_fixture(
+            directory.path(),
+            None,
+        )
+        .await;
+        let remote = crate::service::workspace::legacy_compat::register_remote_fixture(
+            &directory.path().to_string_lossy(),
+            "fork-ssh",
+            "fork-host",
+        )
+        .await;
+        let mut source = crate::agentic::core::Session::new_with_id(
+            "source".into(),
+            "Source".into(),
             "Standard".into(),
             crate::agentic::core::SessionConfig {
-                workspace_path: Some("/workspace/repo".into()),
-                remote_connection_id: Some("ssh-source".into()),
-                remote_ssh_host: Some("source-host".into()),
+                workspace_id: Some(local.id.clone()),
+                workspace_path: Some("/stale/controller/mirror/sessions".into()),
+                remote_connection_id: Some("stale-ssh".into()),
+                remote_ssh_host: Some("stale-host".into()),
                 ..Default::default()
             },
         );
-        let expected = super::workspace_session_identity(
-            "/workspace/repo",
-            Some("ssh-source"),
-            Some("source-host"),
-        );
-        let mut request = openbitfun_runtime_ports::SessionStoragePathRequest {
-            workspace_path: PathBuf::from("/controller/mirror/sessions"),
-            remote_connection_id: None,
-            remote_ssh_host: None,
-        };
+        let binding = super::fork_workspace_binding(&source, &local.id)
+            .await
+            .unwrap();
+        assert!(!binding.is_remote());
+        assert_eq!(binding.root_path, local.root_path);
+        assert!(super::fork_workspace_binding(&source, &remote.id)
+            .await
+            .is_err());
+        source.config.workspace_id = Some(remote.id.clone());
+        source.config.remote_connection_id = None;
+        let binding = super::fork_workspace_binding(&source, &remote.id)
+            .await
+            .unwrap();
+        assert!(binding.is_remote());
         assert_eq!(
-            super::fork_workspace_identity(&source, &request).unwrap(),
-            expected
+            binding.session_identity.remote_connection_id.as_deref(),
+            Some("fork-ssh")
         );
-        request.workspace_path = PathBuf::from("/workspace/repo");
-        request.remote_connection_id = Some("ssh-source".into());
-        assert_eq!(
-            super::fork_workspace_identity(&source, &request).unwrap(),
-            expected
-        );
-        request.remote_connection_id = None;
-        request.remote_ssh_host = Some("source-host".into());
-        assert_eq!(
-            super::fork_workspace_identity(&source, &request).unwrap(),
-            expected
-        );
-
-        let mut incomplete = source.clone();
-        incomplete.config.remote_connection_id = None;
-        assert!(super::fork_workspace_identity(&incomplete, &request).is_err());
-        request.remote_ssh_host = None;
-        assert!(super::fork_workspace_identity(&incomplete, &request).is_err());
-
-        let local = TestWorkspace::new();
-        incomplete.config.workspace_path = Some(local.path().to_string_lossy().into_owned());
-        incomplete.config.remote_ssh_host = Some("localhost".into());
-        request.workspace_path = local.path().to_path_buf();
-        request.remote_ssh_host = Some("localhost".into());
-        assert!(super::fork_workspace_identity(&incomplete, &request)
-            .unwrap()
-            .is_some_and(|identity| identity.remote_connection_id.is_none()));
+        assert!(super::fork_workspace_binding(&source, &local.id)
+            .await
+            .is_err());
+        source.config.workspace_id = Some("missing-id".into());
+        source.config.workspace_path = Some(directory.path().to_string_lossy().into_owned());
+        assert!(super::fork_workspace_binding(&source, &local.id)
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -4122,6 +4202,9 @@ mod tests {
         let workspace = TestWorkspace::new();
         let workspace_root = workspace.path().join("project");
         std::fs::create_dir_all(&workspace_root).expect("workspace root");
+        let record =
+            crate::service::workspace::legacy_compat::register_local_fixture(&workspace_root, None)
+                .await;
         let path_manager = workspace.path_manager();
         let storage_path = WorkspaceRuntimeService::new(path_manager.clone())
             .context_for_local_workspace(&workspace_root)
@@ -4255,7 +4338,8 @@ mod tests {
 
         let result = port
             .fork_session(AgentSessionForkRequest {
-                workspace_path: workspace_root.to_string_lossy().into_owned(),
+                workspace_id: Some(record.id.clone()),
+                workspace_path: String::new(),
                 source_session_id: session_id.to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -4430,7 +4514,8 @@ mod tests {
 
         let hidden_error = port
             .fork_session_at_turn(AgentSessionForkAtTurnRequest {
-                workspace_path: workspace_root.to_string_lossy().into_owned(),
+                workspace_id: Some(record.id.clone()),
+                workspace_path: String::new(),
                 source_session_id: session_id.to_string(),
                 source_turn_id: "turn-hidden".to_string(),
                 remote_connection_id: None,

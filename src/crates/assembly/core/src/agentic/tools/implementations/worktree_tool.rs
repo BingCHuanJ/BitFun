@@ -435,7 +435,11 @@ The tool cannot remove or rebind the worktree in which it is running. Use Sessio
                 };
                 let existing = match runtime
                     .list_sessions(AgentSessionListRequest {
-                        workspace_path: project_workspace_path.clone(),
+                        workspace_id: context
+                            .workspace
+                            .as_ref()
+                            .and_then(|workspace| workspace.project_workspace_id.clone()),
+                        workspace_path: String::new(),
                         remote_connection_id: None,
                         remote_ssh_host: None,
                     })

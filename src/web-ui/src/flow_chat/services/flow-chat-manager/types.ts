@@ -28,7 +28,7 @@ export interface FlowChatContext {
     promise: Promise<void>;
     includeInternal: boolean;
     deferFullHistoryUntilActive: boolean;
-    locationKey: string;
+    workspaceId: string;
   }>;
   /** In-flight backend context restore keyed by device surface and activation. */
   pendingContextRestores?: Map<string, Promise<void>>;
@@ -74,13 +74,6 @@ export interface FlowChatContext {
    * workspace bootstrap that a newer surface switch may have superseded.
    */
   ensureLiveSubscription?: () => Promise<void>;
-}
-
-/** Current owner scope used only when a restored child lacks saved location metadata. */
-export interface SessionHistoryHydrationLocation {
-  workspacePath?: string;
-  remoteConnectionId?: string;
-  remoteSshHost?: string;
 }
 
 /**

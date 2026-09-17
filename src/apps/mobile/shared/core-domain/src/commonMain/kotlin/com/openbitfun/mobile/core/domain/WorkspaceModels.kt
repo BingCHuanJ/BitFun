@@ -7,6 +7,7 @@ public data class RecentWorkspace public constructor(
     public val kind: String,
     public val remoteSshHost: String?,
     public val remoteConnectionId: String?,
+    public val workspaceId: String? = null,
 ) {
     public constructor(path: String, name: String, lastOpened: String, kind: String) :
         this(path, name, lastOpened, kind, null, null)
@@ -20,6 +21,7 @@ public data class WorkspaceAssistant public constructor(
     public val path: String,
     public val name: String,
     public val assistantId: String?,
+    public val workspaceId: String? = null,
 )
 
 public data class SelectedWorkspace public constructor(
@@ -30,6 +32,7 @@ public data class SelectedWorkspace public constructor(
     public val assistantId: String?,
     public val remoteConnectionId: String?,
     public val remoteSshHost: String?,
+    public val workspaceId: String? = null,
 ) {
     public constructor(path: String, name: String, gitBranch: String, kind: String, assistantId: String?) :
         this(path, name, gitBranch, kind, assistantId, null, null)

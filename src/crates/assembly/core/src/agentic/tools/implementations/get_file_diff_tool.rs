@@ -852,9 +852,9 @@ impl GetFileDiffTool {
     async fn try_baseline_diff(
         &self,
         file_path: &Path,
-        workspace_root: Option<&Path>,
+        workspace_id: Option<&str>,
     ) -> Option<OpenBitFunResult<Value>> {
-        let snapshot_manager = workspace_root.and_then(get_snapshot_manager_for_workspace)?;
+        let snapshot_manager = workspace_id.and_then(get_snapshot_manager_for_workspace)?;
 
         // Get snapshot service
         let snapshot_service = snapshot_manager.get_snapshot_service();
@@ -1736,7 +1736,16 @@ Usage:
         }
 
         if !prepared_review {
-            if let Some(result) = self.try_baseline_diff(path, context.workspace_root()).await {
+            if let Some(result) = self
+                .try_baseline_diff(
+                    path,
+                    context
+                        .workspace
+                        .as_ref()
+                        .and_then(|workspace| workspace.workspace_id.as_deref()),
+                )
+                .await
+            {
                 match result {
                     Ok(data) => {
                         debug!("GetFileDiff tool using baseline diff");
@@ -2679,6 +2688,7 @@ mod tests {
             "connection-id".to_string(),
             "Remote".to_string(),
             crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity {
+                workspace_kind: openbitfun_core_types::WorkspaceKind::Remote,
                 hostname: "example.test".to_string(),
                 logical_workspace_path: "/workspace".to_string(),
                 remote_connection_id: Some("connection-id".to_string()),

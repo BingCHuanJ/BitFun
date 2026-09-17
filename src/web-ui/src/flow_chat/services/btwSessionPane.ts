@@ -43,9 +43,7 @@ export interface EnsureBtwSessionAvailableParams {
 
 export interface LoadBtwSessionHistoryParams {
   childSessionId: string;
-  workspacePath?: string;
-  remoteConnectionId?: string;
-  remoteSshHost?: string;
+  parentSessionId?: string;
 }
 
 type AgentCanvasState = ReturnType<typeof useAgentCanvasStore.getState>;
@@ -134,18 +132,20 @@ export const selectActiveBtwSessionTab = (state: AgentCanvasState): CanvasTab | 
 };
 
 export async function loadBtwSessionHistory(params: LoadBtwSessionHistoryParams): Promise<void> {
-  const location = params.workspacePath
-    ? {
-        workspacePath: params.workspacePath,
-        remoteConnectionId: params.remoteConnectionId,
-        remoteSshHost: params.remoteSshHost,
-      }
-    : undefined;
-  if (location) {
-    await flowChatManager.hydrateSessionHistoryForDetail(params.childSessionId, location);
-  } else {
-    await flowChatManager.hydrateSessionHistoryForDetail(params.childSessionId);
+  const sessions = flowChatStore.getState().sessions;
+  const child = sessions.get(params.childSessionId);
+  if (!(child?.workspaceId ?? child?.config?.workspaceId)) {
+    const parentId = params.parentSessionId ?? child?.parentSessionId;
+    const parent = parentId ? sessions.get(parentId) : undefined;
+    // Read the child's persisted binding from its parent's project store.
+    // Never assign the parent's execution ID: a child may own a worktree.
+    const storageOwnerId = parent?.projectWorkspaceId ?? parent?.config?.projectWorkspaceId
+      ?? parent?.workspaceId ?? parent?.config?.workspaceId;
+    if (!storageOwnerId || !await flowChatStore.ensurePersistedSessionMetadata(params.childSessionId, storageOwnerId)) {
+      throw new Error('Child session workspace is unavailable');
+    }
   }
+  await flowChatManager.hydrateSessionHistoryForDetail(params.childSessionId);
 }
 
 interface EnsureBtwSessionAvailableResult {
@@ -219,20 +219,9 @@ function ensureBtwSessionAvailableInternal(
       (sessionToHydrate.historyState === 'metadata-only' || sessionToHydrate.historyState === 'failed')
     );
 
-  const workspacePath = resolvedWorkspacePath || sessionToHydrate?.workspacePath;
-  if (!shouldHydrate || !workspacePath) {
-    return { historyLoadRequested: false };
-  }
-
+  if (!shouldHydrate) return { historyLoadRequested: false };
   void loadBtwSessionHistory({
-    childSessionId: params.childSessionId,
-    ...(!sessionToHydrate?.workspacePath
-      ? {
-          workspacePath,
-          remoteConnectionId: resolvedRemoteConnectionId,
-          remoteSshHost: resolvedRemoteSshHost,
-        }
-      : {}),
+    childSessionId: params.childSessionId, parentSessionId: params.parentSessionId,
   }).catch(() => undefined);
   return { historyLoadRequested: true };
 }
@@ -265,25 +254,9 @@ export function openBtwSessionInAuxPane(params: {
     !ensureResult.historyLoadRequested &&
     !isSessionHistoryComplete(childSession)
   ) {
-    const parentSession = flowChatStore.getState().sessions.get(params.parentSessionId);
-    const workspacePath =
-      params.workspacePath || childSession?.workspacePath || parentSession?.workspacePath;
-    if (workspacePath) {
-      void loadBtwSessionHistory({
-        childSessionId: params.childSessionId,
-        ...(!childSession?.workspacePath
-          ? {
-              workspacePath,
-              remoteConnectionId:
-                params.remoteConnectionId ||
-                childSession?.remoteConnectionId ||
-                parentSession?.remoteConnectionId,
-              remoteSshHost:
-                params.remoteSshHost || childSession?.remoteSshHost || parentSession?.remoteSshHost,
-            }
-          : {}),
-      }).catch(() => undefined);
-    }
+    void loadBtwSessionHistory({
+      childSessionId: params.childSessionId, parentSessionId: params.parentSessionId,
+    }).catch(() => undefined);
   }
 
   const content = buildBtwSessionPanelContent(

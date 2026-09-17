@@ -404,7 +404,7 @@ internal fun RemoteWorkspacePanel(
             }) { Text(stringResource(R.string.workspace_open_path)) }
             state.workspaces.forEach { workspace ->
                 TextButton(
-                    onClick = { onIntent(RemoteWorkspaceIntent.SelectWorkspace(workspace.path, workspace.remoteConnectionId, workspace.remoteSshHost)) },
+                    onClick = { onIntent(RemoteWorkspaceIntent.SelectWorkspace(workspace.path, workspace.remoteConnectionId, workspace.remoteSshHost, inferSavedIdentity = false, workspaceId = workspace.workspaceId)) },
                     enabled = !state.busy && state.selected?.path != workspace.path,
                 ) { Text(workspace.displayName) }
             }

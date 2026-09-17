@@ -170,7 +170,7 @@ export interface FileSystemChangeEvent {
 
 
 export interface IFileSystemService {
-  loadFileTree(rootPath: string, options?: FileSystemOptions): Promise<FileSystemNode[]>;
+  loadFileTree(workspaceId: string, rootPath: string, options?: FileSystemOptions): Promise<FileSystemNode[]>;
   searchFiles(rootPath: string, query: string): Promise<FileSystemNode[]>;
   watchFileChanges(rootPath: string, callback: (event: FileSystemChangeEvent) => void): () => void;
   getFileContent(filePath: string): Promise<string>;

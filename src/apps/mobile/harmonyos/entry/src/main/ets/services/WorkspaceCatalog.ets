@@ -21,12 +21,13 @@ export function projectWorkspaceCatalog(
   const seen: Set<string> = new Set<string>();
   const workspaces: RecentWorkspaceEntry[] = [];
   rows.forEach((row: RecentWorkspaceEntry) => {
-    const key = JSON.stringify([row.remoteConnectionId || null, row.remoteSshHost || null, row.path]);
+    const key = row.workspaceId || JSON.stringify([row.remoteConnectionId || null, row.remoteSshHost || null, row.path]);
     if (!row.path || seen.has(key)) return;
     seen.add(key);
     const assistant = !row.remoteConnectionId && !row.remoteSshHost ?
-      assistants.find((item: AssistantEntry): boolean => item.path === row.path && item.name.trim().length > 0) : undefined;
+      assistants.find((item: AssistantEntry): boolean => (row.workspaceId ? item.workspace_id === row.workspaceId : !item.workspace_id && item.path === row.path) && item.name.trim().length > 0) : undefined;
     workspaces.push({
+      workspaceId: row.workspaceId,
       path: row.path, name: assistant ? assistant.name : row.name,
       lastOpened: row.lastOpened, workspaceKind: assistant ? 'assistant' : row.workspaceKind,
       remoteConnectionId: row.remoteConnectionId, remoteSshHost: row.remoteSshHost
@@ -37,6 +38,7 @@ export function projectWorkspaceCatalog(
 
 export function mergeLegacyWorkspaces(recent: RecentWorkspaceEntry[], assistants: AssistantEntry[]): RecentWorkspaceEntry[] {
   const rows: RecentWorkspaceEntry[] = assistants.map((item: AssistantEntry): RecentWorkspaceEntry => ({
+    workspaceId: item.workspace_id,
     path: item.path, name: item.name, lastOpened: '', workspaceKind: 'assistant'
   }));
   recent.forEach((item: RecentWorkspaceEntry) => {

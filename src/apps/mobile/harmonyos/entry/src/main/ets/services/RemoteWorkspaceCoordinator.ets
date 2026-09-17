@@ -30,8 +30,8 @@ export class RemoteWorkspaceCoordinator {
 
   async savedConnections(): Promise<SavedRuntimeConnection[]> { return await this.repository.savedConnections(); }
 
-  async switchWorkspace(path: string, connectionId?: string, sshHost?: string): Promise<WorkspaceInfo> {
-    return await this.repository.setWorkspace(path, connectionId, sshHost);
+  async switchWorkspace(path: string, connectionId?: string, sshHost?: string, workspaceId?: string): Promise<WorkspaceInfo> {
+    return await this.repository.setWorkspace(path, connectionId, sshHost, workspaceId);
   }
 
   async switchAssistant(path: string): Promise<WorkspaceInfo> {

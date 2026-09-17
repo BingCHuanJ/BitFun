@@ -570,9 +570,7 @@ class WorkspaceManager {
         return null;
       }
 
-      const matches =
-        workspace.id === update.workspaceId ||
-        workspace.rootPath === update.workspacePath;
+      const matches = workspace.id === update.workspaceId;
 
       if (!matches) {
         return workspace;
@@ -1334,21 +1332,15 @@ class WorkspaceManager {
       return this.setActiveWorkspace(workspace.id);
     }
 
-    if (isRemoteWorkspace(workspace)) {
-      const connectionId = workspace.connectionId?.trim() ?? '';
-      const connectionName = workspace.connectionName?.trim() || connectionId;
-      if (!connectionId) {
-        throw new Error('Remote workspace is missing connectionId; reconnect via SSH first.');
-      }
-      return this.openRemoteWorkspace({
-        connectionId,
-        connectionName,
-        remotePath: workspace.rootPath,
-        sshHost: workspace.sshHost,
-      });
-    }
-
-    return this.openWorkspace(workspace.rootPath);
+    const surface = this.captureSurface();
+    const selected = await globalStateAPI.openWorkspaceById(workspace.id);
+    const [recent, opened] = await Promise.all([
+      globalStateAPI.getRecentWorkspaces(), globalStateAPI.getOpenedWorkspaces(),
+    ]);
+    this.assertSurfaceUnchanged(surface, 'reopen workspace');
+    this.updateWorkspaceState(selected, recent, opened, false, null,
+      { type: 'workspace:opened', workspace: selected });
+    return selected;
   }
 
   public async scanWorkspaceInfo(): Promise<WorkspaceInfo | null> {
@@ -1361,7 +1353,7 @@ class WorkspaceManager {
       this.setLoading(true);
       this.setError(null);
 
-      const updatedWorkspace = await globalStateAPI.scanWorkspaceInfo(this.state.currentWorkspace.rootPath);
+      const updatedWorkspace = await globalStateAPI.scanWorkspaceInfo(this.state.currentWorkspace.id);
       this.assertSurfaceUnchanged(surface, 'scan workspace info');
 
       if (updatedWorkspace) {

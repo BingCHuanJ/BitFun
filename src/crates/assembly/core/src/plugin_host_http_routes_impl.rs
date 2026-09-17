@@ -244,7 +244,7 @@ struct SessionForkBody {
 async fn session_fork(context: &PluginHostInstance, session_id: &str, body: &[u8]) -> RouteResult {
     let input: SessionForkBody = body_as(body)?;
     let result = crate::product_runtime::fork_session_for_plugin(
-        context.directory.clone(),
+        context.workspace_id.clone(),
         session_id.to_string(),
         input.message_id,
     )
@@ -272,7 +272,7 @@ async fn session_diff(
     let Some(message_id) = query_first(query, "messageID") else {
         return Ok(json!([]));
     };
-    let manager = crate::service::snapshot::open_snapshot_manager_for_view(&context.directory)
+    let manager = crate::service::snapshot::open_snapshot_manager_for_view(&context.workspace_id)
         .await
         .map_err(|error| Failure::backend(error.to_string()))?;
     let turns = coordinator()?

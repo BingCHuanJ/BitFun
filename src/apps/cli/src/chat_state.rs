@@ -461,6 +461,8 @@ impl ChatState {
             workspace
                 .as_ref()
                 .map(|workspace_path| AgentSessionWorkspaceBinding {
+                    workspace_kind: None,
+                    project_workspace_id: None,
                     workspace_id: None,
                     workspace_path: workspace_path.clone(),
                     project_workspace_path: Some(workspace_path.clone()),
@@ -1671,6 +1673,8 @@ mod tests {
         base_commit: Option<&str>,
     ) -> AgentSessionWorkspaceBinding {
         AgentSessionWorkspaceBinding {
+            workspace_kind: None,
+            project_workspace_id: None,
             workspace_id: Some("workspace-1".to_string()),
             workspace_path: "/tmp/managed-worktree".to_string(),
             project_workspace_path: Some("/tmp/project".to_string()),

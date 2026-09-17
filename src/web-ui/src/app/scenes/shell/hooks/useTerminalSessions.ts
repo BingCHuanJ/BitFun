@@ -10,6 +10,7 @@ import {
 import { isSessionRunning, type ShellEntry } from './shellEntryTypes';
 
 interface UseTerminalSessionsOptions {
+  workspaceId?: string;
   workspacePath?: string;
   isRemote: boolean;
   currentConnectionId: string | null;
@@ -27,8 +28,8 @@ interface SessionSnapshot {
 const snapshots = new Map<string, SessionResponse[]>();
 
 export function useTerminalSessions(options: UseTerminalSessionsOptions) {
-  const { workspacePath, isRemote, currentConnectionId, scope, workspaces, savedSessionIds } = options;
-  const key = scope.key('workspace-terminals', currentConnectionId, workspacePath);
+  const { workspaceId, workspacePath, isRemote, currentConnectionId, scope, workspaces, savedSessionIds } = options;
+  const key = scope.key('workspace-terminals', workspaceId);
   const activation = useMemo(() => ({ key, scope }), [key, scope]);
   const currentActivation = useRef<typeof activation | null>(activation);
   currentActivation.current = activation;
@@ -46,13 +47,15 @@ export function useTerminalSessions(options: UseTerminalSessionsOptions) {
   );
   const sessionMap = useMemo(() => new Map(sessions.map(session => [session.id, session])), [sessions]);
   const target = useMemo<TerminalWorkspaceScope>(() => ({
+    workspaceId: workspaceId ?? '',
     rootPath: workspacePath ?? '', isRemote, connectionId: currentConnectionId,
-  }), [workspacePath, isRemote, currentConnectionId]);
+  }), [workspaceId, workspacePath, isRemote, currentConnectionId]);
   const assertCurrent = useCallback(() => {
     scope.assertCurrent('workspace terminal action');
+    if (!workspaceId) throw new Error('Workspace ID is unavailable');
     if (currentActivation.current !== activation) throw new Error('Workspace changed during terminal action');
     if (isRemote && !currentConnectionId) throw new Error('Remote workspace connection is unavailable');
-  }, [scope, activation, isRemote, currentConnectionId]);
+  }, [scope, activation, isRemote, currentConnectionId, workspaceId]);
 
   const refreshSessions = useCallback(async () => {
     if (!workspacePath || !scope.isCurrent() || currentActivation.current !== activation) return;
@@ -69,8 +72,8 @@ export function useTerminalSessions(options: UseTerminalSessionsOptions) {
       const allSessions = await service.listSessions();
       if (!scope.isCurrent() || currentActivation.current !== activation || version !== requestVersion.current) return;
       const filtered = allSessions.filter(session =>
-        (savedSessionIds.has(session.id) && terminalMatchesEnvironment(session, target))
-        || terminalBelongsToWorkspace(session, target, workspaces),
+        (!session.workspaceId && savedSessionIds.has(session.id) && terminalMatchesEnvironment(session, target))
+        || terminalBelongsToWorkspace(session, target),
       );
       snapshots.set(key, filtered);
       setSnapshot({ key, sessions: filtered, loading: false, error: null });
@@ -127,26 +130,28 @@ export function useTerminalSessions(options: UseTerminalSessionsOptions) {
       assertCurrent();
     }
     const session = await createManualTerminalSession({
+      workspaceId: workspaceId!,
       workspacePath: entry.workingDirectory ?? entry.cwd ?? workspacePath,
-      connectionId: currentConnectionId, shellType: entry.shellType,
+      shellType: entry.shellType,
       sessionId: entry.sessionId, name: entry.name,
     });
     assertCurrent();
     await refreshSessions();
     assertCurrent();
     return { session, created: true };
-  }, [assertCurrent, currentConnectionId, refreshSessions, sessionMap, workspacePath]);
+  }, [assertCurrent, currentConnectionId, refreshSessions, sessionMap, workspacePath, workspaceId]);
 
   const createManualSession = useCallback(async (shellType?: string, directory?: string, shellId?: string) => {
     assertCurrent();
     const session = await createManualTerminalSession({
-      workspacePath: directory ?? workspacePath, connectionId: currentConnectionId, shellType, shellId,
+      workspaceId: workspaceId!,
+      workspacePath: directory ?? workspacePath, shellType, shellId,
     });
     assertCurrent();
     await refreshSessions();
     assertCurrent();
     return session;
-  }, [assertCurrent, currentConnectionId, refreshSessions, workspacePath]);
+  }, [assertCurrent, currentConnectionId, refreshSessions, workspacePath, workspaceId]);
   const stopEntrySession = useCallback(async (entry: ShellEntry) => {
     if (entry.isRunning) await closeSessionIfPresent(entry.sessionId);
   }, [closeSessionIfPresent]);

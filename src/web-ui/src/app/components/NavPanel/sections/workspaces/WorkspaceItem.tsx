@@ -122,7 +122,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     getWorkspaceGitBasicInfoOptions(workspace, isActive),
     historySessionOpenTransition !== null
   );
-  useGitBasicInfo(workspace.rootPath, gitBasicInfoOptions);
+  useGitBasicInfo({ workspaceId: workspace.id }, gitBasicInfoOptions);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuContextPoint, setMenuContextPoint] = useState<{ x: number; y: number } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -180,7 +180,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     && !workspaceIsRemote
     && workspace.workspaceKind === WorkspaceKind.Normal;
   const workspaceSearchIndex = useWorkspaceSearchIndex({
-    workspacePath: canShowSearchIndex ? workspace.rootPath : undefined,
+    workspaceId: canShowSearchIndex ? workspace.id : undefined,
     enabled: canShowSearchIndex,
     isRemote: workspaceIsRemote,
   });
@@ -197,7 +197,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
       for (const reason of WORKSPACE_GIT_PENDING_CANCEL_REASONS) {
         for (const source of WORKSPACE_GIT_PENDING_CANCEL_SOURCES) {
-          gitStateManager.cancelPendingRefresh(workspace.rootPath, {
+          gitStateManager.cancelPendingRefresh({ workspaceId: workspace.id }, {
             layers: ['basic'],
             reason,
             source,
@@ -1065,6 +1065,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             <WorkspaceSessionBatchModal
               isOpen={sessionBatchModalOpen}
               onClose={() => setSessionBatchModalOpen(false)}
+              workspaceId={workspace.id}
               workspacePath={workspace.rootPath}
               workspaceLabel={workspaceDisplayName}
               remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
@@ -1600,6 +1601,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           <WorkspaceSessionBatchModal
             isOpen={sessionBatchModalOpen}
             onClose={() => setSessionBatchModalOpen(false)}
+            workspaceId={workspace.id}
             workspacePath={workspace.rootPath}
             workspaceLabel={workspaceDisplayName}
             remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}

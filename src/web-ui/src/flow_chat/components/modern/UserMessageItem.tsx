@@ -41,7 +41,7 @@ import { SessionUsageReportCard } from '../usage/SessionUsageReportCard';
 import type { SessionUsagePanelTab } from '../usage/sessionUsagePanelTypes';
 import { coerceSessionUsageReport } from '../usage/usageReportUtils';
 import { resolveSessionRelationship } from '../../utils/sessionMetadata';
-import { isRemoteWorkspaceSession } from '../../utils/sessionWorkspace';
+import { isLocalWorkspaceSession } from '../../utils/sessionWorkspace';
 import { resolveSessionDriverId } from '../../session-drivers/resolve';
 import { absoluteSessionTurnIndexForId } from '../../utils/flowChatTurnOrdinal';
 import {
@@ -202,7 +202,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       ? resolvedAbsoluteTurnIndex - 1
       : -1;
     const isDispatchSession = resolveSessionDriverId(resolvedSessionId ?? '', currentSession ?? undefined) === 'dispatch';
-    const isRemoteSession = isRemoteWorkspaceSession(currentSession ?? undefined, null) || isDispatchSession;
+    const isRemoteSession = !isLocalWorkspaceSession(currentSession ?? undefined, null) || isDispatchSession;
     const isSystemTriggered = Boolean(
       message?.metadata?.triggerSource && message.metadata.triggerSource !== 'desktop_ui',
     );

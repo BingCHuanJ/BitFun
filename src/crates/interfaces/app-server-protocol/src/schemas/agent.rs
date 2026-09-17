@@ -27,6 +27,8 @@ macro_rules! unit_response {
 #[serde(rename_all = "camelCase")]
 pub struct ListAgentModesRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub include_external: bool,

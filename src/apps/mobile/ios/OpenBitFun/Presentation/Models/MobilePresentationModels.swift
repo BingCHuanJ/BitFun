@@ -410,7 +410,8 @@ struct MobileDeviceDirectoryEntry: Identifiable, Equatable {
 }
 
 struct MobileWorkspaceGroup: Identifiable, Equatable {
-    var id: String { [deviceKey ?? "", remoteConnectionId ?? "", remoteSshHost ?? "", path].map { "\($0.utf8.count):\($0)" }.joined() }
+    var workspaceId: String? = nil
+    var id: String { if let workspaceId { return [deviceKey ?? "", workspaceId].map { "\($0.utf8.count):\($0)" }.joined() }; return [deviceKey ?? "", remoteConnectionId ?? "", remoteSshHost ?? "", path].map { "\($0.utf8.count):\($0)" }.joined() }
     let path: String
     let name: String
     let selected: Bool

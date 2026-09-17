@@ -6,7 +6,7 @@ export interface RemoteWorkspaceDataSource {
   listWorkspaceCatalog(): Promise<WorkspaceCatalog>;
   savedConnections(): Promise<SavedRuntimeConnection[]>;
   listRecentWorkspaces(): Promise<RecentWorkspaceEntry[]>;
-  setWorkspace(path: string, connectionId?: string, sshHost?: string): Promise<WorkspaceInfo>;
+  setWorkspace(path: string, connectionId?: string, sshHost?: string, workspaceId?: string): Promise<WorkspaceInfo>;
   listAssistants(): Promise<AssistantEntry[]>;
   setAssistant(path: string): Promise<WorkspaceInfo>;
   listSessionsForWorkspace(path: string, limit: number): Promise<RemoteSession[]>;
@@ -32,8 +32,8 @@ export class RemoteWorkspaceRepository implements RemoteWorkspaceDataSource {
     return await this.sessionManager.listRecentWorkspaces();
   }
 
-  async setWorkspace(path: string, connectionId?: string, sshHost?: string): Promise<WorkspaceInfo> {
-    await this.sessionManager.setWorkspace(path, connectionId, sshHost);
+  async setWorkspace(path: string, connectionId?: string, sshHost?: string, workspaceId?: string): Promise<WorkspaceInfo> {
+    await this.sessionManager.setWorkspace(path, connectionId, sshHost, workspaceId);
     return await this.sessionManager.getWorkspaceInfo();
   }
 

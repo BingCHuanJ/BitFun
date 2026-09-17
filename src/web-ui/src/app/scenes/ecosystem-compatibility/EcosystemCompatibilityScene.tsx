@@ -119,7 +119,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
   const { workspace, workspacePath } = useCurrentWorkspace();
   const peerDevice = usePeerDeviceModeOptional();
   const peerDeviceId = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : undefined;
-  const requestScope = JSON.stringify([peerDeviceId, workspace?.id, workspace?.workspaceKind, workspacePath]);
+  const requestScope = JSON.stringify([peerDeviceId, workspace?.id, workspace?.workspaceKind, workspacePath, workspace?.id]);
   const requestSequence = useRef(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const acpManagerRef = useRef<React.ComponentRef<typeof AcpAgentsConfig>>(null);
@@ -173,7 +173,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
     if (!forceRefresh && !backgroundRequest) setLoading(true);
 
     const [sourceResult, clientsResult] = await Promise.allSettled([
-      externalSourcesAPI.getDiscoverySnapshot(workspacePath, forceRefresh),
+      externalSourcesAPI.getDiscoverySnapshot(workspace?.id, forceRefresh),
       ACPClientAPI.getClients(),
     ]);
     if (sequence !== requestSequence.current || backgroundRequest?.isCurrent() === false) return undefined;
@@ -192,7 +192,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
     setLoadIssues(nextIssues);
     setLoading(false);
     return sourceResult.status === 'fulfilled' ? sourceResult.value : undefined;
-  }, [setAcpClients, setSnapshot, workspacePath]);
+  }, [setAcpClients, setSnapshot, workspacePath, workspace?.id]);
 
   useEffect(() => {
     setSnapshot(null);
@@ -298,7 +298,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
       detail: { clientId: client.id },
     }));
     notification.info(t('run.starting', { name: client.name || client.id }), { duration: 2400 });
-  }, [notification, setOwnerSurface, t, workspacePath]);
+  }, [notification, setOwnerSurface, t, workspacePath, workspace?.id]);
 
   const handleConfigureSubagent = useCallback((client: AcpClientInfo) => {
     if (!client.subagent) return;

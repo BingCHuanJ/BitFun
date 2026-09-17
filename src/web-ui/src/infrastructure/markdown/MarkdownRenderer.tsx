@@ -899,6 +899,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   const basePathRef = useLiveValueRef(basePath);
   const remoteConnectionIdRef = useLiveValueRef(fileAccess ? fileAccess.scope.remoteConnectionId : remoteConnectionId);
   const remoteSshHostRef = useLiveValueRef(remoteSshHost);
+  const workspaceIdRef = useLiveValueRef(fileAccess?.scope.workspaceId);
   const currentWorkspacePathRef = useLiveValueRef(fileAccess?.scope.workspacePath ?? currentWorkspacePath);
   const expandDetailsByDefaultRef = useLiveValueRef(expandDetailsByDefault);
   const onOpenVisualizationRef = useLiveValueRef(onOpenVisualization);
@@ -1442,6 +1443,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
               event.stopPropagation();
               const opened = openCanvasArtifactTab({
                 artifactReference: hrefValue,
+                workspaceId: workspaceIdRef.current,
                 workspacePath: basePathRef.current || currentWorkspacePathRef.current || undefined,
                 remoteConnectionId: remoteConnectionIdRef.current,
                 remoteSshHost: remoteSshHostRef.current,

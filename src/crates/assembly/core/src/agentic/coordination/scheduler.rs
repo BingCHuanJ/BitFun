@@ -2702,7 +2702,12 @@ impl DialogScheduler {
                         "External subagent delegation does not accept attachments or prepended reminders",
                     ));
                 }
-                if request.remote_connection_id.is_some() || request.remote_ssh_host.is_some() {
+                if self
+                    .coordinator
+                    .get_session_manager()
+                    .get_session(&request.session_id)
+                    .is_some_and(|session| session.config.is_remote_workspace())
+                {
                     return Err(PortError::new(
                         PortErrorKind::NotAvailable,
                         "External subagent delegation is unavailable for remote workspaces",

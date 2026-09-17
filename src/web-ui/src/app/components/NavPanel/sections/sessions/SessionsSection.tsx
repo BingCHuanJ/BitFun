@@ -1,3 +1,4 @@
+import { requireSessionWorkspaceId } from '@/flow_chat/utils/sessionWorkspace';
 /**
  * SessionsSection — inline accordion content for the "Sessions" nav item.
  *
@@ -128,19 +129,11 @@ function DefaultSessionTitlePreview({ sessionId, createdAt }: Pick<Session, 'ses
 }
 
 const countTopLevelSessionsInScope = (
-  sessions: Iterable<Session>,
-  workspacePath?: string,
-  remoteConnectionId?: string | null,
-  remoteSshHost?: string | null,
+  sessions: Iterable<Session>, workspaceId?: string,
 ): number => {
   const scopedSessions = Array.from(sessions).filter((session: Session) => {
-    if (session.isTransient || session.sessionKind === 'subagent') {
-      return false;
-    }
-    if (workspacePath) {
-      return sessionBelongsToWorkspaceNavRow(session, workspacePath, remoteConnectionId, remoteSshHost);
-    }
-    return !session.workspacePath;
+    if (session.isTransient || session.sessionKind === 'subagent') return false;
+    return workspaceId ? sessionBelongsToWorkspaceNavRow(session, workspaceId) : !session.workspaceId;
   });
 
   const knownIds = new Set(scopedSessions.map(session => session.sessionId));
@@ -431,11 +424,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         let cursor: string | undefined;
         do {
           const page = await flowChatStore.loadSessionMetadataPage(
-            scope.workspacePath,
-            SESSIONS_LEVEL_2_PAGE,
-            cursor,
-            scope.remoteConnectionId || undefined,
-            scope.remoteSshHost || undefined,
+            scope.workspaceId, SESSIONS_LEVEL_2_PAGE, cursor,
             'sessions_nav_all_grouping',
           );
           if (cancelled) return;
@@ -444,9 +433,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
         if (!sessionFilters.hideArchived && !cancelled) {
           await flowChatStore.loadArchivedSessionMetadata(
-            scope.workspacePath,
-            scope.remoteConnectionId || undefined,
-            scope.remoteSshHost || undefined,
+            scope.workspaceId,
           );
         }
       }));
@@ -486,11 +473,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   ]);
 
   useEffect(() => {
-    if (!isVisible || sessionFilters.hideArchived || workspaceScopes?.length || !workspacePath) return;
+    if (!isVisible || sessionFilters.hideArchived || workspaceScopes?.length || !workspaceId) return;
     void flowChatStore.loadArchivedSessionMetadata(
-      workspacePath,
-      remoteConnectionId || undefined,
-      remoteSshHost || undefined,
+      workspaceId!,
     ).catch(error => {
       log.warn('Failed to load archived session projection', { error });
     });
@@ -540,19 +525,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
       try {
         const page = await flowChatStore.loadSessionMetadataPage(
-          workspacePath,
-          limit,
-          cursor,
-          remoteConnectionId || undefined,
-          remoteSshHost || undefined,
+          workspaceId!, limit, cursor,
           source
         );
         if (metadataLoadRequestIdRef.current === requestId) {
           const syncedTopLevelCount = countTopLevelSessionsInScope(
             flowChatStore.getState().sessions.values(),
-            workspacePath,
-            remoteConnectionId,
-            remoteSshHost,
+            workspaceId,
           );
           setMetadataPageState({
             totalTopLevelCount: page.totalTopLevelCount,
@@ -789,19 +768,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             return false;
           }
           if (workspaceScopes?.length) {
-            return workspaceScopes.some(scope => sessionBelongsToWorkspaceNavRow(
-              s,
-              scope.workspacePath,
-              scope.remoteConnectionId,
-              scope.remoteSshHost,
-            ));
+            return workspaceScopes.some(scope => sessionBelongsToWorkspaceNavRow(s, scope.workspaceId));
           }
-          if (workspacePath) {
-            return sessionBelongsToWorkspaceNavRow(s, workspacePath, remoteConnectionId, remoteSshHost);
+          if (workspaceId) {
+            return sessionBelongsToWorkspaceNavRow(s, workspaceId);
           }
-          return !s.workspacePath;
+          return !s.workspaceId;
         }),
-    [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost, workspaceScopes]
+    [flowChatState.sessions, workspaceId, workspaceScopes]
   );
 
   const { topLevelSessions: allTopLevelSessions, childrenByParent } = useMemo(() => {
@@ -1102,12 +1076,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         }
         const relationship = resolveSessionRelationship(session);
         const parentSessionId = relationship.parentSessionId;
-        const matchingScope = session && workspaceScopes?.find(scope => sessionBelongsToWorkspaceNavRow(
-          session,
-          scope.workspacePath,
-          scope.remoteConnectionId,
-          scope.remoteSshHost,
-        ));
+        const matchingScope = session && workspaceScopes?.find(scope => sessionBelongsToWorkspaceNavRow(session, scope.workspaceId));
         const targetWorkspaceId = matchingScope?.workspaceId ?? workspaceId;
         const mustActivateWorkspace =
           Boolean(targetWorkspaceId) && targetWorkspaceId !== currentWorkspace?.id;
@@ -1247,15 +1216,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           {
             sessionId: session.sessionId,
             title: resolveSessionTitle(session),
-            workspacePath:
-              session.projectWorkspacePath
-              || session.config.projectWorkspacePath
-              || session.workspacePath
-              || workspacePath,
-            // The nav row carries the workspace's current connection; a session's
-            // stored ids can be stale (e.g. after an SSH port change).
-            remoteConnectionId: remoteConnectionId ?? session.remoteConnectionId,
-            remoteSshHost: remoteSshHost ?? session.remoteSshHost,
+            workspaceId: requireSessionWorkspaceId(session),
           },
           scope
         );
@@ -1560,12 +1521,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const titleNumber = titleNumbers.get(session.sessionId);
           const displayTitle = titleNumber ? `${sessionTitle} ${titleNumber}` : sessionTitle;
           const isDefaultTitle = isDefaultSessionTitle(session);
-          const sessionWorkspaceScope = workspaceScopes?.find(scope => sessionBelongsToWorkspaceNavRow(
-            session,
-            scope.workspacePath,
-            scope.remoteConnectionId,
-            scope.remoteSshHost,
-          ));
+          const sessionWorkspaceScope = workspaceScopes?.find(scope => sessionBelongsToWorkspaceNavRow(session, scope.workspaceId));
           const backgroundSubagentActivity = !isChildSession
             ? backgroundSubagentActivityByParent.get(session.sessionId)
             : undefined;
@@ -2083,6 +2039,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           <WorkspaceSessionBatchModal
             isOpen
             onClose={() => setBatchWorkspace(null)}
+            workspaceId={batchWorkspace.workspaceId}
             workspacePath={batchWorkspace.workspacePath}
             workspaceLabel={batchWorkspace.workspaceName}
             remoteConnectionId={batchWorkspace.remoteConnectionId}

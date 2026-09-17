@@ -1,3 +1,4 @@
+import { requireSessionWorkspaceId } from '../utils/sessionWorkspace';
 /**
  * Flow Chat unified manager
  * Integrates Agent management and Flow Chat UI state management
@@ -37,7 +38,6 @@ import type {
   FlowChatContext,
   SessionConfig,
   DialogTurn,
-  SessionHistoryHydrationLocation,
 } from './flow-chat-manager/types';
 import {
   saveAllInProgressTurns,
@@ -176,23 +176,14 @@ export class FlowChatManager {
     FlowChatManager.instance = null;
   }
 
-  async initialize(
-    workspacePath: string,
-    preferredMode?: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
-  ): Promise<boolean> {
+  async initialize(workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'workspaceKind' | 'connectionId' | 'sshHost'>, preferredMode?: string): Promise<boolean> {
+    const workspacePath = workspace.rootPath;
     if (this.disposed) {
       log.debug('Ignoring initialize call on disposed FlowChatManager', { workspacePath });
       return false;
     }
 
-    const requestKey = FlowChatManager.createInitializationRequestKey(
-      workspacePath,
-      preferredMode,
-      remoteConnectionId,
-      remoteSshHost,
-    );
+    const requestKey = JSON.stringify([getActiveSurfaceId(), workspace.id, preferredMode ?? '']);
     const existingRequest = this.initializationRequests.get(requestKey);
     this.latestInitializationRequestKey = requestKey;
     if (existingRequest) {
@@ -201,10 +192,9 @@ export class FlowChatManager {
 
     const request = this.initializeWorkspace(
       requestKey,
+      workspace.id,
       workspacePath,
       preferredMode,
-      remoteConnectionId,
-      remoteSshHost,
     ).finally(() => {
       if (this.initializationRequests.get(requestKey) === request) {
         this.initializationRequests.delete(requestKey);
@@ -214,32 +204,11 @@ export class FlowChatManager {
     return request;
   }
 
-  /**
-   * The same repository is routinely open at the same path on two devices, so
-   * without the surface a bootstrap for one device is handed the in-flight
-   * initialization of another — and reads back the wrong device's session list.
-   */
-  private static createInitializationRequestKey(
-    workspacePath: string,
-    preferredMode?: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
-  ): string {
-    return JSON.stringify([
-      getActiveSurfaceId(),
-      workspacePath,
-      preferredMode ?? '',
-      remoteConnectionId ?? '',
-      remoteSshHost ?? '',
-    ]);
-  }
-
   private async initializeWorkspace(
     requestKey: string,
+    workspaceId: string,
     workspacePath: string,
-    preferredMode?: string,
-    remoteConnectionId?: string,
-    remoteSshHost?: string
+    preferredMode?: string
   ): Promise<boolean> {
     const scope = getActiveSurfaceScope();
     try {
@@ -249,11 +218,7 @@ export class FlowChatManager {
       }
 
       const initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
-        workspacePath,
-        5,
-        undefined,
-        remoteConnectionId,
-        remoteSshHost,
+        workspaceId, 5, undefined,
         'flow_chat_manager'
       );
       if (this.disposed) {
@@ -268,10 +233,7 @@ export class FlowChatManager {
 
       const sessionMatchesWorkspace = (session: Session) => {
         return sessionBelongsToWorkspaceNavRow(
-          session,
-          workspacePath,
-          remoteConnectionId,
-          remoteSshHost
+          session, workspaceId
         );
       };
       const isAutoSelectableWorkspaceSession = (
@@ -295,11 +257,7 @@ export class FlowChatManager {
         let nextCursor = initialMetadataPage.nextCursor;
         while (nextCursor) {
           const nextPage = await this.context.flowChatStore.loadSessionMetadataPage(
-            workspacePath,
-            5,
-            nextCursor,
-            remoteConnectionId,
-            remoteSshHost,
+            workspaceId, 5, nextCursor,
             'flow_chat_manager_preferred_mode'
           );
           if (this.disposed) {
@@ -350,13 +308,7 @@ export class FlowChatManager {
         activeSession.isHistorical === true &&
         isCurrentInitializationRequest()
       ) {
-        await this.context.flowChatStore.loadSessionHistory(
-          activeSession.sessionId,
-          workspacePath,
-          undefined,
-          activeSession.remoteConnectionId,
-          activeSession.remoteSshHost,
-        );
+        await this.context.flowChatStore.loadSessionHistory(activeSession.sessionId);
         if (this.disposed) {
           return false;
         }
@@ -388,13 +340,7 @@ export class FlowChatManager {
         }
 
         if (latestSession.isHistorical) {
-          await this.context.flowChatStore.loadSessionHistory(
-            latestSession.sessionId,
-            workspacePath,
-            undefined,
-            latestSession.remoteConnectionId,
-            latestSession.remoteSshHost,
-          );
+          await this.context.flowChatStore.loadSessionHistory(latestSession.sessionId);
           if (this.disposed) {
             return false;
           }
@@ -675,8 +621,8 @@ export class FlowChatManager {
 
       surfaceScope.assertCurrent('create ACP backend session');
       const createdTitleDescriptor = await initializeSessionTitleMetadata(
-        response.sessionId, titleDescriptor, config.projectWorkspacePath || workspacePath,
-        surfaceScope, config.remoteConnectionId, config.remoteSshHost,
+        response.sessionId, titleDescriptor, requireSessionWorkspaceId({ config }),
+        surfaceScope,
       );
 
       this.context.flowChatStore.createSession(
@@ -715,9 +661,8 @@ export class FlowChatManager {
 
   async hydrateSessionHistoryForDetail(
     sessionId: string,
-    location?: SessionHistoryHydrationLocation,
-  ): Promise<void> {
-    await hydrateSessionHistoryForDetailModule(this.context, sessionId, location);
+    ): Promise<void> {
+    await hydrateSessionHistoryForDetailModule(this.context, sessionId);
   }
 
   async deleteChatSession(sessionId: string): Promise<void> {
@@ -758,12 +703,10 @@ export class FlowChatManager {
   }
 
   async refreshWorkspaceSessions(
-    workspace: Pick<WorkspaceInfo, 'rootPath' | 'connectionId' | 'sshHost'>
+    workspace: Pick<WorkspaceInfo, 'id'>
   ): Promise<void> {
     await this.context.flowChatStore.refreshWorkspaceFromDisk(
-      workspace.rootPath,
-      workspace.connectionId,
-      workspace.sshHost
+      workspace.id
     );
   }
 
@@ -780,7 +723,7 @@ export class FlowChatManager {
   }
 
   async resetWorkspaceSessions(
-    workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'connectionId' | 'sshHost'>,
+    workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'workspaceKind' | 'connectionId' | 'sshHost'>,
     options?: {
       reinitialize?: boolean;
       preferredMode?: string;
@@ -803,10 +746,7 @@ export class FlowChatManager {
     }
 
     const hasHistoricalSessions = await this.initialize(
-      workspacePath,
-      options.preferredMode,
-      remoteConnectionId ?? undefined,
-      remoteSshHost ?? undefined
+      workspace, options.preferredMode
     );
     const state = this.context.flowChatStore.getState();
     const activeSession = state.activeSessionId
@@ -814,16 +754,7 @@ export class FlowChatManager {
       : null;
     const hasActiveWorkspaceSession =
       !!activeSession &&
-      sessionBelongsToWorkspaceNavRow(
-        {
-          workspacePath: activeSession.workspacePath || workspacePath,
-          remoteConnectionId: activeSession.remoteConnectionId,
-          remoteSshHost: activeSession.remoteSshHost,
-        },
-        workspacePath,
-        remoteConnectionId,
-        remoteSshHost
-      );
+      sessionBelongsToWorkspaceNavRow(activeSession, workspace.id);
 
     if (!hasHistoricalSessions || !hasActiveWorkspaceSession) {
       await this.createChatSession(

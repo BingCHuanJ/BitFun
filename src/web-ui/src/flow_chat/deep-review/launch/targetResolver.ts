@@ -1,3 +1,4 @@
+import type { GitWorkspaceScope } from '@/infrastructure/api/service-api/GitAPI';
 import { gitAPI, systemAPI, workspaceAPI } from '@/infrastructure/api';
 import {
   isGitRepositoryNotFoundError,
@@ -56,15 +57,15 @@ function rethrowActionableGitError(error: unknown): void {
 }
 
 async function resolveRevision(
-  workspacePath: string,
+  workspace: GitWorkspaceScope,
   revision: string,
 ): Promise<string | undefined> {
   try {
-    return await gitAPI.resolveRevision(workspacePath, revision);
+    return await gitAPI.resolveRevision(workspace, revision);
   } catch (error) {
     rethrowActionableGitError(error);
     log.warn('Failed to resolve Git revision for Review target evidence', {
-      workspacePath,
+      workspace,
       revision,
       error,
     });
@@ -73,15 +74,15 @@ async function resolveRevision(
 }
 
 async function resolveDiff(
-  workspacePath: string,
+  workspace: GitWorkspaceScope,
   params: GitDiffParams,
 ): Promise<string | undefined> {
   try {
-    return await gitAPI.getDiff(workspacePath, { ...params, reviewSafe: true });
+    return await gitAPI.getDiff(workspace, { ...params, reviewSafe: true });
   } catch (error) {
     rethrowActionableGitError(error);
     log.warn('Failed to resolve Git diff for Review target evidence', {
-      workspacePath,
+      workspace,
       params,
       error,
     });
@@ -406,11 +407,12 @@ export interface ResolvedCurrentFileReviewSnapshot {
 }
 
 export async function resolveCurrentFileReviewSnapshot(
-  workspacePath: string | undefined,
+  workspace: GitWorkspaceScope | undefined,
   target: ReviewTargetClassification,
   remoteConnectionId?: string,
   knownStatus?: GitStatus,
 ): Promise<ResolvedCurrentFileReviewSnapshot> {
+  const workspacePath = workspace?.repositoryPath;
   if (!workspacePath) {
     return {
       target,
@@ -450,8 +452,8 @@ export async function resolveCurrentFileReviewSnapshot(
     const [status, changedFiles] = await Promise.all([
       knownStatus
         ? Promise.resolve(knownStatus)
-        : gitAPI.getStatus(workspacePath, 'review_file_scope_snapshot'),
-      gitAPI.getChangedFiles(workspacePath, {
+        : gitAPI.getStatus(workspace!, 'review_file_scope_snapshot'),
+      gitAPI.getChangedFiles(workspace!, {
         source: 'HEAD',
         reviewSafe: true,
       }),
@@ -476,8 +478,8 @@ export async function resolveCurrentFileReviewSnapshot(
       targetPathSet.has(normalizePath(path, workspacePath))
     );
     const [baseRevision, diff, untrackedFacts] = await Promise.all([
-      resolveRevision(workspacePath, 'HEAD'),
-      resolveDiff(workspacePath, {
+      resolveRevision(workspace!, 'HEAD'),
+      resolveDiff(workspace!, {
         source: 'HEAD',
         files: targetDiffPaths,
       }),
@@ -573,13 +575,13 @@ export async function resolveCurrentFileReviewSnapshot(
 }
 
 export async function resolveCurrentFileReviewChangeStats(
-  workspacePath: string,
+  workspace: GitWorkspaceScope,
   target: ReviewTargetClassification,
   knownStatus?: GitStatus,
   remoteConnectionId?: string,
 ): Promise<ReviewTeamChangeStats> {
   return (await resolveCurrentFileReviewSnapshot(
-    workspacePath,
+    workspace,
     target,
     remoteConnectionId,
     knownStatus,
@@ -588,9 +590,10 @@ export async function resolveCurrentFileReviewChangeStats(
 
 export async function resolveSlashCommandReviewTarget(
   commandFocus: string,
-  workspacePath?: string,
+  workspace?: GitWorkspaceScope,
   remoteConnectionId?: string,
 ): Promise<ResolvedDeepReviewTarget> {
+  const workspacePath = workspace?.repositoryPath;
   if (/(?:^|\s)\S+\.\.\.\S+(?:\s|$)/.test(commandFocus)) {
     const target = createUnknownReviewTargetClassification('slash_command_git_ref');
     return {
@@ -646,15 +649,15 @@ export async function resolveSlashCommandReviewTarget(
     try {
       if (remoteConnectionId) {
         return resolveCurrentFileReviewSnapshot(
-          workspacePath,
+          workspace,
           workspaceTarget,
           remoteConnectionId,
         );
       }
 
       const [status, changedFiles] = await Promise.all([
-        gitAPI.getStatus(workspacePath, 'review_explicit_scope_snapshot'),
-        gitAPI.getChangedFiles(workspacePath, {
+        gitAPI.getStatus(workspace!, 'review_explicit_scope_snapshot'),
+        gitAPI.getChangedFiles(workspace!, {
           source: 'HEAD',
           reviewSafe: true,
         }),
@@ -745,7 +748,7 @@ export async function resolveSlashCommandReviewTarget(
         'slash_command_explicit_files',
       );
       return resolveCurrentFileReviewSnapshot(
-        workspacePath,
+        workspace,
         scopedTarget,
         remoteConnectionId,
         status,
@@ -806,8 +809,8 @@ export async function resolveSlashCommandReviewTarget(
 
     try {
       const [baseRevision, headRevision] = await Promise.all([
-        resolveRevision(workspacePath, gitTarget.source ?? 'HEAD'),
-        resolveRevision(workspacePath, gitTarget.target ?? 'HEAD'),
+        resolveRevision(workspace!, gitTarget.source ?? 'HEAD'),
+        resolveRevision(workspace!, gitTarget.target ?? 'HEAD'),
       ]);
       if (!baseRevision || !headRevision) {
         throw new Error('Git range revisions could not be resolved to immutable commit ids');
@@ -815,13 +818,13 @@ export async function resolveSlashCommandReviewTarget(
       const immutableTarget = { source: baseRevision, target: headRevision };
       const [changedFiles, diff, workspaceHeadRevision, status] =
         await Promise.all([
-          gitAPI.getChangedFiles(workspacePath, {
+          gitAPI.getChangedFiles(workspace!, {
             ...immutableTarget,
             reviewSafe: true,
           }),
-          resolveDiff(workspacePath, immutableTarget),
-          resolveRevision(workspacePath, 'HEAD'),
-          gitAPI.getStatus(workspacePath, 'deep_review_git_range_binding').catch((error) => {
+          resolveDiff(workspace!, immutableTarget),
+          resolveRevision(workspace!, 'HEAD'),
+          gitAPI.getStatus(workspace!, 'deep_review_git_range_binding').catch((error) => {
             rethrowActionableGitError(error);
             log.warn('Failed to resolve workspace binding for Git range Review', {
               workspacePath,
@@ -888,13 +891,13 @@ export async function resolveSlashCommandReviewTarget(
 
   if (workspacePath) {
     try {
-      const status = await gitAPI.getStatus(workspacePath, 'deep_review_target_resolver');
+      const status = await gitAPI.getStatus(workspace!, 'deep_review_target_resolver');
       const target = classifyReviewTargetFromFiles(
         collectWorkspaceDiffFilePaths(status),
         'workspace_diff',
       );
       const snapshot = await resolveCurrentFileReviewSnapshot(
-        workspacePath,
+        workspace,
         target,
         remoteConnectionId,
         status,

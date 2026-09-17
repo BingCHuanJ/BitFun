@@ -1495,15 +1495,16 @@ impl SkillRegistry {
     async fn apply_mode_filters_for_workspace(
         &self,
         candidates: Vec<SkillCandidate>,
-        workspace_root: Option<&Path>,
+        workspace: Option<&crate::agentic::workspace::WorkspaceBinding>,
         agent_type: Option<&str>,
     ) -> Vec<SkillCandidate> {
+        let workspace_root = workspace.map(|workspace| workspace.root_path());
         // Static discovered Skills are directly usable; plugin contributions remain owner-controlled.
         #[cfg(feature = "opencode-plugin-host")]
         let candidates = {
             let mut candidates = candidates;
             let plugin_roots = crate::plugin_capability_publication::skill_roots_for_agent(
-                workspace_root,
+                workspace.and_then(|workspace| workspace.workspace_id.as_deref()),
                 agent_type,
             )
             .into_iter()
@@ -1608,9 +1609,10 @@ impl SkillRegistry {
     async fn find_skill_info_for_explicit_invocation_workspace(
         &self,
         skill_name: &str,
-        workspace_root: Option<&Path>,
+        workspace: Option<&crate::agentic::workspace::WorkspaceBinding>,
         agent_type: Option<&str>,
     ) -> OpenBitFunResult<SkillInfo> {
+        let workspace_root = workspace.map(|workspace| workspace.root_path());
         let candidates = self
             .scan_skill_candidates_for_workspace(workspace_root)
             .await;
@@ -1619,7 +1621,7 @@ impl SkillRegistry {
         let candidates =
             Self::filter_globally_disabled_candidates(candidates, &globally_disabled_user_skills);
         let filtered = self
-            .apply_mode_filters_for_workspace(candidates.clone(), workspace_root, agent_type)
+            .apply_mode_filters_for_workspace(candidates.clone(), workspace, agent_type)
             .await;
         if let Some(info) = resolve_visible_skills(filtered)
             .into_iter()
@@ -1729,14 +1731,15 @@ impl SkillRegistry {
 
     pub async fn get_resolved_skills_for_workspace(
         &self,
-        workspace_root: Option<&Path>,
+        workspace: Option<&crate::agentic::workspace::WorkspaceBinding>,
         agent_type: Option<&str>,
     ) -> Vec<SkillInfo> {
+        let workspace_root = workspace.map(|workspace| workspace.root_path());
         let candidates = self
             .scan_skill_candidates_for_workspace(workspace_root)
             .await;
         let filtered = self
-            .apply_mode_filters_for_workspace(candidates, workspace_root, agent_type)
+            .apply_mode_filters_for_workspace(candidates, workspace, agent_type)
             .await;
         sort_skills(resolve_visible_skills(filtered))
     }
@@ -1758,11 +1761,12 @@ impl SkillRegistry {
 
     pub async fn get_implicitly_invocable_skills_for_workspace(
         &self,
-        workspace_root: Option<&Path>,
+        workspace: Option<&crate::agentic::workspace::WorkspaceBinding>,
         agent_type: Option<&str>,
     ) -> Vec<SkillInfo> {
+        let workspace_root = workspace.map(|workspace| workspace.root_path());
         filter_implicitly_invocable_skills_for_agent(
-            self.get_resolved_skills_for_workspace(workspace_root, agent_type)
+            self.get_resolved_skills_for_workspace(workspace, agent_type)
                 .await,
             agent_type,
         )
@@ -1770,11 +1774,12 @@ impl SkillRegistry {
 
     pub async fn get_user_invocable_skills_for_workspace(
         &self,
-        workspace_root: Option<&Path>,
+        workspace: Option<&crate::agentic::workspace::WorkspaceBinding>,
         agent_type: Option<&str>,
     ) -> Vec<SkillInfo> {
+        let workspace_root = workspace.map(|workspace| workspace.root_path());
         filter_user_invocable_skills(
-            self.get_resolved_skills_for_workspace(workspace_root, agent_type)
+            self.get_resolved_skills_for_workspace(workspace, agent_type)
                 .await,
         )
     }
@@ -1920,15 +1925,12 @@ impl SkillRegistry {
     pub async fn find_and_load_skill_for_workspace(
         &self,
         skill_name: &str,
-        workspace_root: Option<&Path>,
+        workspace: Option<&crate::agentic::workspace::WorkspaceBinding>,
         agent_type: Option<&str>,
     ) -> OpenBitFunResult<SkillData> {
+        let workspace_root = workspace.map(|workspace| workspace.root_path());
         let info = self
-            .find_skill_info_for_explicit_invocation_workspace(
-                skill_name,
-                workspace_root,
-                agent_type,
-            )
+            .find_skill_info_for_explicit_invocation_workspace(skill_name, workspace, agent_type)
             .await?;
 
         let content = Self::read_local_skill_markdown(&info).await?;
@@ -1954,14 +1956,15 @@ impl SkillRegistry {
     pub async fn find_and_load_skill_by_key_for_workspace(
         &self,
         skill_key: &str,
-        workspace_root: Option<&Path>,
+        workspace: Option<&crate::agentic::workspace::WorkspaceBinding>,
         agent_type: Option<&str>,
     ) -> OpenBitFunResult<SkillData> {
+        let workspace_root = workspace.map(|workspace| workspace.root_path());
         let candidates = self
             .scan_skill_candidates_for_workspace(workspace_root)
             .await;
         let filtered = self
-            .apply_mode_filters_for_workspace(candidates, workspace_root, agent_type)
+            .apply_mode_filters_for_workspace(candidates, workspace, agent_type)
             .await;
         let info = filtered
             .into_iter()
@@ -2074,14 +2077,15 @@ impl SkillRegistry {
 
     pub async fn get_resolved_skills_xml_for_workspace(
         &self,
-        workspace_root: Option<&Path>,
+        workspace: Option<&crate::agentic::workspace::WorkspaceBinding>,
         agent_type: Option<&str>,
     ) -> Vec<String> {
+        let workspace_root = workspace.map(|workspace| workspace.root_path());
         let scan = self
             .scan_skill_candidates_with_diagnostics_for_workspace(workspace_root)
             .await;
         let filtered = self
-            .apply_mode_filters_for_workspace(scan.candidates, workspace_root, agent_type)
+            .apply_mode_filters_for_workspace(scan.candidates, workspace, agent_type)
             .await;
         let mut xml: Vec<_> = filter_implicitly_invocable_skills_for_agent(
             sort_skills(resolve_visible_skills(filtered)),

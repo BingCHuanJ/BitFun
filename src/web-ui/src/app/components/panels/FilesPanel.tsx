@@ -152,10 +152,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   const [internalViewMode, setInternalViewMode] = useState<'tree' | 'search'>('tree');
   const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
   const isRemoteCurrentWorkspace = Boolean(
-    workspacePath
-    && currentWorkspace
-    && pathsEquivalentFs(currentWorkspace.rootPath, workspacePath)
-    && isRemoteWorkspace(currentWorkspace)
+    currentWorkspace && isRemoteWorkspace(currentWorkspace)
   );
   const {
     query: searchQuery,
@@ -174,8 +171,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     setSearchOptions,
     clearSearch,
   } = useExplorerSearch({
-    workspacePath,
-    remoteConnectionId: currentWorkspace?.connectionId,
+    workspaceId: currentWorkspace?.id,
     stateKey: searchStateKey,
     initialMode: 'content',
     filenameSearchDebounce: 300,
@@ -290,6 +286,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     expandFolderEnsure,
     removePath,
   } = useFileSystem({
+    workspaceId: currentWorkspace?.id,
     rootPath: workspacePath,
     remoteConnectionId: currentWorkspace?.connectionId,
     autoLoad: true,
@@ -302,12 +299,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     expandFolderLazy(path);
   }, [expandFolderLazy]);
 
-  const prevWorkspacePathRef = useRef<string | undefined>(workspacePath);
+  const prevWorkspaceIdRef = useRef<string | undefined>(currentWorkspace?.id);
   useEffect(() => {
-    if (prevWorkspacePathRef.current !== undefined && prevWorkspacePathRef.current !== workspacePath) {
-      log.debug('Workspace path changed, clearing local state', {
-        from: prevWorkspacePathRef.current,
-        to: workspacePath
+    if (prevWorkspaceIdRef.current !== undefined && prevWorkspaceIdRef.current !== currentWorkspace?.id) {
+      log.debug('Workspace ID changed, clearing local state', {
+        from: prevWorkspaceIdRef.current,
+        to: currentWorkspace?.id
       });
       
       clearSearch();
@@ -323,8 +320,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         setInternalViewMode('tree');
       }
     }
-    prevWorkspacePathRef.current = workspacePath;
-  }, [workspacePath, clearSearch, onViewModeChange]);
+    prevWorkspaceIdRef.current = currentWorkspace?.id;
+  }, [currentWorkspace?.id, clearSearch, onViewModeChange]);
 
   const normalizePathForCurrentWorkspace = useCallback(
     (path: string) =>

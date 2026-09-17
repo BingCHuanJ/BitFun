@@ -52,12 +52,12 @@ export const TerminalActionBridge: FC = () => {
         ? useNavSceneStore.getState().resourceWorkspace === browseTarget
           && workspaceManager.getState().openedWorkspaces.get(target!.id) === target
         : currentWorkspace.current.key === activeKey);
-      if (creatingRef.current) return;
+      if (creatingRef.current || !target) return;
       creatingRef.current = true;
 
       void createManualTerminalSession({
+        workspaceId: target.id,
         workspacePath: detail?.workingDirectory ?? targetPath,
-        connectionId: target?.connectionId,
       })
         .then((session) => {
           if (!isCurrent()) return;

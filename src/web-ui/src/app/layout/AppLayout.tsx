@@ -307,16 +307,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             : explicitPreferredMode;
 
         const flowChatManager = FlowChatManager.getInstance();
-        const hasHistoricalSessions = await flowChatManager.initialize(
-          currentWorkspace.rootPath,
-          initializationPreferredMode,
-          currentWorkspace.workspaceKind === WorkspaceKind.Remote
-            ? currentWorkspace.connectionId
-            : undefined,
-          currentWorkspace.workspaceKind === WorkspaceKind.Remote
-            ? currentWorkspace.sshHost
-            : undefined
-        );
+        const hasHistoricalSessions = await flowChatManager.initialize(currentWorkspace, initializationPreferredMode);
         if (cancelled) {
           return;
         }

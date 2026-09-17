@@ -26,6 +26,7 @@ export interface SessionExecutionTarget {
 }
 
 export interface WorktreeSessionSummary {
+  workspaceId?: string;
   sessionId: string;
   sessionName: string;
   status: string;
@@ -33,6 +34,7 @@ export interface WorktreeSessionSummary {
 }
 
 export interface WorktreeSummary {
+  workspaceId?: string;
   worktreeId: string;
   projectWorkspacePath: string;
   path: string;
@@ -113,6 +115,7 @@ export interface WorktreeChangedEvent {
 }
 
 export interface WorktreeSessionBindingResult {
+  projectWorkspaceId?: string;
   sessionId: string;
   workspacePath: string;
   projectWorkspacePath: string;

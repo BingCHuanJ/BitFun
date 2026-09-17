@@ -598,9 +598,10 @@ Allowed agent types when creating a session:
 
                 let visible_sessions = runtime
                     .list_sessions(AgentSessionListRequest {
-                        workspace_path: workspace_target.project_workspace_path.clone(),
-                        remote_connection_id: workspace_target.remote_connection_id.clone(),
-                        remote_ssh_host: workspace_target.remote_ssh_host.clone(),
+                        workspace_id: workspace_target.workspace_id.clone(),
+                        workspace_path: String::new(),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
                     })
                     .await
                     .map_err(|error| {

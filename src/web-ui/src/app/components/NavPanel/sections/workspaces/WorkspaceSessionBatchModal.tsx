@@ -1,3 +1,5 @@
+import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { resolveLegacySessionWorkspace } from '@/infrastructure/api/service-api/legacyWorkspaceCompatibility';
 import { OverflowText,
   Button,
   Checkbox,
@@ -29,6 +31,7 @@ import './WorkspaceSessionBatchModal.scss';
 interface WorkspaceSessionBatchModalProps {
   isOpen: boolean;
   onClose: () => void;
+  workspaceId: string;
   workspacePath: string;
   workspaceLabel: string;
   remoteConnectionId?: string | null;
@@ -114,6 +117,7 @@ function getDeletionPlan(selectedIds: Set<string>, sessions: SessionBatchItem[])
 const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
   isOpen,
   onClose,
+  workspaceId,
   workspacePath,
   workspaceLabel,
   remoteConnectionId = null,
@@ -131,20 +135,16 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
     setLoadFailed(false);
     try {
       const metadataList = await sessionAPI.listSessions(
-        workspacePath,
-        remoteConnectionId || undefined,
-        remoteSshHost || undefined
+        workspaceId
       );
-      const filtered = metadataList.filter(metadata => {
+      const filtered = metadataList.map(metadata => ({ ...metadata, workspaceId: metadata.workspaceId ??
+        resolveLegacySessionWorkspace(metadata, [...workspaceManager.getState().openedWorkspaces.values()])?.id })).filter(metadata => {
         if (metadata.status === 'archived') {
           return false;
         }
         if (
           !sessionBelongsToWorkspaceNavRow(
-            metadata,
-            workspacePath,
-            remoteConnectionId,
-            remoteSshHost
+            metadata, workspaceId
           )
         ) {
           return false;
@@ -209,12 +209,8 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
   }, [allSessionIds]);
 
   const refreshWorkspaceSessions = useCallback(async () => {
-    await flowChatManager.refreshWorkspaceSessions({
-      rootPath: workspacePath,
-      connectionId: remoteConnectionId || undefined,
-      sshHost: remoteSshHost || undefined,
-    });
-  }, [remoteConnectionId, remoteSshHost, workspacePath]);
+    await flowChatManager.refreshWorkspaceSessions({ id: workspaceId });
+  }, [workspaceId]);
 
   const handleArchiveSelected = useCallback(async () => {
     if (selectedCount === 0) {

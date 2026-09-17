@@ -39,7 +39,7 @@ const GitScene: React.FC<GitSceneProps> = ({
     isLoading: statusLoading,
     refresh,
   } = useGitState({
-    repositoryPath: workspacePath,
+    repositoryPath: { workspaceId: workspace?.id ?? '', repositoryPath: workspacePath },
     isActive,
     refreshOnMount: true,
     layers: ['basic', 'status'],
@@ -83,7 +83,7 @@ const GitScene: React.FC<GitSceneProps> = ({
     if (!workspacePath || isTrusting) return;
     setIsTrusting(true);
     try {
-      const trusted = await requestGitRepositoryTrust(workspacePath, { userInitiated: true });
+      const trusted = await requestGitRepositoryTrust({ workspaceId: workspace?.id ?? '', repositoryPath: workspacePath }, { userInitiated: true });
       if (trusted) {
         await refresh({ force: true, layers: ['basic', 'status'], reason: 'manual' });
       }
@@ -95,12 +95,12 @@ const GitScene: React.FC<GitSceneProps> = ({
   const renderView = useCallback(() => {
     switch (activeView) {
       case 'branches':
-        return <BranchesView workspacePath={workspacePath} />;
+        return <BranchesView workspaceId={workspace?.id} workspacePath={workspacePath} />;
       case 'graph':
-        return <GraphView workspacePath={workspacePath} />;
+        return <GraphView workspaceId={workspace?.id} workspacePath={workspacePath} />;
       case 'working-copy':
       default:
-        return <WorkingCopyView workspacePath={workspacePath} isActive={isActive} />;
+        return <WorkingCopyView workspaceId={workspace?.id} workspacePath={workspacePath} isActive={isActive} />;
     }
   }, [activeView, isActive, workspacePath]);
 

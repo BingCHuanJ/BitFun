@@ -139,8 +139,8 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     return response.value || [];
   }
 
-  async setWorkspace(path: string, connectionId?: string, sshHost?: string): Promise<void> {
-    const command = RemoteCommandFactory.setWorkspace(path);
+  async setWorkspace(path: string, connectionId?: string, sshHost?: string, workspaceId?: string): Promise<void> {
+    const command = RemoteCommandFactory.setWorkspace(path, workspaceId);
     command.remote_connection_id = connectionId;
     command.remote_ssh_host = sshHost;
     const response = await this.send<SetWorkspaceResponse>(command);

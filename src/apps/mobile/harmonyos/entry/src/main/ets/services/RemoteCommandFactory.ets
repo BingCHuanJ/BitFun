@@ -9,7 +9,9 @@ export class RemoteCommandFactory {
     return { cmd: 'list_recent_workspaces' };
   }
 
-  static setWorkspace(path: string): RemoteCommand {
+  static setWorkspace(path: string, workspaceId?: string): RemoteCommand {
+    if (workspaceId) return { cmd: 'set_workspace', workspace_id: workspaceId };
+    // Upgrade-only command for pre-ID hosts.
     return {
       cmd: 'set_workspace',
       path
@@ -49,6 +51,7 @@ export class RemoteCommandFactory {
       'Remote Assistant Session' : normalizedAgentType === 'cowork' ? 'Remote Cowork Session' : 'Remote Code Session';
     return {
       cmd: 'create_session',
+      workspace_id: options.workspaceId,
       agent_type: options.agentType,
       session_name: options.title.trim() || defaultTitle,
       workspace_path: workspacePath || undefined,

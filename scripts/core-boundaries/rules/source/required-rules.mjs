@@ -3191,8 +3191,8 @@ export const requiredContentRules = [
       'core filesystem service may keep remote-workspace overlay and OpenBitFunError compatibility, but local filesystem owner must remain services-core',
     patterns: [
       {
-        regex: /lookup_remote_connection_with_hint/,
-        message: 'core filesystem wrapper must preserve remote workspace connection disambiguation',
+        regex: /let connection_id = explicit_connection_id\?/,
+        message: 'core filesystem wrapper must require explicit remote workspace connection scope',
       },
       {
         regex: /get_remote_workspace_manager/,
@@ -8243,8 +8243,8 @@ export const requiredContentRules = [
         message: 'missing core remote search provider adapter',
       },
       {
-        regex: /\blookup_remote_connection_with_hint\b/,
-        message: 'missing preferred remote connection lookup adapter',
+        regex: /\brequire_workspace\(workspace_id\)/,
+        message: 'remote search must resolve the registered workspace by ID',
       },
       {
         regex: /\bopen_workspace_stdio\b/,
@@ -8281,8 +8281,8 @@ export const requiredContentRules = [
         message: 'missing explicit disabled remote search diagnostic',
       },
       {
-        regex: /\bremote_workspace_search_service_for_path\b/,
-        message: 'missing disabled remote workspace search resolver',
+        regex: /\bremote_workspace_search_service_for_workspace\b/,
+        message: 'missing ID-based disabled remote workspace search resolver',
       },
     ],
   },
@@ -8300,8 +8300,8 @@ export const requiredContentRules = [
         message: 'missing disabled remote workspace search service surface',
       },
       {
-        regex: /\bremote_workspace_search_service_for_path\b/,
-        message: 'missing disabled remote workspace search resolver',
+        regex: /\bpub async fn search_content\b/,
+        message: 'missing explicit unsupported search operation',
       },
     ],
   },

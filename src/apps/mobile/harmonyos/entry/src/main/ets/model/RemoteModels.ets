@@ -35,6 +35,7 @@ export interface RecentWorkspaceEntry extends RemoteWorkspaceIdentity {
 }
 
 export interface RemoteWorkspaceIdentity {
+  workspaceId?: string;
   path: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -85,6 +86,7 @@ export interface SessionSummary {
 }
 
 export interface CreateSessionOptions {
+  workspaceId?: string;
   remoteSshHost?: string;
   remoteConnectionId?: string;
   agentType: string;
@@ -115,6 +117,7 @@ export interface SavedRuntimeConnection { id: string; name: string; host: string
 export interface SavedRuntimeConnectionsResponse extends CommandStatusResponse { ok: boolean; value?: SavedRuntimeConnection[]; error?: string; }
 
 export interface RemoteCommand {
+  workspace_id?: string;
   remote_ssh_host?: string;
   command?: string;
   args?: Object;
@@ -169,6 +172,7 @@ export interface PermissionModeResponse extends CommandStatusResponse {
 }
 
 export interface WorkspaceInfoResponse extends CommandStatusResponse {
+  workspace_id?: string;
   remote_connection_id?: string;
   remote_ssh_host?: string;
   has_workspace?: boolean;
@@ -183,6 +187,7 @@ export interface WorkspaceInfoResponse extends CommandStatusResponse {
 }
 
 export interface RecentWorkspaceEntryResponse {
+  workspace_id?: string;
   remote_connection_id?: string;
   remote_ssh_host?: string;
   path?: string;
@@ -200,6 +205,7 @@ export interface RecentWorkspaceListResponse extends CommandStatusResponse {
 }
 
 export interface SetWorkspaceResponse extends CommandStatusResponse {
+  workspace_id?: string;
   success?: boolean;
   path?: string;
   project_name?: string;
@@ -207,6 +213,7 @@ export interface SetWorkspaceResponse extends CommandStatusResponse {
 }
 
 export interface AssistantEntry {
+  workspace_id?: string;
   path: string;
   name: string;
   assistant_id?: string;
@@ -263,6 +270,7 @@ export interface SessionListResponse extends CommandStatusResponse {
 }
 
 export interface InitialSyncResponse extends CommandStatusResponse {
+  workspace_id?: string;
   has_workspace?: boolean;
   path?: string;
   project_name?: string;

@@ -213,7 +213,7 @@ pub async fn create_acp_flow_session(
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
     )
-    .await;
+    .await?;
     let response = service
         .create_flow_session_record(
             &session_storage_path,
@@ -287,7 +287,7 @@ pub async fn start_acp_dialog_turn(
                 request.remote_connection_id.as_deref(),
                 request.remote_ssh_host.as_deref(),
             )
-            .await,
+            .await?,
         ),
         None => None,
     };
@@ -607,7 +607,7 @@ pub async fn get_acp_session_options(
                 request.remote_connection_id.as_deref(),
                 request.remote_ssh_host.as_deref(),
             )
-            .await,
+            .await?,
         ),
         None => None,
     };
@@ -640,7 +640,7 @@ pub async fn get_acp_session_commands(
                 request.remote_connection_id.as_deref(),
                 request.remote_ssh_host.as_deref(),
             )
-            .await,
+            .await?,
         ),
         None => None,
     };
@@ -673,7 +673,7 @@ pub async fn set_acp_session_model(
                 request.remote_connection_id.as_deref(),
                 request.remote_ssh_host.as_deref(),
             )
-            .await,
+            .await?,
         ),
         None => None,
     };
@@ -700,7 +700,7 @@ pub async fn set_acp_session_config_option(
                 request.remote_connection_id.as_deref(),
                 request.remote_ssh_host.as_deref(),
             )
-            .await,
+            .await?,
         ),
         None => None,
     };

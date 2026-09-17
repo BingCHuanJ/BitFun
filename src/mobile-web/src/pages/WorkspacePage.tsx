@@ -69,10 +69,7 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady, onBa
     setSwitching(true);
     setError(null);
     try {
-      const result = await sessionMgr.setWorkspace(workspace.path, {
-        remoteConnectionId: workspace.remote_connection_id,
-        remoteSshHost: workspace.remote_ssh_host,
-      });
+      const result = await sessionMgr.setWorkspace(workspace);
       if (result.success) {
         await loadWorkspaceInfo();
         onReady();

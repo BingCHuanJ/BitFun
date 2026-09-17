@@ -1,3 +1,4 @@
+import { requireSessionWorkspaceId } from '../../utils/sessionWorkspace';
 /**
  * Local session driver: the default flavor backed by this machine's (or the
  * attached peer's) agent runtime via `agentAPI`.
@@ -35,7 +36,6 @@ import { syncSessionModelSelection } from '../../utils/modelSync';
 import { nextStorageTurnIndex } from '../../utils/flowChatTurnIdentity';
 import { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
 import {
-  requireSessionProjectWorkspacePath,
   sessionProjectWorkspacePath,
 } from '../../utils/sessionWorkspace';
 import { sessionWorktreeMaterializationPlan } from '../../utils/sessionWorktree';
@@ -115,8 +115,8 @@ export const localSessionDriver: SessionDriver = {
     };
 
     const createdTitleDescriptor = await initializeSessionTitleMetadata(
-      response.sessionId, titleDescriptor, effectiveProjectWorkspacePath,
-      surfaceScope, remoteConnectionId, remoteSshHost,
+      response.sessionId, titleDescriptor, requireSessionWorkspaceId({ config: resolvedConfig }),
+      surfaceScope,
     );
 
     context.flowChatStore.createSession(
@@ -168,10 +168,7 @@ export const localSessionDriver: SessionDriver = {
 
     await sessionAPI.archiveSession(
       sessionId,
-      requireSessionProjectWorkspacePath(session, sessionId),
-      session.remoteConnectionId,
-      session.remoteSshHost,
-    );
+      requireSessionWorkspaceId(session));
 
     context.flowChatStore.removeSession(
       sessionId,

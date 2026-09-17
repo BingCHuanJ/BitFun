@@ -409,7 +409,6 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
             const statsResp = await snapshotAPI.getSessionFileDiffStats(
               sessionId,
               file.filePath,
-              currentWorkspace?.rootPath,
             );
             const fileName = file.filePath.split(/[/\\]/).pop() || file.filePath;
 
@@ -661,6 +660,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         reviewableFilePaths,
         {
           workspacePath: currentWorkspace?.rootPath,
+          workspaceId: currentWorkspace?.id,
           changeStats: {
             fileCount: reviewableFilePaths.length,
             ...(!hasUnknownLineStats

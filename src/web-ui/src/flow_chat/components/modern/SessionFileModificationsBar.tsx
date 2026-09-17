@@ -194,7 +194,6 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
             const statsResp = await snapshotAPI.getSessionFileDiffStats(
               file.sourceSessionId,
               file.filePath,
-              currentWorkspace?.rootPath,
             );
             const fileName = file.filePath.split(/[/\\]/).pop() || file.filePath;
 

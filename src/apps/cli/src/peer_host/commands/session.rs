@@ -25,9 +25,45 @@ use crate::diagnostics::{OUTCOME_UNKNOWN_ERROR_CODE, SESSION_IN_USE_ERROR_CODE};
 use crate::peer_host::args::{get_string, optional_bool, optional_string, request_value};
 use crate::peer_host::state::PeerHostState;
 
-use super::snapshot::{local_snapshot_session_stats, require_local_snapshot_workspace};
+use super::snapshot::{
+    local_snapshot_session_stats, require_local_snapshot_workspace, resolve_snapshot_workspace,
+};
 
-fn session_storage_request(request: &Value) -> Result<SessionStoragePathRequest, String> {
+async fn session_storage_request(
+    state: &PeerHostState,
+    request: &Value,
+) -> Result<SessionStoragePathRequest, String> {
+    if let Some(id) = optional_string(request, "workspaceId") {
+        let workspace = state
+            .workspace_service
+            .require_workspace(&id)
+            .await
+            .map_err(|error| error.to_string())?;
+        let remote =
+            workspace.workspace_kind == openbitfun_core::service::workspace::WorkspaceKind::Remote;
+        return Ok(SessionStoragePathRequest {
+            workspace_path: workspace.root_path.clone(),
+            remote_connection_id: if remote {
+                Some(
+                    workspace
+                        .remote_ssh_connection_id()
+                        .ok_or("Remote workspace is missing its saved SSH connection ID")?
+                        .to_owned(),
+                )
+            } else {
+                None
+            },
+            remote_ssh_host: if remote {
+                workspace
+                    .metadata
+                    .get("sshHost")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            } else {
+                None
+            },
+        });
+    }
     let workspace_path = get_string(request, "workspacePath")?;
     let workspace_path = workspace_path.trim();
     if workspace_path.is_empty() {
@@ -112,11 +148,29 @@ pub(crate) fn load_session_event_backfill(
     ))
 }
 
-pub(super) fn ensure_session_workspace_runtime_ownership(
+pub(super) async fn ensure_session_workspace_runtime_ownership(
     state: &PeerHostState,
     request: &Value,
 ) -> Result<SessionStoragePathRequest, String> {
-    let scope = session_storage_request(request)?;
+    let scope = session_storage_request(state, request).await?;
+    if optional_string(request, "workspaceId").is_some() {
+        let coordinator = openbitfun_core::agentic::coordination::get_global_coordinator()
+            .ok_or("Conversation coordinator is unavailable")?;
+        if let Some(connection) = scope.remote_connection_id.as_deref() {
+            coordinator
+                .ensure_verified_remote_workspace_runtime_ownership(
+                    &scope.workspace_path,
+                    connection,
+                    scope.remote_ssh_host.as_deref(),
+                )
+                .map_err(|error| error.to_string())?;
+        } else {
+            coordinator
+                .ensure_workspace_runtime_ownership(&scope.workspace_path, None, None)
+                .map_err(|error| error.to_string())?;
+        }
+        return Ok(scope);
+    }
     state
         .compatibility
         .ensure_workspace_runtime_ownership(&scope)
@@ -128,7 +182,15 @@ pub(super) async fn resolved_session_storage_path(
     state: &PeerHostState,
     request: &Value,
 ) -> Result<PathBuf, String> {
-    resolved_session_storage_scope(state, session_storage_request(request)?).await
+    if let Some(id) = optional_string(request, "workspaceId") {
+        use openbitfun_runtime_ports::SessionStorePort;
+        return openbitfun_core::agentic::session::CoreSessionStorePort::default()
+            .resolve_workspace_storage(&id)
+            .await
+            .map(|resolution| resolution.effective_storage_path)
+            .map_err(|error| error.to_string());
+    }
+    resolved_session_storage_scope(state, session_storage_request(state, request).await?).await
 }
 
 pub(super) async fn resolved_session_storage_scope(
@@ -395,7 +457,7 @@ pub(crate) async fn restore_session_view(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let storage_request = session_storage_request(request)?;
+    let storage_request = session_storage_request(state, request).await?;
     let include_internal = request
         .get("includeInternal")
         .and_then(|v| v.as_bool())
@@ -457,7 +519,7 @@ pub(crate) async fn restore_session_with_turns(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let storage_request = session_storage_request(request)?;
+    let storage_request = session_storage_request(state, request).await?;
     let include_internal = request
         .get("includeInternal")
         .and_then(|v| v.as_bool())
@@ -479,7 +541,7 @@ pub(crate) async fn restore_session_with_turns(
 pub(crate) async fn restore_session(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let storage_request = session_storage_request(request)?;
+    let workspace = resolve_snapshot_workspace(state, request).await?;
     let include_internal = request
         .get("includeInternal")
         .and_then(|v| v.as_bool())
@@ -488,11 +550,12 @@ pub(crate) async fn restore_session(state: &PeerHostState, args: &Value) -> Resu
     let restored = state
         .agent_runtime
         .restore_session(AgentSessionRestoreRequest {
-            workspace_path: storage_request.workspace_path.to_string_lossy().to_string(),
+            workspace_id: Some(workspace.id),
+            workspace_path: String::new(),
             session_id,
             include_internal,
-            remote_connection_id: storage_request.remote_connection_id,
-            remote_ssh_host: storage_request.remote_ssh_host,
+            remote_connection_id: None,
+            remote_ssh_host: None,
         })
         .await
         .map_err(|error| peer_runtime_session_error("Failed to restore session", error))?;
@@ -557,10 +620,11 @@ pub(crate) async fn create_session(state: &PeerHostState, args: &Value) -> Resul
 pub(crate) async fn delete_session(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let workspace_path = get_string(request, "workspacePath")?;
+    let workspace_path = optional_string(request, "workspacePath").unwrap_or_default();
     state
         .agent_runtime
         .delete_session(AgentSessionDeleteRequest {
+            workspace_id: optional_string(request, "workspaceId"),
             workspace_path,
             session_id,
             remote_connection_id: optional_string(request, "remoteConnectionId"),
@@ -574,13 +638,14 @@ pub(crate) async fn delete_session(state: &PeerHostState, args: &Value) -> Resul
 pub(crate) async fn rename_session(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let storage_request = session_storage_request(request)?;
+    let storage_request = session_storage_request(state, request).await?;
     let title = get_string(request, "sessionName")
         .or_else(|_| get_string(request, "title"))
         .or_else(|_| get_string(request, "name"))?;
     state
         .agent_runtime
         .rename_session(AgentSessionRenameRequest {
+            workspace_id: optional_string(request, "workspaceId"),
             workspace_path: storage_request.workspace_path.to_string_lossy().to_string(),
             session_id,
             session_name: title,
@@ -595,10 +660,11 @@ pub(crate) async fn rename_session(state: &PeerHostState, args: &Value) -> Resul
 pub(crate) async fn archive_session(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let storage_request = session_storage_request(request)?;
+    let storage_request = session_storage_request(state, request).await?;
     state
         .agent_runtime
         .archive_session(AgentSessionArchiveRequest {
+            workspace_id: optional_string(request, "workspaceId"),
             workspace_path: storage_request.workspace_path.to_string_lossy().to_string(),
             session_id,
             remote_connection_id: storage_request.remote_connection_id,
@@ -615,8 +681,8 @@ pub(crate) async fn touch_session_activity(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
-    let workspace_path = resolved_session_storage_scope(state, scope).await?;
+    ensure_session_workspace_runtime_ownership(state, request).await?;
+    let workspace_path = resolved_session_storage_path(state, request).await?;
     let _mutation = state
         .compatibility
         .begin_persisted_session_mutation(&workspace_path, &session_id)
@@ -637,7 +703,7 @@ pub(crate) async fn get_session_thread_goal(
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
     let storage_request = if optional_string(request, "workspacePath").is_some() {
-        session_storage_request(request)?
+        session_storage_request(state, request).await?
     } else {
         SessionStoragePathRequest {
             workspace_path: PathBuf::from("."),
@@ -724,7 +790,7 @@ pub(crate) async fn ensure_coordinator_session(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
+    let scope = ensure_session_workspace_runtime_ownership(state, request).await?;
     if state
         .compatibility
         .is_session_loaded_in_memory(&session_id)
@@ -732,7 +798,7 @@ pub(crate) async fn ensure_coordinator_session(
     {
         return Ok(Value::Null);
     }
-    let storage = resolved_session_storage_scope(state, scope).await?;
+    let storage = resolved_session_storage_path(state, request).await?;
     let include_internal = optional_bool(request, "includeInternal").unwrap_or(false);
 
     state
@@ -748,29 +814,38 @@ pub(crate) async fn get_available_modes(
     args: &Value,
 ) -> Result<Value, String> {
     let request = request_value(args);
-    let workspace = super::external_sources::workspace_root(state, request)
+    let workspace_id = super::external_sources::workspace_id(state, request)
         .await
         .map_err(|error| error.encode())?;
+    let workspace = match workspace_id.as_deref() {
+        Some(id) => Some(
+            state
+                .workspace_service
+                .require_workspace(id)
+                .await
+                .map_err(|error| error.to_string())?
+                .root_path,
+        ),
+        None => None,
+    };
     if let Some(workspace) = workspace.as_deref() {
         if let Err(error) = openbitfun_core::plugin_host::ensure_configured_plugin_instance(
             crate::PLUGIN_HOST_LAUNCH_POLICY,
-            workspace.to_path_buf(),
-            workspace.to_path_buf(),
-            optional_string(request, "workspaceId"),
+            workspace_id.as_deref().ok_or("Workspace ID is required")?,
         )
         .await
         {
             openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                 "CLI Peer mode catalog",
-                Some(workspace),
+                workspace_id.as_deref(),
                 error,
             )
             .await;
         }
         if let Err(error) =
-            openbitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
-                workspace,
-            ))
+            openbitfun_core::external_sources::ensure_external_source_workspace_snapshot(
+                workspace_id.as_deref(),
+            )
             .await
         {
             tracing::warn!(
@@ -779,7 +854,7 @@ pub(crate) async fn get_available_modes(
         }
     }
     let mode_infos = get_agent_registry()
-        .get_modes_info_for_workspace(workspace.as_deref(), workspace.is_some())
+        .get_modes_info_for_workspace(workspace_id.as_deref(), workspace_id.is_some())
         .await;
     let dtos: Vec<Value> = mode_infos
         .into_iter()
@@ -814,12 +889,12 @@ pub(crate) async fn get_session_stats(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = get_string(request, "sessionId")?;
-    let workspace_path = get_string(request, "workspacePath")?;
+    let workspace = resolve_snapshot_workspace(state, request).await?;
     openbitfun_agent_runtime::session_control::validate_session_id(&session_id)
         .map_err(session_stats_validation_error)?;
-    require_local_snapshot_workspace(request, &workspace_path).await?;
+    require_local_snapshot_workspace(&workspace)?;
 
-    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
+    let scope = ensure_session_workspace_runtime_ownership(state, request).await?;
     let storage_path = resolved_session_storage_scope(state, scope).await?;
     let read = state
         .compatibility
@@ -829,7 +904,7 @@ pub(crate) async fn get_session_stats(
 
     let stats = local_snapshot_session_stats(
         state.local_workspace_snapshot.as_ref(),
-        PathBuf::from(&workspace_path),
+        workspace.id,
         session_id,
         read.visible_turn_end(),
     )
@@ -852,8 +927,8 @@ pub(crate) async fn save_session_turn(
     args: &Value,
 ) -> Result<Value, String> {
     let request = request_value(args);
-    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
-    let workspace_path = resolved_session_storage_scope(state, scope).await?;
+    ensure_session_workspace_runtime_ownership(state, request).await?;
+    let workspace_path = resolved_session_storage_path(state, request).await?;
     let turn_data = request
         .get("turnData")
         .or_else(|| request.get("turn_data"))

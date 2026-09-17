@@ -13,6 +13,7 @@ export function projectWorkspaceCatalog(
   const source = Array.isArray(response.opened_workspaces) ? 'opened' : 'recent';
   const rows = source === 'opened' ? response.opened_workspaces! : [
     ...assistants.map((assistant): RecentWorkspaceEntry => ({
+      workspace_id: assistant.workspace_id,
       path: assistant.path, name: assistant.name, last_opened: '', workspace_kind: 'assistant',
     })),
     ...response.workspaces,
@@ -20,9 +21,11 @@ export function projectWorkspaceCatalog(
   const seen = new Set<string>();
   return {
     source,
-    workspaces: rows.map((workspace) => {
+    workspaces: rows.map(normalizeWorkspaceRouting).map((workspace) => {
       if (workspace.remote_connection_id || workspace.remote_ssh_host) return workspace;
-      const assistant = assistants.find(candidate => candidate.path === workspace.path);
+      const assistant = assistants.find(candidate => workspace.workspace_id
+        ? candidate.workspace_id === workspace.workspace_id
+        : !candidate.workspace_id && candidate.path === workspace.path);
       return assistant?.name.trim()
         ? { ...workspace, name: assistant.name, workspace_kind: 'assistant' as const }
         : workspace;
@@ -38,10 +41,12 @@ export function projectWorkspaceCatalog(
 
 export type WorkspaceIdentity = Pick<
   RecentWorkspaceEntry,
-  'path' | 'remote_connection_id' | 'remote_ssh_host'
+  'workspace_id' | 'path' | 'remote_connection_id' | 'remote_ssh_host'
 >;
 
 export function workspaceIdentityKey(workspace: WorkspaceIdentity): string {
+  if (workspace.workspace_id) return workspace.workspace_id;
+  // Upgrade-only key for catalogs received from pre-ID hosts. Never sent as an ID.
   return JSON.stringify([
     workspace.remote_connection_id ?? null,
     workspace.remote_ssh_host ?? null,
@@ -56,9 +61,11 @@ export function sessionMatchesWorkspace(
   workspace: WorkspaceIdentity,
   catalog: WorkspaceIdentity[] = [],
 ): boolean {
+  if (session.workspace_id) return session.workspace_id === workspace.workspace_id;
   if (session.workspace_identity) {
     return workspaceIdentityKey(session.workspace_identity) === workspaceIdentityKey(workspace);
   }
+  if (workspace.workspace_id) return false;
   return session.workspace_path === workspace.path
     && !workspace.remote_connection_id
     && !workspace.remote_ssh_host
@@ -88,4 +95,15 @@ export function mergeWorkspaceSessions(
     });
   });
   return [...merged.values()];
+}
+
+/** Old hosts included sshHost=localhost on normal records. Kind is authoritative;
+ * missing kinds retain legacy selectors for the owning host to resolve. */
+export function normalizeWorkspaceRouting<T extends {
+  workspace_kind?: string; remote_connection_id?: string; remote_ssh_host?: string;
+}>(workspace: T): T {
+  return (workspace.workspace_kind === 'normal' || workspace.workspace_kind === 'assistant')
+      && (workspace.remote_connection_id !== undefined || workspace.remote_ssh_host !== undefined)
+    ? { ...workspace, remote_connection_id: undefined, remote_ssh_host: undefined }
+    : workspace;
 }

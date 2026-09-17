@@ -79,7 +79,6 @@ use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig}
 use crate::service::config::{
     get_global_config_service, AgentModelDefaultsConfig, SubagentModelSelection,
 };
-use crate::service::remote_ssh::normalize_remote_workspace_path;
 use crate::service::session::{
     DialogTurnData, SessionMemoryMode, SessionRelationship, SessionRelationshipKind, SessionStatus,
     ToolItemIdentityExt, TurnStatus,
@@ -335,21 +334,17 @@ fn inherit_matching_parent_workspace_binding(
     parent_config: &SessionConfig,
     child_config: &mut SessionConfig,
 ) {
-    let Some(parent_workspace_path) = parent_config.workspace_path.as_deref() else {
-        return;
-    };
-    let Some(child_workspace_path) = child_config.workspace_path.as_deref() else {
-        return;
-    };
-    if comparable_workspace_path(parent_workspace_path)
-        != comparable_workspace_path(child_workspace_path)
+    if parent_config.workspace_id.is_none()
+        || parent_config.workspace_id != child_config.workspace_id
     {
         return;
     }
-
+    child_config.workspace_path = parent_config.workspace_path.clone();
+    child_config.project_workspace_id = parent_config.project_workspace_id.clone();
     child_config.project_workspace_path = parent_config.project_workspace_path.clone();
     child_config.execution_target = parent_config.execution_target.clone();
     child_config.workspace_id = parent_config.workspace_id.clone();
+    child_config.workspace_kind = parent_config.workspace_kind.clone();
     child_config.remote_connection_id = parent_config.remote_connection_id.clone();
     child_config.remote_ssh_host = parent_config.remote_ssh_host.clone();
 }
@@ -507,7 +502,7 @@ pub(crate) struct InternalAgentExecutionRequest {
     pub(crate) task_description: String,
     pub(crate) agent_type: String,
     pub(crate) session_name: String,
-    pub(crate) workspace_path: String,
+    pub(crate) workspace_id: String,
     pub(crate) model_id: Option<String>,
     pub(crate) created_by: Option<String>,
     pub(crate) context: HashMap<String, String>,
@@ -1273,70 +1268,11 @@ pub struct ConversationCoordinator {
 
 impl ConversationCoordinator {
     pub(crate) async fn resolve_workspace_id_for_config(config: &SessionConfig) -> Option<String> {
-        let explicit = config
-            .workspace_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
-        if explicit.is_some() {
-            return explicit;
-        }
-
-        let workspace_path = config.workspace_path.as_deref()?;
-        let workspace_service = get_global_workspace_service()?;
-
-        if config.remote_connection_id.is_some() || config.remote_ssh_host.is_some() {
-            let normalized_path = normalize_remote_workspace_path(workspace_path);
-            let desired_connection_id = config
-                .remote_connection_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty());
-            let desired_ssh_host = config
-                .remote_ssh_host
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty());
-
-            return workspace_service
-                .list_workspace_infos()
-                .await
-                .into_iter()
-                .find(|workspace| {
-                    if workspace.workspace_kind != WorkspaceKind::Remote {
-                        return false;
-                    }
-                    if normalize_remote_workspace_path(&workspace.root_path.to_string_lossy())
-                        != normalized_path
-                    {
-                        return false;
-                    }
-                    if let Some(connection_id) = desired_connection_id {
-                        if workspace.remote_ssh_connection_id() != Some(connection_id) {
-                            return false;
-                        }
-                    }
-                    if let Some(ssh_host) = desired_ssh_host {
-                        let workspace_ssh_host = workspace
-                            .metadata
-                            .get("sshHost")
-                            .and_then(|value| value.as_str())
-                            .map(str::trim)
-                            .filter(|value| !value.is_empty());
-                        if workspace_ssh_host != Some(ssh_host) {
-                            return false;
-                        }
-                    }
-                    true
-                })
-                .map(|workspace| workspace.id);
-        }
-
-        workspace_service
-            .get_workspace_by_path(Path::new(workspace_path))
+        let mut resolved = config.clone();
+        crate::agentic::workspace::normalize_session_workspace(&mut resolved)
             .await
-            .map(|workspace| workspace.id)
+            .ok()?;
+        resolved.workspace_id
     }
 
     async fn track_session_workspace_activity_best_effort(
@@ -1358,7 +1294,7 @@ impl ConversationCoordinator {
             ..Default::default()
         };
 
-        if config.remote_connection_id.is_some() {
+        if config.is_remote_workspace() {
             options.workspace_kind = WorkspaceKind::Remote;
             options.remote_connection_id = config.remote_connection_id.clone();
             options.remote_ssh_host = config.remote_ssh_host.clone();
@@ -1387,166 +1323,53 @@ impl ConversationCoordinator {
     pub(crate) async fn build_workspace_binding(
         config: &SessionConfig,
     ) -> Option<WorkspaceBinding> {
-        let workspace_path = config.workspace_path.as_ref()?;
-        let path_buf = PathBuf::from(workspace_path);
-        let workspace_id = Self::resolve_workspace_id_for_config(config).await;
-
-        #[cfg(not(feature = "remote-workspace"))]
+        let mut config = config.clone();
+        if let Err(error) =
+            crate::agentic::workspace::normalize_session_workspace(&mut config).await
         {
-            let has_remote_metadata = config
-                .remote_connection_id
-                .as_deref()
-                .is_some_and(|value| !value.trim().is_empty())
-                || config
-                    .remote_ssh_host
-                    .as_deref()
-                    .is_some_and(|value| !value.trim().is_empty());
-            if has_remote_metadata {
-                let identity =
-                    crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
-                        workspace_path,
-                        config.remote_connection_id.as_deref(),
-                        config.remote_ssh_host.as_deref(),
-                    )
-                    .await?;
-                let connection_id = identity.remote_connection_id.clone()?;
-                let connection_name = config
-                    .remote_ssh_host
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or(&connection_id)
-                    .to_string();
-                return Some(
-                    WorkspaceBinding::new_remote(
-                        workspace_id,
-                        path_buf,
-                        connection_id,
-                        connection_name,
-                        identity,
-                    )
-                    .with_execution_target(config.execution_target.clone()),
-                );
-            }
-
-            let mut binding = WorkspaceBinding::new(workspace_id, path_buf);
-            if let Some(project_workspace_path) = config.project_workspace_path.as_deref() {
-                binding = binding.with_project_root_path(PathBuf::from(project_workspace_path));
-            }
-            binding = binding.with_execution_target(config.execution_target.clone());
-            return Some(binding);
+            warn!("Workspace identity resolution failed: {}", error);
+            return None;
         }
-
-        #[cfg(feature = "remote-workspace")]
-        {
-            let identity =
-                crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
-                    workspace_path,
-                    config.remote_connection_id.as_deref(),
-                    config.remote_ssh_host.as_deref(),
-                )
-                .await?;
-
-            if let Some(rid) = identity.remote_connection_id.as_deref() {
-                // Try to look up the connection by the session's stored ID first.
-                let lookup =
-                crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
-                    workspace_path,
-                    Some(rid),
-                )
-                .await;
-
-                // If the stored connection_id does not resolve to a registered
-                // workspace, attempt a path-only lookup.  This covers the case
-                // where the user changed the SSH port: the old connection_id is
-                // no longer registered, but the same remote path is now bound to
-                // a new connection with the updated port.
-                let (effective_rid, entry) = if lookup.is_some() {
-                    (rid.to_string(), lookup)
-                } else {
-                    let path_entry =
-                        crate::service::remote_ssh::workspace_state::lookup_remote_connection(
-                            workspace_path,
-                        )
-                        .await;
-                    if let Some(ref pe) = path_entry {
-                        log::info!(
-                        "Session connection_id {} not registered for workspace {}; remapping to {}",
-                        rid,
-                        workspace_path,
-                        pe.connection_id
-                    );
-                        (pe.connection_id.clone(), path_entry)
-                    } else {
-                        (rid.to_string(), lookup)
-                    }
-                };
-
-                let connection_name = entry
-                    .map(|e| e.connection_name)
-                    .unwrap_or_else(|| effective_rid.clone());
-
-                // Re-resolve identity with the effective connection_id so the
-                // session storage path is correct.
-                let effective_identity =
-                crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
-                    workspace_path,
-                    Some(&effective_rid),
-                    config.remote_ssh_host.as_deref(),
-                )
-                .await
-                .unwrap_or(identity);
-
-                let binding = WorkspaceBinding::new_remote(
-                    workspace_id.clone(),
-                    path_buf,
-                    effective_rid,
-                    connection_name,
-                    effective_identity,
-                );
-
-                return Some(binding);
-            }
-
-            let mut binding = WorkspaceBinding::new(workspace_id, path_buf);
-            if let Some(project_workspace_path) = config.project_workspace_path.as_deref() {
-                binding = binding.with_project_root_path(PathBuf::from(project_workspace_path));
-            }
-            binding = binding.with_execution_target(config.execution_target.clone());
-
-            Some(binding)
+        let path = PathBuf::from(config.workspace_path.as_ref()?);
+        if config.is_remote_workspace() {
+            let connection_id = config.remote_connection_id.clone()?;
+            let host = config.remote_ssh_host.clone()?;
+            let identity = openbitfun_services_core::workspace_identity::WorkspaceSessionIdentity {
+                workspace_kind: openbitfun_core_types::WorkspaceKind::Remote,
+                hostname: host.clone(),
+                logical_workspace_path: crate::service::remote_ssh::normalize_remote_workspace_path(
+                    &path.to_string_lossy(),
+                ),
+                remote_connection_id: Some(connection_id.clone()),
+            };
+            return Some(WorkspaceBinding::new_remote(
+                config.workspace_id,
+                path,
+                connection_id,
+                host,
+                identity,
+            ));
         }
+        let mut binding = WorkspaceBinding::new(config.workspace_id, path);
+        binding.project_workspace_id = config.project_workspace_id;
+        binding.session_identity.workspace_kind = config.workspace_kind.unwrap_or_default();
+        if let Some(project) = config.project_workspace_path {
+            binding = binding.with_project_root_path(PathBuf::from(project));
+        }
+        Some(binding.with_execution_target(config.execution_target))
     }
 
     async fn build_session_config_for_workspace(
-        workspace_path: String,
+        workspace_id: String,
         model_id: Option<String>,
-    ) -> SessionConfig {
-        let config = SessionConfig {
-            workspace_path: Some(workspace_path),
+    ) -> OpenBitFunResult<SessionConfig> {
+        let mut config = SessionConfig {
+            workspace_id: Some(workspace_id),
             model_id,
-            ..SessionConfig::default()
+            ..Default::default()
         };
-
-        #[cfg(feature = "remote-workspace")]
-        {
-            let mut config = config;
-            let remote_entry =
-                crate::service::remote_ssh::workspace_state::lookup_remote_connection(
-                    config.workspace_path.as_deref().unwrap_or_default(),
-                )
-                .await;
-            if let Some(entry) = remote_entry {
-                config.remote_connection_id = Some(entry.connection_id);
-                if !entry.ssh_host.trim().is_empty() {
-                    config.remote_ssh_host = Some(entry.ssh_host);
-                }
-            }
-            return config;
-        }
-
-        #[cfg(not(feature = "remote-workspace"))]
-        config
+        crate::agentic::workspace::normalize_session_workspace(&mut config).await?;
+        Ok(config)
     }
 
     /// Build `WorkspaceServices` from a resolved `WorkspaceBinding`.
@@ -1623,7 +1446,7 @@ impl ConversationCoordinator {
 
     async fn resolve_primary_agent_for_workspace(
         agent_type: &str,
-        workspace_root: Option<&Path>,
+        workspace_id: Option<&str>,
         external_sources_supported: bool,
         expected_owner: Option<SessionAgentRouteOwner>,
         expected_route_key: Option<&str>,
@@ -1631,10 +1454,10 @@ impl ConversationCoordinator {
         let external_sources_supported =
             cfg!(feature = "external-sources") && external_sources_supported;
         let registry = get_agent_registry();
-        registry.load_custom_agents(workspace_root).await;
+        registry.load_custom_agents(workspace_id).await;
         let local_binding = registry.resolve_primary_agent_for_turn_with_route(
             agent_type,
-            workspace_root,
+            workspace_id,
             false,
             expected_owner,
             expected_route_key,
@@ -1648,11 +1471,11 @@ impl ConversationCoordinator {
 
         #[cfg(feature = "external-sources")]
         if let Err(error) =
-            crate::external_sources::ensure_external_source_workspace_snapshot(workspace_root).await
+            crate::external_sources::ensure_external_source_workspace_snapshot(workspace_id).await
         {
             if let Some(external_binding) = registry.resolve_primary_agent_for_turn_with_route(
                 agent_type,
-                workspace_root,
+                workspace_id,
                 true,
                 expected_owner,
                 expected_route_key,
@@ -1666,7 +1489,7 @@ impl ConversationCoordinator {
                 return Ok(external_binding);
             }
             if expected_owner == Some(SessionAgentRouteOwner::External)
-                || registry.is_external_subagent_route(agent_type, workspace_root)
+                || registry.is_external_subagent_route(agent_type, workspace_id)
             {
                 return Err(OpenBitFunError::Validation(format!(
                     "candidate_unavailable: external main agent {agent_type} could not be refreshed"
@@ -1688,14 +1511,14 @@ impl ConversationCoordinator {
         registry
             .resolve_primary_agent_for_turn_with_route(
                 agent_type,
-                workspace_root,
+                workspace_id,
                 true,
                 expected_owner,
                 expected_route_key,
             )
             .ok_or_else(|| {
                 if expected_owner == Some(SessionAgentRouteOwner::External)
-                    || registry.is_external_subagent_route(agent_type, workspace_root)
+                    || registry.is_external_subagent_route(agent_type, workspace_id)
                 {
                     OpenBitFunError::Validation(format!(
                         "candidate_unavailable: external main agent {agent_type} changed before the turn could start"
@@ -1711,8 +1534,6 @@ impl ConversationCoordinator {
         agent_type: &str,
         workspace: &Option<WorkspaceBinding>,
     ) -> OpenBitFunResult<crate::agentic::agents::ExternalPrimaryAgentTurnBinding> {
-        let workspace_root =
-            crate::agentic::workspace::session_execution_workspace_root(&session.config);
         let external_sources_supported = workspace
             .as_ref()
             .is_some_and(|workspace| !workspace.is_remote());
@@ -1725,7 +1546,7 @@ impl ConversationCoordinator {
             .flatten();
         Self::resolve_primary_agent_for_workspace(
             agent_type,
-            workspace_root,
+            session.config.workspace_id.as_deref(),
             external_sources_supported,
             expected_owner,
             expected_route_key,
@@ -2344,7 +2165,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         &self.hook_registry
     }
 
-    fn ensure_runtime_ownership(
+    pub(crate) fn ensure_runtime_ownership(
         &self,
         workspace_path: &Path,
         remote_connection_id: Option<&str>,
@@ -2391,12 +2212,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         ssh_host: Option<&str>,
     ) -> OpenBitFunResult<()> {
         let known = workspace_service
-            .find_known_remote_workspace_for_path(
+            .resolve_legacy_workspace_reference(
+                None,
                 &workspace_path.to_string_lossy(),
                 Some(connection_id),
                 ssh_host,
             )
-            .await
+            .await?
             .filter(|workspace| {
                 workspace.remote_ssh_connection_id() == Some(connection_id)
                     && ssh_host.is_none_or(|requested_host| {
@@ -2420,68 +2242,126 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.ensure_runtime_ownership(workspace_path, Some(connection_id), ssh_host)
     }
 
-    /// Gates workspace attachment before opening it, then prepares local
-    /// Snapshot ownership without treating remote workspaces as local paths.
-    pub async fn open_workspace_with_runtime_ownership(
+    async fn session_storage_for_reference(
         &self,
-        workspace_service: &WorkspaceService,
-        path: PathBuf,
-        remote_connection_id: Option<&str>,
-        remote_ssh_host: Option<&str>,
-        snapshot_log_context: &str,
-    ) -> OpenBitFunResult<WorkspaceInfo> {
-        let known_remote = workspace_service
-            .resolve_remote_workspace_for_open(
-                &path.to_string_lossy(),
-                remote_connection_id,
-                remote_ssh_host,
-            )
-            .await?;
-        if known_remote.is_none() && !path.exists() {
-            return Err(OpenBitFunError::service(format!(
-                "Workspace path does not exist locally and is not a known remote SSH workspace: {}. Open it once from the desktop SSH remote UI so OpenBitFun can remember the connection, then try again.",
-                path.display()
-            )));
-        }
-        // Caller-provided remote facts only select a known workspace. They are
-        // not authority to bypass the local Runtime ownership lease.
-        let resolved_connection_id = known_remote
-            .as_ref()
-            .and_then(WorkspaceInfo::remote_ssh_connection_id)
-            .map(ToOwned::to_owned);
-        let resolved_ssh_host = known_remote.as_ref().and_then(|workspace| {
-            workspace
-                .metadata
-                .get("sshHost")
-                .and_then(|value| value.as_str())
-                .map(ToOwned::to_owned)
-        });
-        if let Some(connection_id) = resolved_connection_id.as_deref() {
+        workspace_id: Option<&str>,
+        legacy_path: &str,
+        legacy_connection_id: Option<&str>,
+        legacy_ssh_host: Option<&str>,
+    ) -> OpenBitFunResult<PathBuf> {
+        let service = crate::service::workspace::get_global_workspace_service()
+            .ok_or_else(|| OpenBitFunError::service("Workspace service is unavailable"))?;
+        let workspace = match workspace_id {
+            Some(id) => service.require_workspace(id).await?,
+            None => service
+                .resolve_legacy_workspace_reference(
+                    None,
+                    legacy_path,
+                    legacy_connection_id,
+                    legacy_ssh_host,
+                )
+                .await?
+                .ok_or_else(|| {
+                    OpenBitFunError::service("Legacy workspace reference is unavailable")
+                })?,
+        };
+        if workspace.workspace_kind == WorkspaceKind::Remote {
+            let connection = workspace.remote_ssh_connection_id().ok_or_else(|| {
+                OpenBitFunError::service("Remote workspace is missing its saved SSH connection ID")
+            })?;
             self.ensure_verified_remote_workspace_runtime_ownership(
-                &path,
-                connection_id,
-                resolved_ssh_host.as_deref(),
+                &workspace.root_path,
+                connection,
+                workspace
+                    .metadata
+                    .get("sshHost")
+                    .and_then(|host| host.as_str()),
             )?;
         } else {
-            self.ensure_runtime_ownership(&path, None, None)?;
+            self.ensure_runtime_ownership(&workspace.root_path, None, None)?;
         }
-        let info = workspace_service
-            .open_workspace_after_known_resolution(path, known_remote)
-            .await?;
-        if info.workspace_kind != WorkspaceKind::Remote {
+        crate::agentic::session::CoreSessionStorePort::default()
+            .resolve_workspace_storage(&workspace.id)
+            .await
+            .map(|resolution| resolution.effective_storage_path)
+            .map_err(|error| OpenBitFunError::service(error.to_string()))
+    }
+
+    /// Attach a workspace selected by its owning-host ID. Caller paths and SSH
+    /// fields never participate in identity or execution-domain selection.
+    pub async fn select_workspace_with_runtime_ownership(
+        &self,
+        workspace_service: &WorkspaceService,
+        workspace_id: &str,
+    ) -> OpenBitFunResult<WorkspaceInfo> {
+        let workspace = workspace_service.require_workspace(workspace_id).await?;
+        if workspace.workspace_kind == WorkspaceKind::Remote {
+            let connection_id = workspace.remote_ssh_connection_id().ok_or_else(|| {
+                OpenBitFunError::service(
+                    "Remote workspace record is missing its saved SSH connection ID",
+                )
+            })?;
+            let host = workspace
+                .metadata
+                .get("sshHost")
+                .and_then(|value| value.as_str());
+            self.ensure_verified_remote_workspace_runtime_ownership(
+                &workspace.root_path,
+                connection_id,
+                host,
+            )?;
+        } else {
+            self.ensure_runtime_ownership(&workspace.root_path, None, None)?;
+        }
+        let workspace = workspace_service.open_workspace_by_id(workspace_id).await?;
+        if workspace.workspace_kind != WorkspaceKind::Remote {
             if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
-                info.root_path.clone(),
+                &workspace.id,
                 None,
             )
             .await
             {
-                error!(
-                    "Failed to initialize snapshot after {}: {}",
-                    snapshot_log_context, error
-                );
+                error!("Failed to initialize snapshot after workspace selection: {error}");
             }
         }
-        Ok(info)
+        Ok(workspace)
+    }
+
+    /// Register a user-selected local folder, then select its authoritative ID.
+    /// This is a creation boundary; existing-workspace selection accepts only IDs.
+    pub async fn create_local_workspace_with_runtime_ownership(
+        &self,
+        workspace_service: &WorkspaceService,
+        path: PathBuf,
+    ) -> OpenBitFunResult<WorkspaceInfo> {
+        self.ensure_runtime_ownership(&path, None, None)?;
+        let workspace = workspace_service.open_workspace(path).await?;
+        self.select_workspace_with_runtime_ownership(workspace_service, &workspace.id)
+            .await
+    }
+
+    /// Create a remote workspace using a saved connection, then retain its ID.
+    pub async fn create_remote_workspace_with_runtime_ownership(
+        &self,
+        workspace_service: &WorkspaceService,
+        path: &str,
+        connection_id: &str,
+        ssh_host: Option<&str>,
+    ) -> OpenBitFunResult<WorkspaceInfo> {
+        let workspace = workspace_service
+            .prepare_remote_workspace(path, connection_id, ssh_host)
+            .await?;
+        self.ensure_verified_remote_workspace_runtime_ownership(
+            &workspace.root_path,
+            connection_id,
+            workspace
+                .metadata
+                .get("sshHost")
+                .and_then(|host| host.as_str()),
+        )?;
+        workspace_service
+            .open_known_remote_workspace(&workspace)
+            .await
     }
 
     /// Ensures ownership from the loaded session binding, or from a local
@@ -2739,6 +2619,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // Persist the workspace binding inside the session config so execution can
         // consistently restore the correct workspace regardless of the entry point.
         config.workspace_path = Some(workspace_path.clone());
+        crate::agentic::workspace::normalize_session_workspace(&mut config).await?;
         self.ensure_runtime_ownership(
             Path::new(&workspace_path),
             config.remote_connection_id.as_deref(),
@@ -2748,14 +2629,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let agent_type = Self::normalize_agent_type(&agent_type);
         let expected_route_key = config.agent_route_key.clone();
         let workspace_binding = Self::build_workspace_binding(&config).await;
-        let external_workspace_root =
-            crate::agentic::workspace::session_execution_workspace_root(&config);
         let external_sources_supported = workspace_binding
             .as_ref()
             .is_some_and(|workspace| !workspace.is_remote());
         let primary_agent_binding = Self::resolve_primary_agent_for_workspace(
             &agent_type,
-            external_workspace_root,
+            config.workspace_id.as_deref(),
             external_sources_supported,
             None,
             expected_route_key.as_deref(),
@@ -2830,6 +2709,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         is_remote_workspace: bool,
     ) -> NativeHookSessionFacts<'a> {
         NativeHookSessionFacts {
+            workspace_id: session.config.workspace_id.as_deref(),
             session_id: &session.session_id,
             turn_id: None,
             workspace_root,
@@ -2955,6 +2835,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         {
             let memory_mode = new_session_memory_mode_from_global_config().await;
             let metadata = SessionMetadata {
+                workspace_id: None,
+                project_workspace_id: None,
                 session_id: session_id.to_string(),
                 session_name: "Recovered Session".to_string(),
                 agent_type: "Standard".to_string(),
@@ -3897,11 +3779,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .load_custom_agents(
                 workspace
                     .filter(|binding| !binding.is_remote())
-                    .map(|binding| binding.root_path()),
+                    .and_then(|binding| binding.workspace_id.as_deref()),
             )
             .await;
         let current_agent = agent_registry
-            .get_agent(agent_type, workspace.map(|binding| binding.root_path()))
+            .get_agent(
+                agent_type,
+                workspace.and_then(|binding| binding.workspace_id.as_deref()),
+            )
             .ok_or_else(|| {
                 OpenBitFunError::Validation(format!("Unknown agent type: {}", agent_type))
             })?;
@@ -4022,7 +3907,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let is_chinese = Self::is_chinese_locale().await;
         let kickoff_query = Self::assistant_bootstrap_kickoff_query(is_chinese);
         let expected_reply_language = if is_chinese { "Chinese" } else { "English" };
-        let workspace_binding = WorkspaceBinding::new(None, workspace_root.clone());
+        let workspace_binding =
+            WorkspaceBinding::resolve(session.config.workspace_id.as_deref().ok_or_else(|| {
+                OpenBitFunError::service("Assistant bootstrap requires its workspace ID")
+            })?)
+            .await?;
         let (model_id, _) = self
             .execution_engine
             .resolve_model_id_for_turn(
@@ -4174,9 +4063,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     OpenBitFunError::NotFound(format!("Session not found: {session_id}"))
                 })?;
             self.ensure_session_runtime_ownership(&session_id, None)?;
-            if session.config.remote_connection_id.is_some()
-                || session.config.remote_ssh_host.is_some()
-            {
+            if session.config.is_remote_workspace() {
                 return Err(OpenBitFunError::NotImplemented(
                     "External subagent command delegation is unavailable for remote workspaces"
                         .to_string(),
@@ -4252,7 +4139,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .resolve_external_subagent_for_fresh_invocation(
                 &logical_id,
                 &ecosystem_id,
-                Some(Path::new(&execution_workspace_path)),
+                session.config.workspace_id.as_deref(),
             )
             .ok_or_else(|| {
                 OpenBitFunError::Validation(format!(
@@ -4269,7 +4156,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             let permission_runtime_ceiling =
                 crate::agentic::permission_policy::load_parent_permission_runtime_ceiling(
                     Some(&primary_runtime_agent_key),
-                    Some(Path::new(&execution_workspace_path)),
+                    session.config.workspace_id.as_deref(),
                 )
                 .await?;
             if session.agent_type != effective_agent_type
@@ -7001,11 +6888,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .to_string(),
             ));
         }
-        if request.remote_connection_id.is_some()
-            || request.remote_ssh_host.is_some()
-            || session.config.remote_connection_id.is_some()
-            || session.config.remote_ssh_host.is_some()
-        {
+        if session.config.is_remote_workspace() {
             return Err(OpenBitFunError::Validation(
                 "Interrupted turn recovery is unavailable for remote workspaces".to_string(),
             ));
@@ -7714,9 +7597,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         .to_string(),
                 ));
             }
-            if session.config.remote_connection_id.is_some()
-                || session.config.remote_ssh_host.is_some()
-            {
+            if session.config.is_remote_workspace() {
                 return Err(OpenBitFunError::Validation(
                     "Recoverable interruption is not available for remote workspaces".to_string(),
                 ));
@@ -8097,12 +7978,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Some(session) => Some((
                 Self::session_hooks_are_remote(&session).await,
                 session.config.model_id.clone().unwrap_or_default(),
+                session.config.workspace_id.clone(),
             )),
             None => None,
         };
-        if let Some((is_remote_workspace, model)) = session_hook_facts {
+        if let Some((is_remote_workspace, model, workspace_id)) = session_hook_facts {
             native_hooks::dispatch_session_end(
                 NativeHookSessionFacts {
+                    workspace_id: workspace_id.as_deref(),
                     session_id,
                     turn_id: None,
                     workspace_root: Some(workspace_path),
@@ -8252,28 +8135,32 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.reconcile_restored_session(session_id, session).await
     }
 
-    pub(crate) fn local_revert_workspace(&self, session_id: &str) -> OpenBitFunResult<PathBuf> {
+    pub(crate) async fn local_revert_workspace(
+        &self,
+        session_id: &str,
+    ) -> OpenBitFunResult<crate::service::workspace::WorkspaceInfo> {
         let session = self
             .session_manager
             .get_session(session_id)
             .ok_or_else(|| OpenBitFunError::NotFound(format!("Session not found: {session_id}")))?;
-        if session.config.remote_connection_id.is_some() || session.config.remote_ssh_host.is_some()
-        {
+        let id = session.config.workspace_id.as_deref().ok_or_else(|| {
+            OpenBitFunError::Validation(format!("Session workspace ID is missing: {session_id}"))
+        })?;
+        let service = crate::service::workspace::get_global_workspace_service()
+            .ok_or_else(|| OpenBitFunError::service("Workspace service is unavailable"))?;
+        let workspace = service.require_workspace(id).await?;
+        if workspace.workspace_kind == WorkspaceKind::Remote {
             return Err(OpenBitFunError::Validation(
-                "Session undo and redo are unavailable for remote workspaces".to_string(),
+                "Session undo and redo are unavailable for remote workspaces".into(),
             ));
         }
-        let workspace_path = session.config.workspace_path.as_deref().ok_or_else(|| {
-            OpenBitFunError::Validation(format!("Session workspace_path is missing: {session_id}"))
-        })?;
-        let workspace_path = PathBuf::from(workspace_path);
-        if !workspace_path.is_dir() {
+        if !workspace.root_path.is_dir() {
             return Err(OpenBitFunError::Validation(format!(
                 "Session workspace directory does not exist: {}",
-                workspace_path.display()
+                workspace.root_path.display()
             )));
         }
-        Ok(workspace_path)
+        Ok(workspace)
     }
 
     pub(crate) async fn apply_session_revert_locked(
@@ -8282,9 +8169,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         undo: bool,
     ) -> OpenBitFunResult<(AgentSessionComposerUpdate, bool, usize)> {
-        let workspace_path = self.local_revert_workspace(session_id)?;
+        let workspace = self.local_revert_workspace(session_id).await?;
         let snapshot_manager =
-            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+            crate::service::snapshot::get_or_create_snapshot_manager(&workspace.id, None)
                 .await
                 .map_err(|error| OpenBitFunError::service(error.to_string()))?;
         let persistence = self.session_manager.persistence_manager();
@@ -8428,7 +8315,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Vec<String>,
         Vec<String>,
     )> {
-        let workspace_path = self.local_revert_workspace(session_id)?;
+        let workspace = self.local_revert_workspace(session_id).await?;
         let persistence = self.session_manager.persistence_manager();
         let current = persistence
             .load_session_revert_state(session_storage_path, session_id)
@@ -8500,7 +8387,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             unreachable!("targeted rollback always stages a boundary")
         };
         let snapshot_manager =
-            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+            crate::service::snapshot::get_or_create_snapshot_manager(&workspace.id, None)
                 .await
                 .map_err(|error| OpenBitFunError::service(error.to_string()))?;
 
@@ -8725,9 +8612,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         state: crate::agentic::session::revert::SessionRevertState,
     ) -> OpenBitFunResult<()> {
         let persistence = self.session_manager.persistence_manager();
-        let workspace_path = self.local_revert_workspace(session_id)?;
+        let workspace = self.local_revert_workspace(session_id).await?;
         let snapshot_manager =
-            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+            crate::service::snapshot::get_or_create_snapshot_manager(&workspace.id, None)
                 .await
                 .map_err(|error| OpenBitFunError::service(error.to_string()))?;
         snapshot_manager
@@ -8803,9 +8690,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             };
             state = reconciled;
         }
-        let workspace_path = self.local_revert_workspace(session_id)?;
+        let workspace = self.local_revert_workspace(session_id).await?;
+        let workspace_path = workspace.root_path.clone();
         let snapshot_manager =
-            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+            crate::service::snapshot::get_or_create_snapshot_manager(&workspace.id, None)
                 .await
                 .map_err(|error| OpenBitFunError::service(error.to_string()))?;
         if state.phase == SessionRevertPhase::Staged {
@@ -10093,7 +9981,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .as_ref()
             .is_some_and(|workspace| workspace.is_remote());
         let subagent_hook_model = session.config.model_id.clone().unwrap_or_default();
+        let subagent_hook_workspace_id = subagent_workspace
+            .as_ref()
+            .and_then(|workspace| workspace.workspace_id.clone());
         let subagent_hook_facts = NativeHookSessionFacts {
+            workspace_id: subagent_hook_workspace_id.as_deref(),
             session_id: &session_id,
             turn_id: Some(&dialog_turn_id),
             workspace_root: subagent_hook_workspace_root.as_deref(),
@@ -11220,7 +11112,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         explicit_model_id: Option<&str>,
         inherit_parent_model: bool,
         agent_type: &str,
-        workspace_path: &str,
         parent_session_id: &str,
     ) -> OpenBitFunResult<String> {
         let defaults = Self::agent_model_defaults().await;
@@ -11230,9 +11121,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await;
         }
+        let parent_session = self
+            .session_manager
+            .get_session(parent_session_id)
+            .ok_or_else(|| {
+                OpenBitFunError::NotFound(format!("Session not found: {parent_session_id}"))
+            })?;
         let registry = get_agent_registry();
         let configured_selection = registry
-            .get_explicit_subagent_model_selection(agent_type, Some(Path::new(workspace_path)))
+            .get_explicit_subagent_model_selection(
+                agent_type,
+                parent_session.config.workspace_id.as_deref(),
+            )
             .unwrap_or_else(|| defaults.builtin_subagent_selection(agent_type));
         let parent_model_id = if explicit_model_id.is_none()
             && matches!(&configured_selection, SubagentModelSelection::Inherit)
@@ -11456,7 +11356,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             model_id.as_deref(),
                             inherit_parent_model,
                             &agent_type,
-                            &workspace_path,
                             &request.subagent_parent_info.session_id,
                         )
                         .await?,
@@ -11467,11 +11366,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     request.logical_subagent_type.as_deref(),
                     &agent_type,
                 );
-                let mut session_config = Self::build_session_config_for_workspace(
-                    workspace_path,
-                    Some(resolved_model_id),
-                )
-                .await;
+                let workspace_id = parent_session.config.workspace_id.clone().ok_or_else(|| {
+                    OpenBitFunError::service("Parent session workspace ID is unavailable")
+                })?;
+                let mut session_config =
+                    Self::build_session_config_for_workspace(workspace_id, Some(resolved_model_id))
+                        .await?;
                 inherit_matching_parent_workspace_binding(
                     &parent_session.config,
                     &mut session_config,
@@ -12016,6 +11916,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if let Some(workspace_path) = workspace_path.as_deref() {
             native_hooks::dispatch_session_end(
                 NativeHookSessionFacts {
+                    workspace_id: session.config.workspace_id.as_deref(),
                     session_id,
                     turn_id: None,
                     workspace_root: Some(workspace_path),
@@ -12202,10 +12103,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             agent_type: request.agent_type,
             logical_agent_type,
             session_config: Self::build_session_config_for_workspace(
-                request.workspace_path,
+                request.workspace_id,
                 request.model_id,
             )
-            .await,
+            .await?,
             initial_messages: vec![Message::user(task_description.clone())],
             user_input_text: task_description,
             created_by: request.created_by,
@@ -12603,19 +12504,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         // Clean up snapshot system resources
         let session = self.session_manager.get_session(session_id);
-        if let Some(workspace_path) = session
+        if let Some(workspace_id) = session
             .as_ref()
-            .and_then(|session| session.config.workspace_path.as_deref())
-            .map(std::path::PathBuf::from)
+            .and_then(|session| session.config.workspace_id.as_deref())
         {
             debug!(
-                "Subagent cleanup stage starting: session_id={}, stage=snapshot_cleanup, workspace_path={}",
+                "Subagent cleanup stage starting: session_id={}, stage=snapshot_cleanup, workspace_id={}",
                 session_id,
-                workspace_path.display()
+                workspace_id
             );
             let stage_started_at = Instant::now();
             if let Ok(snapshot_manager) =
-                crate::service::snapshot::ensure_snapshot_manager_for_workspace(&workspace_path)
+                crate::service::snapshot::ensure_snapshot_manager_for_workspace(workspace_id)
             {
                 let snapshot_service = snapshot_manager.get_snapshot_service();
                 let snapshot_service = snapshot_service.read().await;
@@ -12795,14 +12695,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .get_session(session_id)
             .ok_or_else(|| OpenBitFunError::NotFound(format!("Session not found: {session_id}")))?;
         let workspace = Self::build_workspace_binding(&session.config).await;
-        let workspace_root =
-            crate::agentic::workspace::session_execution_workspace_root(&session.config);
         let external_sources_supported = workspace
             .as_ref()
             .is_some_and(|workspace| !workspace.is_remote());
         let binding = Self::resolve_primary_agent_for_workspace(
             mode_id,
-            workspace_root,
+            session.config.workspace_id.as_deref(),
             external_sources_supported,
             None,
             expected_route_key,
@@ -13343,6 +13241,8 @@ fn runtime_session_summary(
 
 fn runtime_session_workspace_binding(binding: WorkspaceBinding) -> AgentSessionWorkspaceBinding {
     AgentSessionWorkspaceBinding {
+        workspace_kind: Some(binding.session_identity.workspace_kind.clone()),
+        project_workspace_id: binding.project_workspace_id.clone(),
         workspace_id: binding.workspace_id.clone(),
         workspace_path: binding.root_path_string(),
         project_workspace_path: Some(binding.project_root_path_string()),
@@ -13423,18 +13323,20 @@ impl openbitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordi
         request: openbitfun_runtime_ports::AgentSessionListRequest,
     ) -> openbitfun_runtime_ports::PortResult<Vec<openbitfun_runtime_ports::AgentSessionSummary>>
     {
-        let effective_storage_path = Self::resolve_session_restore_path(
-            &request.workspace_path,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )
-        .await
-        .map_err(|error| {
-            openbitfun_runtime_ports::PortError::new(
-                openbitfun_runtime_ports::PortErrorKind::Backend,
-                error.to_string(),
+        let effective_storage_path = self
+            .session_storage_for_reference(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
             )
-        })?;
+            .await
+            .map_err(|error| {
+                openbitfun_runtime_ports::PortError::new(
+                    openbitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })?;
 
         self.list_sessions(&effective_storage_path)
             .await
@@ -13462,24 +13364,20 @@ impl openbitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordi
                 message,
             )
         })?;
-        self.ensure_runtime_ownership(
-            Path::new(&request.workspace_path),
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )
-        .map_err(runtime_port_error_preserving_message)?;
-        let effective_storage_path = Self::resolve_session_restore_path(
-            &request.workspace_path,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )
-        .await
-        .map_err(|error| {
-            openbitfun_runtime_ports::PortError::new(
-                openbitfun_runtime_ports::PortErrorKind::Backend,
-                error.to_string(),
+        let effective_storage_path = self
+            .session_storage_for_reference(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
             )
-        })?;
+            .await
+            .map_err(|error| {
+                openbitfun_runtime_ports::PortError::new(
+                    openbitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })?;
 
         self.delete_session(&effective_storage_path, &request.session_id)
             .await
@@ -13501,19 +13399,15 @@ impl openbitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordi
                 message,
             )
         })?;
-        self.ensure_runtime_ownership(
-            Path::new(&request.workspace_path),
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )
-        .map_err(runtime_port_error_preserving_message)?;
-        let effective_storage_path = Self::resolve_session_restore_path(
-            &request.workspace_path,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )
-        .await
-        .map_err(runtime_port_error_preserving_message)?;
+        let effective_storage_path = self
+            .session_storage_for_reference(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
 
         let session_manager = self.get_session_manager();
         if !session_manager
@@ -13537,6 +13431,7 @@ impl openbitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordi
         openbitfun_runtime_ports::AgentSessionManagementPort::set_session_archived(
             self,
             openbitfun_runtime_ports::AgentSessionArchiveStateRequest {
+                workspace_id: request.workspace_id,
                 workspace_path: request.workspace_path,
                 session_id: request.session_id,
                 archived: true,
@@ -13557,19 +13452,15 @@ impl openbitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordi
                 message,
             )
         })?;
-        self.ensure_runtime_ownership(
-            Path::new(&request.workspace_path),
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )
-        .map_err(runtime_port_error_preserving_message)?;
-        let effective_storage_path = Self::resolve_session_restore_path(
-            &request.workspace_path,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )
-        .await
-        .map_err(runtime_port_error_preserving_message)?;
+        let effective_storage_path = self
+            .session_storage_for_reference(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
 
         let session_manager = self.get_session_manager();
         let _mutation = session_manager
@@ -13879,16 +13770,20 @@ impl openbitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoor
                 message,
             )
         })?;
-        let storage_request = SessionStoragePathRequest {
-            workspace_path: PathBuf::from(request.workspace_path),
-            remote_connection_id: request.remote_connection_id,
-            remote_ssh_host: request.remote_ssh_host,
-        };
+        let storage_path = self
+            .session_storage_for_reference(
+                request.workspace_id.as_deref(),
+                &request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
         let session = if request.include_internal {
-            self.restore_internal_session_for_workspace(storage_request, &request.session_id)
+            self.restore_internal_session_from_storage_path(&storage_path, &request.session_id)
                 .await
         } else {
-            self.restore_session_for_workspace(storage_request, &request.session_id)
+            self.restore_session_from_storage_path(&storage_path, &request.session_id)
                 .await
         }
         .map_err(runtime_port_error_preserving_message)?;
@@ -15215,6 +15110,12 @@ mod tests {
 
     #[tokio::test]
     async fn remote_workspace_services_unavailable_is_an_error() {
+        crate::service::workspace::legacy_compat::register_remote_fixture(
+            "/srv/remote-project",
+            "ssh-user@example.test:22",
+            "example.test",
+        )
+        .await;
         let binding = ConversationCoordinator::build_workspace_binding(&SessionConfig {
             workspace_path: Some("/srv/remote-project".to_string()),
             remote_connection_id: Some("ssh-user@example.test:22".to_string()),
@@ -17395,12 +17296,15 @@ mod tests {
         let session_id = format!("restore-revert-{}", uuid::Uuid::new_v4());
         let storage_path =
             create_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id).await;
-        let snapshot_manager = crate::service::snapshot::get_or_create_snapshot_manager(
-            workspace.path().to_path_buf(),
+        let record = crate::service::workspace::legacy_compat::register_local_fixture(
+            workspace.path(),
             None,
         )
-        .await
-        .expect("snapshot manager");
+        .await;
+        let snapshot_manager =
+            crate::service::snapshot::get_or_create_snapshot_manager(&record.id, None)
+                .await
+                .expect("snapshot manager");
         let operation_id = snapshot_manager
             .record_file_change(
                 &session_id,
@@ -17795,11 +17699,11 @@ mod tests {
     fn workspace_open_owner_gates_before_open_and_guards_snapshot_by_kind() {
         let source = include_str!("coordinator.rs");
         let helper = source
-            .split("pub async fn open_workspace_with_runtime_ownership")
+            .split("pub async fn select_workspace_with_runtime_ownership")
             .nth(1)
             .and_then(|source| {
                 source
-                    .split("pub fn ensure_session_runtime_ownership")
+                    .split("pub async fn create_local_workspace_with_runtime_ownership")
                     .next()
             })
             .expect("workspace open owner");
@@ -17807,14 +17711,14 @@ mod tests {
             .find("ensure_runtime_ownership")
             .expect("workspace ownership gate");
         let workspace_open = helper
-            .find("open_workspace_after_known_resolution")
+            .find("open_workspace_by_id")
             .expect("workspace open call");
         assert!(ownership_gate < workspace_open);
         assert!(helper.contains("WorkspaceKind::Remote"));
         assert!(helper.contains("initialize_snapshot_manager_for_workspace"));
 
         let bot_router = include_str!("../../service/remote_connect/bot/command_router.rs");
-        assert!(bot_router.contains("open_workspace_with_runtime_ownership"));
+        assert!(bot_router.contains("select_workspace_with_runtime_ownership"));
         assert!(!bot_router.contains("initialize_snapshot_manager_for_workspace"));
     }
 
@@ -17853,7 +17757,7 @@ mod tests {
         let (coordinator, _) = test_coordinator_with_config_and_ownership(100, false, owner);
 
         let opened = coordinator
-            .open_workspace_with_runtime_ownership(
+            .upgrade_legacy_workspace_with_runtime_ownership(
                 &workspace_service,
                 remote_path,
                 None,
@@ -18008,7 +17912,7 @@ mod tests {
                 .await;
 
         let error = coordinator
-            .open_workspace_with_runtime_ownership(
+            .upgrade_legacy_workspace_with_runtime_ownership(
                 &workspace_service,
                 workspace.path().to_path_buf(),
                 Some("bogus-connection"),
@@ -18086,6 +17990,7 @@ mod tests {
             openbitfun_runtime_ports::AgentSessionManagementPort::set_session_archived(
                 &coordinator,
                 openbitfun_runtime_ports::AgentSessionArchiveStateRequest {
+                    workspace_id: None,
                     workspace_path,
                     session_id: "missing-session".to_string(),
                     archived: true,
@@ -19213,6 +19118,7 @@ mod tests {
         AgentSessionManagementPort::rename_session(
             &coordinator,
             AgentSessionRenameRequest {
+                workspace_id: None,
                 workspace_path: workspace.clone(),
                 session_id: created.session_id.clone(),
                 session_name: "Renamed".to_string(),
@@ -19242,6 +19148,7 @@ mod tests {
         AgentSessionManagementPort::archive_session(
             &coordinator,
             AgentSessionArchiveRequest {
+                workspace_id: None,
                 workspace_path: workspace.clone(),
                 session_id: created.session_id.clone(),
                 remote_connection_id: None,
@@ -19261,6 +19168,7 @@ mod tests {
         AgentSessionManagementPort::set_session_archived(
             &coordinator,
             openbitfun_runtime_ports::AgentSessionArchiveStateRequest {
+                workspace_id: None,
                 workspace_path: workspace.clone(),
                 session_id: created.session_id.clone(),
                 archived: false,
@@ -19445,6 +19353,12 @@ mod tests {
         let mut storage_paths = Vec::new();
 
         for (index, (connection_id, ssh_host, objective)) in remote_identities.iter().enumerate() {
+            crate::service::workspace::legacy_compat::register_remote_fixture(
+                logical_workspace_path,
+                connection_id,
+                ssh_host,
+            )
+            .await;
             let storage_path = ConversationCoordinator::resolve_session_restore_path(
                 logical_workspace_path,
                 Some(connection_id),
@@ -19614,6 +19528,12 @@ mod tests {
         let logical_workspace_path = format!("/workspace/remote-goal-{fixture_id}");
         let remote_connection_id = format!("connection-{fixture_id}");
         let remote_ssh_host = format!("host-{fixture_id}");
+        crate::service::workspace::legacy_compat::register_remote_fixture(
+            &logical_workspace_path,
+            &remote_connection_id,
+            &remote_ssh_host,
+        )
+        .await;
 
         coordinator
             .ensure_verified_remote_workspace_runtime_ownership(
@@ -19930,24 +19850,18 @@ mod tests {
     #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn subagent_session_config_preserves_registered_remote_workspace_identity() {
-        let manager = init_remote_workspace_manager();
-        manager
-            .register_remote_workspace(
-                "/remote/subagent-test".to_string(),
-                "conn-subagent-test".to_string(),
-                "Remote Test".to_string(),
-                "remote-host".to_string(),
-            )
-            .await;
-        manager
-            .set_active_connection_hint(Some("conn-subagent-test".to_string()))
-            .await;
-
-        let config = ConversationCoordinator::build_session_config_for_workspace(
-            "/remote/subagent-test/project".to_string(),
-            Some("model-fast".to_string()),
+        let workspace = crate::service::workspace::legacy_compat::register_remote_fixture(
+            "/remote/subagent-test/project",
+            "conn-subagent-test",
+            "remote-host",
         )
         .await;
+        let config = ConversationCoordinator::build_session_config_for_workspace(
+            workspace.id,
+            Some("model-fast".to_string()),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
             config.workspace_path.as_deref(),
@@ -19990,15 +19904,7 @@ mod tests {
             .expect("parent session should be created");
 
         let model_id = coordinator
-            .resolve_fresh_subagent_model_id(
-                None,
-                true,
-                "Explore",
-                workspace_path
-                    .to_str()
-                    .expect("workspace path should be UTF-8"),
-                &parent_session.session_id,
-            )
+            .resolve_fresh_subagent_model_id(None, true, "Explore", &parent_session.session_id)
             .await
             .expect("fresh subagent request should inherit the parent model");
 
@@ -20079,6 +19985,14 @@ mod tests {
         std::fs::create_dir_all(&worktree_path).expect("worktree dir should exist");
         let project_workspace_path = project_path.to_string_lossy().into_owned();
         let workspace_path = worktree_path.to_string_lossy().into_owned();
+        let project_record =
+            crate::service::workspace::legacy_compat::register_local_fixture(&project_path, None)
+                .await;
+        let workspace_record = crate::service::workspace::legacy_compat::register_local_fixture(
+            &worktree_path,
+            Some(&project_path),
+        )
+        .await;
         let execution_target = SessionExecutionTarget {
             kind: SessionExecutionTargetKind::ManagedWorktree,
             worktree_id: Some("worktree-1".to_string()),
@@ -20097,7 +20011,8 @@ mod tests {
                     workspace_path: Some(workspace_path.clone()),
                     project_workspace_path: Some(project_workspace_path.clone()),
                     execution_target: Some(execution_target.clone()),
-                    workspace_id: Some("workspace-1".to_string()),
+                    workspace_id: Some(workspace_record.id.clone()),
+                    project_workspace_id: Some(project_record.id.clone()),
                     prompt_cache_lineage_id: Some("parent-lineage".to_string()),
                     ..Default::default()
                 },
@@ -20145,7 +20060,7 @@ mod tests {
         );
         assert_eq!(
             resolved.session_config.workspace_id.as_deref(),
-            Some("workspace-1")
+            Some(workspace_record.id.as_str())
         );
         assert!(resolved.session_config.prompt_cache_lineage_id.is_none());
     }
@@ -20166,6 +20081,9 @@ mod tests {
         }
         let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
         let workspace = workspace_path.to_string_lossy().into_owned();
+        let workspace_record =
+            crate::service::workspace::legacy_compat::register_local_fixture(&workspace_path, None)
+                .await;
         let parent_session = session_manager
             .create_transient_session_with_id_and_details(
                 None,
@@ -20174,6 +20092,7 @@ mod tests {
                 SessionConfig {
                     model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace.clone()),
+                    workspace_id: Some(workspace_record.id.clone()),
                     ..Default::default()
                 },
                 None,

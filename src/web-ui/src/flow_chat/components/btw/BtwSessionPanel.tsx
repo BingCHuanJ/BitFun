@@ -59,7 +59,6 @@ import {
 } from '../../store/deepReviewActionBarStore';
 import {loadPersistedReviewState} from '../../services/ReviewActionBarPersistenceService';
 import type {ReviewActionPersistedState} from '@/shared/types/session-history';
-import {sessionProjectWorkspacePath} from '../../utils/sessionWorkspace';
 import {
   collectModifiedFilePathsFromTurns,
   hasOpaqueWorkspaceMutationRisk,
@@ -268,20 +267,8 @@ const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPa
   const loadChildHistory = useCallback(async () => {
     if (!childSessionId || !childSession) return;
 
-    const path = workspacePath ?? childSession.workspacePath ?? parentMetadata?.workspacePath;
-    if (!path) return;
-
-    await loadBtwSessionHistory({
-      childSessionId,
-      ...(!childSession.workspacePath
-        ? {
-            workspacePath: path,
-            remoteConnectionId: childSession.remoteConnectionId || parentMetadata?.remoteConnectionId,
-            remoteSshHost: childSession.remoteSshHost || parentMetadata?.remoteSshHost,
-          }
-        : {}),
-    });
-  }, [childSessionId, childSession, parentMetadata, workspacePath]);
+    await loadBtwSessionHistory({ childSessionId, parentSessionId });
+  }, [childSessionId, childSession, parentSessionId]);
 
   useEffect(() => {
     if (!childSession?.isHistorical || childSession.historyState !== 'metadata-only') return;
@@ -771,17 +758,17 @@ const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPa
     t,
   ]);
 
-  const persistedReviewWorkspacePath = childSession
-    ? sessionProjectWorkspacePath(childSession)
+  const persistedReviewWorkspaceId = childSession
+    ? childSession.workspaceId || childSession.config.workspaceId
     : undefined;
   const persistedReviewRemoteConnectionId = childSession?.remoteConnectionId;
   const persistedReviewRemoteSshHost = childSession?.remoteSshHost;
 
   // Restore persisted review action state once for each stable session location.
   useEffect(() => {
-    if (!isReviewSession || !childSessionId || !persistedReviewWorkspacePath) return;
+    if (!isReviewSession || !childSessionId || !persistedReviewWorkspaceId) return;
     const locationKey = JSON.stringify([
-      childSessionId, persistedReviewWorkspacePath,
+      childSessionId, persistedReviewWorkspaceId,
       persistedReviewRemoteConnectionId, persistedReviewRemoteSshHost,
     ]);
     if (viewState.restoredReviewLocation === locationKey) return;
@@ -801,14 +788,12 @@ const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPa
 
     loadPersistedReviewState(
       childSessionId,
-      persistedReviewWorkspacePath,
-      persistedReviewRemoteConnectionId,
-      persistedReviewRemoteSshHost,
+      persistedReviewWorkspaceId,
     ).then((persisted: ReviewActionPersistedState | null) => {
       const latestChildSession = childSessionRef.current;
       if (cancelled || !latestChildSession) return;
       if (
-        sessionProjectWorkspacePath(latestChildSession) !== persistedReviewWorkspacePath
+        (latestChildSession.workspaceId || latestChildSession.config.workspaceId) !== persistedReviewWorkspaceId
         || latestChildSession.remoteConnectionId !== persistedReviewRemoteConnectionId
         || latestChildSession.remoteSshHost !== persistedReviewRemoteSshHost
       ) return;
@@ -924,7 +909,7 @@ const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPa
     parentSessionId,
     isReviewSession,
     isDeepReview,
-    persistedReviewWorkspacePath,
+    persistedReviewWorkspaceId,
     persistedReviewRemoteConnectionId,
     persistedReviewRemoteSshHost,
     viewState,

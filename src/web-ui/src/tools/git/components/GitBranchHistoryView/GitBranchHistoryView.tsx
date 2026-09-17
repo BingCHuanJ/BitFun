@@ -1,3 +1,4 @@
+import type { GitWorkspaceScope } from '@/infrastructure/api/service-api/GitAPI';
 /**
  * Git branch commit history view.
  * Shows a branch's commits and supports cherry-pick when applicable.
@@ -20,7 +21,7 @@ const log = createLogger('GitBranchHistoryView');
 
 export interface GitBranchHistoryViewProps {
   /** Repository path */
-  repositoryPath: string;
+  repositoryPath: GitWorkspaceScope;
   /** Branch name */
   branchName: string;
   /** Current branch name (used to determine if cherry-pick is allowed) */
@@ -79,13 +80,14 @@ function convertToCommitInfo(node: GitGraphNode): CommitInfo {
 }
 
 export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
-  repositoryPath,
+  repositoryPath: workspaceReference,
   branchName,
   currentBranch,
   maxCount = 100,
   className = '',
   onCherryPickSuccess
 }) => {
+  const repositoryPath = React.useMemo(() => workspaceReference, [workspaceReference.workspaceId]);
   const { t } = useTranslation('panels/git');
   const { t: tComponents } = useI18n('components');
   const [commits, setCommits] = useState<CommitInfo[]>([]);

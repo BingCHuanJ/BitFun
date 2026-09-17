@@ -42,11 +42,13 @@ const FILE_LIST_WIDTH_MAX = 560;
 
 interface WorkingCopyViewProps {
   workspacePath?: string;
+  workspaceId?: string;
   isActive?: boolean;
 }
 
 const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
   workspacePath,
+  workspaceId,
   isActive = true,
 }) => {
   const { t } = useTranslation('panels/git');
@@ -70,7 +72,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
     behind,
     refresh,
   } = useGitState({
-    repositoryPath: workspacePath ?? '',
+    repositoryPath: { workspaceId: workspaceId ?? '', repositoryPath: workspacePath },
     isActive,
     refreshOnMount: true,
     layers: ['basic', 'status'],
@@ -85,7 +87,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
   );
 
   const { isOperating, addFiles, commit, push, pull, resetFiles } = useGitOperations({
-    repositoryPath: workspacePath ?? '',
+    repositoryPath: { workspaceId: workspaceId ?? '', repositoryPath: workspacePath },
     autoRefresh: false,
   });
   const { commitMessage: aiCommitMessage, isGeneratingCommit, quickGenerateCommit, cancelCommitGeneration } = useGitAgent({
@@ -189,8 +191,8 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
           await workspaceAPI.deleteFile(full);
         } else {
           const unstage = fileType === 'staged';
-          if (unstage) await gitService.resetFiles(workspacePath, [filePath], true);
-          await gitService.resetFiles(workspacePath, [filePath], false);
+          if (unstage) await gitService.resetFiles({ workspaceId: workspaceId ?? '', repositoryPath: workspacePath }, [filePath], true);
+          await gitService.resetFiles({ workspaceId: workspaceId ?? '', repositoryPath: workspacePath }, [filePath], false);
         }
         await handleRefresh();
         notification.success(t('notifications.fileRestored'));
@@ -230,7 +232,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
           }
           let originalContent = '';
           try {
-            originalContent = await gitService.getFileContent(workspacePath, filePath, 'HEAD');
+            originalContent = await gitService.getFileContent({ workspaceId: workspaceId ?? '', repositoryPath: workspacePath }, filePath, 'HEAD');
           } catch (_) {}
           createGitDiffEditorTab(filePath, fileName, originalContent, modifiedContent, workspacePath, false);
         } catch (err) {

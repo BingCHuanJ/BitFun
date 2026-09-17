@@ -42,6 +42,7 @@ interface DispatchInstallDialogProps {
   open: boolean;
   target: DispatchTargetOption | null;
   sourceWorkspacePath?: string;
+  sourceWorkspaceId?: string;
   onClose: () => void;
   onReady: (selection: DispatchSelection) => void;
 }
@@ -50,6 +51,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   open,
   target,
   sourceWorkspacePath,
+  sourceWorkspaceId,
   onClose,
   onReady,
 }) => {
@@ -345,7 +347,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     setValidatingBaseRef(true);
     setBaseRefError(null);
     try {
-      await gitAPI.resolveRevision(normalizedSourcePath, normalizedBaseRef);
+      await gitAPI.resolveRevision({ workspaceId: sourceWorkspaceId ?? '', repositoryPath: normalizedSourcePath }, normalizedBaseRef);
     } catch (nextError) {
       if (generation === generationRef.current) {
         log.warn('Failed to resolve dispatch base revision', {

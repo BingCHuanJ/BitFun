@@ -205,18 +205,18 @@ final class MobileCoreAdapter {
         deviceDirectory.dispatch(intent: DeviceDirectoryIntentRetry(deviceId: deviceID))
     }
 
-    func setDirectoryWorkspaceExpanded(_ deviceID: String, path: String, expanded: Bool, connectionId: String? = nil, sshHost: String? = nil) {
+    func setDirectoryWorkspaceExpanded(_ deviceID: String, path: String, expanded: Bool, connectionId: String? = nil, sshHost: String? = nil, workspaceId: String? = nil) {
         deviceDirectory.dispatch(intent: DeviceDirectoryIntentSetWorkspaceExpanded(
             deviceId: deviceID,
             path: path,
-            expanded: expanded, remoteConnectionId: connectionId, remoteSshHost: sshHost
+            expanded: expanded, remoteConnectionId: connectionId, remoteSshHost: sshHost, workspaceId: workspaceId
         ))
     }
 
-    func retryDirectoryWorkspace(_ deviceID: String, path: String, connectionId: String? = nil, sshHost: String? = nil) {
+    func retryDirectoryWorkspace(_ deviceID: String, path: String, connectionId: String? = nil, sshHost: String? = nil, workspaceId: String? = nil) {
         deviceDirectory.dispatch(intent: DeviceDirectoryIntentRetryWorkspace(
             deviceId: deviceID,
-            path: path, remoteConnectionId: connectionId, remoteSshHost: sshHost
+            path: path, remoteConnectionId: connectionId, remoteSshHost: sshHost, workspaceId: workspaceId
         ))
     }
 
@@ -439,8 +439,8 @@ final class MobileCoreAdapter {
     func writeRuntimeTerminal(_ data: String) { remoteWorkspace?.dispatch(intent: RemoteWorkspaceIntentWriteTerminal(data: data)) }
     func closeRuntimeTerminal() { remoteWorkspace?.dispatch(intent: RemoteWorkspaceIntentCloseTerminal.shared) }
 
-    func selectRemoteWorkspace(path: String, remoteConnectionId: String? = nil, remoteSshHost: String? = nil) {
-        remoteWorkspace?.dispatch(intent: RemoteWorkspaceIntentSelectWorkspace(path: path, remoteConnectionId: remoteConnectionId, remoteSshHost: remoteSshHost))
+    func selectRemoteWorkspace(path: String, remoteConnectionId: String? = nil, remoteSshHost: String? = nil, workspaceId: String? = nil) {
+        remoteWorkspace?.dispatch(intent: RemoteWorkspaceIntentSelectWorkspace(path: path, remoteConnectionId: remoteConnectionId, remoteSshHost: remoteSshHost, inferSavedIdentity: workspaceId == nil, workspaceId: workspaceId))
     }
 
     func selectRemoteAssistant(path: String) {

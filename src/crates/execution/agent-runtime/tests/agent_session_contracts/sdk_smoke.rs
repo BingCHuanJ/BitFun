@@ -95,7 +95,7 @@ fn sdk_facade_exposes_versioned_preview_compatibility_contract() {
 
 impl RuntimeAgentRegistry for FakeSdkAgentRegistry {
     fn agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String> {
-        if query.workspace_root.is_some() {
+        if query.workspace_id.is_some() {
             self.workspace_agent_ids.clone()
         } else {
             self.agent_ids.clone()
@@ -347,6 +347,7 @@ async fn sdk_facade_delegates_mode_catalog_queries_to_the_injected_owner() {
         .expect("sdk runtime");
 
     let query = AgentModeCatalogQuery {
+        workspace_id: None,
         workspace_root: Some("/workspace/project".to_string()),
         include_external: true,
     };
@@ -369,6 +370,7 @@ async fn sdk_facade_fails_closed_without_a_mode_catalog_owner() {
 
     let error = runtime
         .list_agent_modes(AgentModeCatalogQuery {
+            workspace_id: None,
             workspace_root: None,
             include_external: false,
         })
@@ -428,7 +430,7 @@ async fn sdk_facade_accepts_fake_services_tools_and_hooks_without_core() {
     );
     assert_eq!(
         runtime.registered_agent_ids(RuntimeAgentRegistryQuery {
-            workspace_root: Some(Path::new("/workspace/project")),
+            workspace_id: Some("workspace-project"),
         }),
         vec![
             "Standard".to_string(),

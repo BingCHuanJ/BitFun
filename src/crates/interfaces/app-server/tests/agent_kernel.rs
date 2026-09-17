@@ -362,6 +362,8 @@ impl ports::AgentSessionManagementPort for Phase2Provider {
         _request: ports::AgentSessionWorkspaceRequest,
     ) -> PortResult<Option<ports::AgentSessionWorkspaceBinding>> {
         Ok(Some(ports::AgentSessionWorkspaceBinding {
+            workspace_kind: None,
+            project_workspace_id: None,
             workspace_id: Some("workspace-1".to_string()),
             workspace_path: "/authoritative/workspace".to_string(),
             project_workspace_path: Some("/authoritative/workspace".to_string()),
@@ -795,6 +797,7 @@ async fn phase2_sync_aggregates_authoritative_session_state() {
                 .expect("connect app server client");
             let response = client
                 .sync_session(protocol_session::SyncSessionRequest {
+                    workspace_id: None,
                     workspace_path: "/requested/workspace".to_string(),
                     session_id: "session-1".to_string(),
                     include_internal: true,
@@ -886,6 +889,7 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
             let undone = client
                 .undo_session(protocol_session::UndoSessionRequest(
                     ports::AgentSessionRevertRequest {
+                        workspace_id: None,
                         workspace_path: "/workspace".to_string(),
                         session_id: "session-1".to_string(),
                         remote_connection_id: None,
@@ -898,6 +902,7 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
             client
                 .redo_session(protocol_session::RedoSessionRequest(
                     ports::AgentSessionRevertRequest {
+                        workspace_id: None,
                         workspace_path: "/workspace".to_string(),
                         session_id: "session-1".to_string(),
                         remote_connection_id: None,
@@ -989,6 +994,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
             let lineage = client
                 .session_lineage(protocol_session::SessionLineageRequest(
                     ports::AgentSessionLineageRequest {
+                        workspace_id: None,
                         workspace_path: "/workspace".to_string(),
                         anchor_session_id: "session-1".to_string(),
                         remote_connection_id: None,
@@ -1233,6 +1239,7 @@ async fn session_control_methods_forward_exact_owner_dtos() {
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
                     let RenameSessionResponse {} = recv(cx.send_request(RenameSessionMessage(
                         AgentSessionRenameRequest {
+                            workspace_id: None,
                             workspace_path: "/repo".to_string(),
                             session_id: "session-1".to_string(),
                             session_name: "Renamed".to_string(),
@@ -1243,6 +1250,7 @@ async fn session_control_methods_forward_exact_owner_dtos() {
                     .await?;
                     let SetSessionArchivedResponse {} = recv(cx.send_request(
                         SetSessionArchivedMessage(AgentSessionArchiveStateRequest {
+                            workspace_id: None,
                             workspace_path: "/repo".to_string(),
                             session_id: "session-1".to_string(),
                             archived: false,
@@ -1268,6 +1276,7 @@ async fn session_control_methods_forward_exact_owner_dtos() {
                     .await?;
                     let ForkSessionResponse(forked) = recv(cx.send_request(
                         ForkSessionAtTurnMessage(AgentSessionForkAtTurnRequest {
+                            workspace_id: None,
                             workspace_path: "/repo".to_string(),
                             source_session_id: "session-1".to_string(),
                             source_turn_id: "turn-2".to_string(),
@@ -1279,6 +1288,7 @@ async fn session_control_methods_forward_exact_owner_dtos() {
                     assert_eq!(forked.session_id, "forked-session");
 
                     let restored = recv(cx.send_request(RestoreSessionMessage {
+                        workspace_id: None,
                         workspace_path: "/repo".to_string(),
                         session_id: "session-1".to_string(),
                         include_internal: true,
@@ -1525,6 +1535,7 @@ async fn list_sessions_maps_missing_port_to_internal_error() {
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
                     let result = recv(cx.send_request(ListSessionsMessage(
                         AgentSessionListRequest {
+                            workspace_id: None,
                             workspace_path: ".".to_string(),
                             remote_connection_id: None,
                             remote_ssh_host: None,
@@ -1557,6 +1568,7 @@ async fn delete_session_maps_missing_port_to_internal_error() {
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
                     let result = recv(cx.send_request(DeleteSessionMessage(
                         AgentSessionDeleteRequest {
+                            workspace_id: None,
                             workspace_path: ".".to_string(),
                             session_id: "example-session".to_string(),
                             remote_connection_id: None,

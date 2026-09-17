@@ -89,6 +89,7 @@ const Harness: React.FC<HarnessProps> = ({
         isOpen={isOpen}
         searchQuery={searchQuery}
         workspacePath="/workspace"
+        workspaceId="workspace-id"
         remoteConnectionId={remoteConnectionId}
         anchorRef={anchorRef}
         entryView={entryView}
@@ -616,8 +617,8 @@ describe('ChatContextPicker overlay', () => {
 
     expect(workspaceAPI.searchFilenamesOnlyStreamDetailed).toHaveBeenCalled();
     expect(
-      vi.mocked(workspaceAPI.searchFilenamesOnlyStreamDetailed).mock.calls[0]?.[10],
-    ).toBe('remote-connection-1');
+      vi.mocked(workspaceAPI.searchFilenamesOnlyStreamDetailed).mock.calls[0]?.[0],
+    ).toBe('workspace-id');
 
     await act(async () => {
       reportProgress?.({

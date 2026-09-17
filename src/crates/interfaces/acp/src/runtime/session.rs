@@ -353,6 +353,7 @@ impl OpenBitFunAcpRuntime {
         if let Err(error) = self
             .agent_runtime
             .delete_session(AgentSessionDeleteRequest {
+                workspace_id: None,
                 workspace_path: cwd.to_string(),
                 session_id: session_id.to_string(),
                 remote_connection_id: None,
@@ -443,10 +444,23 @@ impl OpenBitFunAcpRuntime {
             .as_deref()
             .and_then(|value| value.parse::<u128>().ok());
 
+        // ACP defines cwd as a directory operand. Translate this external
+        // protocol reference once; internal session operations use the record ID.
+        let workspace_service = openbitfun_core::service::workspace::get_global_workspace_service()
+            .ok_or_else(|| Error::internal_error().data("Workspace service is unavailable"))?;
+        let workspace = workspace_service
+            .resolve_legacy_workspace_reference(None, &cwd.to_string_lossy(), None, None)
+            .await
+            .map_err(|error| Error::invalid_params().data(error.to_string()))?
+            .ok_or_else(|| {
+                Error::invalid_params().data("Workspace is unavailable; open the directory first")
+            })?;
+
         let mut summaries = self
             .agent_runtime
             .list_sessions(AgentSessionListRequest {
-                workspace_path: cwd.to_string_lossy().to_string(),
+                workspace_id: Some(workspace.id),
+                workspace_path: String::new(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
             })

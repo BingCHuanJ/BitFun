@@ -56,7 +56,13 @@ impl ChatMode {
                 if self.agent.is_remote_workspace() {
                     anyhow::bail!("Skill management is unavailable for a Remote workspace")
                 }
-                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let workspace_id = self
+                    .agent
+                    .workspace_id()
+                    .ok_or_else(|| anyhow::anyhow!("Workspace ID is unavailable"))?;
+                let workspace =
+                    openbitfun_core::agentic::workspace::WorkspaceBinding::resolve(&workspace_id)
+                        .await?;
                 let registry =
                     openbitfun_core::agentic::tools::implementations::skills::get_skill_registry();
                 let skills = registry
@@ -270,12 +276,15 @@ impl ChatMode {
                 if self.agent.is_remote_workspace() {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
-                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let workspace_id = self
+                    .agent
+                    .workspace_id()
+                    .ok_or_else(|| anyhow::anyhow!("Workspace ID is unavailable"))?;
                 let values = openbitfun_core::agentic::agents::get_agent_registry()
                     .get_subagents_for_query(
                         &openbitfun_core::agentic::agents::SubagentQueryContext {
                             parent_agent_type: Some(&self.agent_type),
-                            workspace_root: Some(&workspace),
+                            workspace_id: Some(&workspace_id),
                             list_scope:
                                 openbitfun_core::agentic::agents::SubagentListScope::TaskVisible,
                             include_disabled: false,
@@ -329,11 +338,11 @@ impl ChatMode {
                 if self.agent.is_remote_workspace() {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
-                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let workspace_id = self.agent.workspace_id().ok_or_else(|| anyhow::anyhow!("Workspace ID is unavailable"))?;
                 let values = openbitfun_core::agentic::agents::get_agent_registry()
                     .get_subagents_for_query(&openbitfun_core::agentic::agents::SubagentQueryContext {
                         parent_agent_type: Some(&self.agent_type),
-                        workspace_root: Some(&workspace),
+                        workspace_id: Some(&workspace_id),
                         list_scope:
                             openbitfun_core::agentic::agents::SubagentListScope::RegistryManagement,
                         include_disabled: true,
@@ -431,9 +440,12 @@ impl ChatMode {
                 if self.agent.is_remote_workspace() {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
-                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let workspace_id = self
+                    .agent
+                    .workspace_id()
+                    .ok_or_else(|| anyhow::anyhow!("Workspace ID is unavailable"))?;
                 openbitfun_core::agentic::agents::get_agent_registry()
-                    .update_subagent_override(&mode_id, &subagent.id, enabled, Some(&workspace))
+                    .update_subagent_override(&mode_id, &subagent.id, enabled, Some(&workspace_id))
                     .await
                     .map_err(|error| anyhow::anyhow!(error.to_string()))?;
                 Ok::<(), anyhow::Error>(())

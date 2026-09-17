@@ -825,7 +825,6 @@ function UsageFiles({
         sessionId,
         resolvedPath,
         operationId,
-        workspacePath,
       );
       const diffPath = diff.filePath || resolvedPath;
       createDiffEditorTab(

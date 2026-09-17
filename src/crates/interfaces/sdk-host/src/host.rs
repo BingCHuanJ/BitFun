@@ -868,6 +868,7 @@ impl SdkHostConnection {
                 .inner
                 .runtime
                 .delete_session(AgentSessionDeleteRequest {
+                    workspace_id: None,
                     workspace_path,
                     session_id,
                     remote_connection_id,
@@ -2287,6 +2288,7 @@ impl SdkHostConnection {
         let restoration = tokio::spawn(async move {
             let restored = runtime
                 .restore_session(AgentSessionRestoreRequest {
+                    workspace_id: None,
                     workspace_path: task_workspace_path.clone(),
                     session_id: task_session_id.clone(),
                     include_internal: false,
