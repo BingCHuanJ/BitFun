@@ -1,3 +1,30 @@
+// The transcript reserves a lane for turn navigation before sizing its column.
+// Keep the lane geometry shared with the rail so narrow panes cannot overlap it.
+$turn-rail-offset: 4px;
+$turn-rail-width: 30px;
+
+@mixin viewport {
+  container: flow-chat-transcript / inline-size;
+}
+
+@mixin reading-column {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+
+  // Reserve only the rail side plus a small opposite inset. Wide columns stay
+  // centered; neither the composer nor the welcome surface needs this lane.
+  @container flow-chat-transcript (min-width: 0px) {
+    width: calc(100% - #{$turn-rail-offset + $turn-rail-width} - var(--openbitfun-space-1) - var(--openbitfun-space-2));
+    margin-inline-start: max(
+      calc(#{$turn-rail-offset + $turn-rail-width} + var(--openbitfun-space-1)),
+      calc((100% - 900px) / 2)
+    );
+  }
+}
+
 // Transcript containers own the reading column; leaf content adds no inset.
 // User-message decoration may extend into this gutter without moving its text.
 @mixin content-column {

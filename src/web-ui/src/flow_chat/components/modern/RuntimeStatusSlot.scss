@@ -47,10 +47,9 @@
   }
 
   &--footer &__content {
+    @include transcriptLayout.reading-column;
     @include transcriptLayout.content-column;
-    width: 100%;
-    max-width: 900px;
-    margin: 0 auto;
+    margin-block: 0;
     padding-block: 0;
   }
 }

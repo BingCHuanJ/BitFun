@@ -170,6 +170,13 @@ measured message even when no valid timestamp is available. The timestamp and
 actions remain visible at rest, without requiring hover or keyboard focus.
 `_transcript-layout.scss` owns the reading-column inset shared by user-message
 shells, model rounds, Explore regions, and the runtime-status footer.
+The messages viewport enables a shared outer column rule for virtual rows and
+the runtime footer: reserve the turn rail's offset and hit area plus space-1 on
+the leading side, and only space-2 on the trailing side. Columns remain centered
+when there is room for the full 900px reading width. This rule is local to the
+transcript; the composer and welcome surface keep their existing widths, and
+embedded transcripts without a rail keep their own layout. The scroller remains
+full width.
 The shared content-padding token defaults to 0.75rem on wide and narrow surfaces,
 keeping the reading column compact while leaving room for decoration and targets.
 The bubble extends into that gutter by its corner radius. Its horizontal border
