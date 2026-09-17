@@ -22,6 +22,10 @@ export const mobileTokens = {
       "light": "#00FFFFFF",
       "dark": "#00151514"
     },
+    "page_bg_overlay": {
+      "light": "#B8FFFFFF",
+      "dark": "#B8151514"
+    },
     "ink": {
       "light": "#171717",
       "dark": "#F4F3EF"
@@ -41,6 +45,10 @@ export const mobileTokens = {
     "card": {
       "light": "#FFFFFF",
       "dark": "#252522"
+    },
+    "card_overlay": {
+      "light": "#CCFFFFFF",
+      "dark": "#CC252522"
     },
     "accent": {
       "light": "#111111",
@@ -297,6 +305,8 @@ export const mobileTokens = {
     "content_gutter": 16,
     "connection_strip_height": 48,
     "timeline_top_padding": 22,
+    "conversation_overlay_side_inset": 16,
+    "conversation_edge_fade_height": 28,
     "message_spacing": 18,
     "message_bubble_max_width": 276,
     "message_bubble_horizontal_padding": 14,
@@ -599,6 +609,27 @@ export const mobileComponents = {
         "timeline_top_padding"
       ],
       "platformNotes": "The maximum width is the 276-unit compact HarmonyOS baseline; wide layouts may use a separate responsive policy."
+    },
+    "conversation_overlay": {
+      "purpose": "Lets the transcript own the whole pane while the header and composer stay reachable above it.",
+      "anatomy": [
+        "top_overlay",
+        "top_edge_fade",
+        "timeline",
+        "bottom_overlay_fade"
+      ],
+      "states": [
+        "at_rest",
+        "scrolled",
+        "composer_expanded",
+        "mailbox_open",
+        "keyboard_open"
+      ],
+      "tokens": [
+        "conversation_overlay_side_inset",
+        "conversation_edge_fade_height"
+      ],
+      "platformNotes": "The timeline fills the pane and scrolls beneath both overlays; its content insets are measured from the live overlay heights rather than fixed, and are applied with each platform's content-inset primitive — Compose contentPadding, SwiftUI safeAreaInset, ArkUI contentStartOffset/contentEndOffset — never with padding, which would shrink the viewport and stop the transcript at the overlay instead of letting it run underneath, because the composer grows with multiline text and attachments and the mailbox appears without warning. The top layer is an opaque band with a short fade carrying it into the transcript; the bottom layer has no strip of its own — its whole background is the fade, because the transcript runs behind the composer and a short strip would leave a line of text crisp beside the pill after it had already faded out higher up. Fades never take touches. Blur is the platform's own: iOS ultraThinMaterial, HarmonyOS backgroundBlurStyle. Compose has no first-party backdrop blur, so Android uses a high-opacity band instead and reads the same at a glance."
     },
     "composer_bar": {
       "purpose": "Collects the next instruction and exposes one unambiguous primary action.",
