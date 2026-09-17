@@ -5,6 +5,7 @@
 @use '@/shared/styles/surface-recipes' as surfaces;
 
 .openbitfun-context-drop-zone.openbitfun-chat-input-drop-zone {
+  box-sizing: border-box;
   position: absolute;
   flex: 0 0 auto;
   bottom: var(--openbitfun-space-6);
@@ -13,6 +14,7 @@
   width: 100%;
   height: auto;
   min-height: 0;
+  min-width: 0;
   max-width: 900px;
   z-index: var(--openbitfun-layer-overlay);
   display: flex;
@@ -301,7 +303,7 @@
 
 }
 
-@media (max-width: 640px) {
+@container chat-input (max-width: 640px) {
   .openbitfun-chat-input__voice-cluster--recording {
     min-width: 220px;
   }
@@ -327,7 +329,11 @@
 }
 
 .openbitfun-chat-input {
+  // The off-screen capsule measurement clones this root, so responsive controls
+  // see the same local width there as in main, floating, and native windows.
+  container: chat-input / inline-size;
   width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   transform: translateY(0);
@@ -501,7 +507,7 @@
   // Product controls fill the stable public ChatComposer slots. The package
   // owns the 42px compact / 120px expanded surface geometry; Web UI owns concrete menus and
   // lifecycle states.
-  &__composer-surface {
+  &__composer > [data-openbitfun-part='body'] > [data-openbitfun-part='surface'] {
     .openbitfun-chat-input__actions-left,
     .openbitfun-chat-input__actions-right {
       display: flex;
@@ -545,6 +551,7 @@
     }
 
     .openbitfun-model-selector__trigger {
+      min-width: 0;
       height: var(--openbitfun-control-chat-composer-control-height);
       padding: 0 var(--openbitfun-space-1) 0 var(--openbitfun-space-2);
       border: 0;
@@ -555,7 +562,11 @@
     }
 
     .openbitfun-model-selector__name {
-      max-width: 160px;
+      max-width: min(160px, 22cqi);
+    }
+
+    .openbitfun-model-selector__trigger-reasoning {
+      max-width: min(72px, 12cqi);
     }
 
     .openbitfun-reasoning-preset-selector[data-openbitfun-presentation='label']
@@ -590,6 +601,14 @@
     }
 
     &[data-openbitfun-layout='compact'] {
+      // Keep the editing track usable in smaller panes. The reasoning setting
+      // remains available in the model menu when its inline summary cannot fit.
+      @container chat-input (max-width: 360px) {
+        .openbitfun-model-selector__trigger-reasoning {
+          display: none;
+        }
+      }
+
       .openbitfun-chat-input__actions-left,
       .openbitfun-chat-input__actions-right {
         height: 100%;
