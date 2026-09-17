@@ -982,7 +982,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       && previous.visibleTurnIds.length === visibleTurnIds.length
       && previous.visibleTurnIds.every((turnId, index) => turnId === visibleTurnIds[index]);
     if (!unchanged) store.setVisibleTurnInfo(nextVisibleTurnInfo);
-  }, [isFollowingOutputNow, userMessageItems]);
+  }, [isFollowingOutputNow, modernStore, userMessageItems]);
 
   const scheduleVisibleTurnInfoUpdate = useCallback(() => {
     if (visibleTurnUpdateFrameRef.current !== null) return;
@@ -2464,7 +2464,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (userMessageItems.length === 0) {
       modernStore.getState().setVisibleTurnInfo(null);
     }
-  }, [userMessageItems.length]);
+  }, [modernStore, userMessageItems.length]);
 
   const handleScrollerRef = useCallback((element: HTMLElement | null) => {
     const scroller = element;

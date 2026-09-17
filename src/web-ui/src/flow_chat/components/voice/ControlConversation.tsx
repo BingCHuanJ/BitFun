@@ -59,8 +59,9 @@ export function ControlConversation({ session, sessionRef, voiceTarget, active, 
   const processingTurnId = trackedTurn && isTransientTurnStatus(trackedTurn.status)
     && trackedTurn.status !== 'cancelling' && !needsAnswer && ownedRequests.length === 0
     ? trackedTurn.id : undefined;
-  const rows = useMemo(() => controlConversationTranscript(sessionRef, session.dialogTurns, voice.conversationTranscript),
-    [sessionRef.surfaceId, sessionRef.sessionId, session.dialogTurns, voice.conversationTranscript]);
+  const { surfaceId, sessionId } = sessionRef;
+  const rows = useMemo(() => controlConversationTranscript({ surfaceId, sessionId }, session.dialogTurns, voice.conversationTranscript),
+    [surfaceId, sessionId, session.dialogTurns, voice.conversationTranscript]);
   const [firstVisibleId, setFirstVisibleId] = useState<string | null>(null);
   const firstVisibleIndex = controlTranscriptStartIndex(rows, firstVisibleId, HISTORY_PAGE_SIZE);
   const firstRenderedId = rows[firstVisibleIndex]?.id ?? null;

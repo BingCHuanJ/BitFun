@@ -218,8 +218,11 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
 };
 
 const ChatPane = memo((props: ChatPaneProps) => {
-  const scope = useMemo(() => props.sessionRef ? { ...props.sessionRef, viewId: props.viewId ?? 'floating', presentation: props.presentation ?? 'compact' } : null,
-    [props.sessionRef?.sessionId, props.sessionRef?.surfaceId, props.viewId, props.presentation]);
+  const sessionId = props.sessionRef?.sessionId;
+  const surfaceId = props.sessionRef?.surfaceId;
+  const scope = useMemo(() => sessionId !== undefined && surfaceId !== undefined
+    ? { sessionId, surfaceId, viewId: props.viewId ?? 'floating', presentation: props.presentation ?? 'compact' } : null,
+    [sessionId, surfaceId, props.viewId, props.presentation]);
   return scope ? <ConversationViewProvider scope={scope}><ChatPaneInner {...props} /></ConversationViewProvider> : <ChatPaneInner {...props} />;
 });
 ChatPane.displayName = 'ChatPane';

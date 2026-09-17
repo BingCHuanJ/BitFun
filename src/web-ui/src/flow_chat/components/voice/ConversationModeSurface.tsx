@@ -55,6 +55,7 @@ export function ConversationModeSurface({
     phase,
     target,
     start: startVoiceCall,
+    end: endVoiceCall,
   } = controller;
   const integrated = transcript !== undefined;
   const ownsCall = phase !== 'idle' && (voiceTarget
@@ -82,7 +83,7 @@ export function ConversationModeSurface({
     if (integrated && ownsCall && phase === 'error' && voiceTarget) {
       setRestartTarget(voiceTarget);
       setShowVoice(true);
-      controller.end();
+      endVoiceCall();
       return;
     }
     if (isVoiceMode) { setShowVoice(false); return; }
@@ -92,7 +93,7 @@ export function ConversationModeSurface({
     if (phase !== 'idle' && !ownsCall) return;
     setShowVoice(true);
     if (!ownsCall) startVoiceCall(voiceTarget);
-  }, [enabled, startVoiceCall, voiceStartDisabled, voiceTarget, ownsCall, phase, isVoiceMode, integrated, controller.end, requiresTextInput]);
+  }, [enabled, startVoiceCall, voiceStartDisabled, voiceTarget, ownsCall, phase, isVoiceMode, integrated, endVoiceCall, requiresTextInput]);
 
   return (
     <div

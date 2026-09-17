@@ -569,7 +569,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [mcpAppState?.html, serverId, resolvedMcpToolName]);
+  }, [mcpAppState?.html, serverId, resolvedMcpToolName, sessionId]);
 
   const handleIframeLoad = useCallback(() => {
     /* iframe loaded, ref is ready for postMessage bridge */

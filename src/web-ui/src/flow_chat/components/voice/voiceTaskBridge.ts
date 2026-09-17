@@ -393,14 +393,14 @@ async function waitForSettledSession(
       scope.signal.removeEventListener('abort', disconnected);
       reject(new Error('OpenBitFun task timed out after 30 minutes'));
     }, TASK_TIMEOUT_MS);
-    const disconnected = () => {
+    function disconnected() {
       if (finished) return;
       finished = true;
       window.clearTimeout(timeoutId);
       stateSubscription.dispose();
       flowSubscription.dispose();
       try { scope.assertCurrent('observe voice task'); } catch (error) { reject(error); }
-    };
+    }
     scope.signal.addEventListener('abort', disconnected, { once: true });
     stateSubscription.dispose = stateMachineManager.subscribeGlobal((changedSessionId) => {
       if (changedSessionId !== sessionId || !isSettled()) return;

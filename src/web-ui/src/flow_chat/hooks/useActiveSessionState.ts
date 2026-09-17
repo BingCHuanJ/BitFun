@@ -16,12 +16,14 @@ export interface ActiveSessionState {
 /** Explicit view selection takes precedence over the main scene selection. */
 export const useActiveSessionState = (): ActiveSessionState => {
   const scope = useConversationViewScope();
+  const surfaceId = scope?.surfaceId;
+  const sessionId = scope?.sessionId;
   const getSnapshot = useMemo(() => {
     let previous: ActiveSessionState | undefined;
     return () => {
       const state = flowChatStore.getState();
-      const session = scope
-        ? (scope.surfaceId === getActiveSurfaceId() ? state.sessions.get(scope.sessionId) : undefined)
+      const session = sessionId !== undefined && surfaceId !== undefined
+        ? (surfaceId === getActiveSurfaceId() ? state.sessions.get(sessionId) : undefined)
         : state.sessions.get(state.activeSessionId ?? '');
       const machine = session ? stateMachineManager.get(session.sessionId) : undefined;
       const next: ActiveSessionState = {
@@ -34,7 +36,7 @@ export const useActiveSessionState = (): ActiveSessionState => {
       if (!previous || Object.keys(next).some(key => next[key as keyof ActiveSessionState] !== previous![key as keyof ActiveSessionState])) previous = next;
       return previous;
     };
-  }, [scope?.surfaceId, scope?.sessionId]);
+  }, [surfaceId, sessionId]);
   const subscribe = useCallback((notify: () => void) => {
     const stopStore = flowChatStore.subscribe(notify);
     const stopMachine = stateMachineManager.subscribeGlobal(notify);

@@ -2225,7 +2225,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       window.removeEventListener('fill-chat-input', handleFillInput);
     };
-  }, [clearPendingLargePastes, dispatchInput]);
+  }, [clearPendingLargePastes, conversationScope, dispatchInput]);
 
   React.useEffect(() => {
     const handleFillChatInput = (data: {
@@ -2302,7 +2302,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('fill-chat-input', handleFillChatInput);
     };
-  }, [addContext, clearPendingLargePastes, dispatchInput, replaceContexts]);
+  }, [addContext, clearPendingLargePastes, conversationScope, dispatchInput, replaceContexts]);
 
   // Expose current input value for external queries (e.g. deep review fill-back confirmation)
   React.useEffect(() => {
@@ -2316,7 +2316,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('chat-input:get-state', handleGetChatInputState);
     };
-  }, []);
+  }, [conversationScope]);
 
   React.useEffect(() => {
     const configPath = 'app.flow_chat.show_permission_mode_control';
@@ -2946,7 +2946,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('mcp-app:message', handleMcpAppMessage);
     };
-  }, [addContext, clearPendingLargePastes, currentImageCount, dispatchInput]);
+  }, [addContext, clearPendingLargePastes, conversationScope, currentImageCount, dispatchInput]);
 
   React.useEffect(() => {
     const handleInsertContextTag = (event: Event) => {
@@ -2978,7 +2978,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       window.removeEventListener('insert-context-tag', handleInsertContextTag);
     };
-  }, []);
+  }, [conversationScope]);
 
   const refreshWorkspaceModeCatalog = useWorkspaceModeCatalog(
     {
@@ -4710,7 +4710,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         { duration: 3000 },
       );
     }
-  }, [addContext, isExternalFileIntakeRequestCurrent, t]);
+  }, [addContext, contextStore, isExternalFileIntakeRequestCurrent, t]);
 
   const addExternalPaths = useCallback(async (
     request: ExternalFileIntakeRequest,
@@ -4765,6 +4765,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     addContext,
+    contextStore,
     isExternalFileIntakeRequestCurrent,
     sessionBoundWorkspacePath,
     t,
