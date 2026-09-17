@@ -1,7 +1,7 @@
 use super::availability::resolve_availability;
 use super::support::{
     get_mode_configs, get_subagent_overrides, load_project_subagent_overrides_local,
-    merge_dynamic_mcp_tools,
+    merge_dynamic_acp_tools, merge_dynamic_mcp_tools,
 };
 use super::AgentRegistry;
 use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry, AgentSource};
@@ -16,6 +16,23 @@ use crate::service::config::mode_config_canonicalizer::resolve_effective_tools;
 use openbitfun_agent_runtime::agents::subagent_source_presentation_rank;
 use std::collections::HashSet;
 use std::path::Path;
+
+/// Append the dynamically registered tool families a mode Agent may use.
+///
+/// MCP tools and enabled ACP subagents are both created at runtime, so neither
+/// can be listed in a static Agent manifest. The manifest allowlist decides what
+/// the model ever sees, which is why both families have to be merged in here.
+pub(super) fn merge_dynamic_mode_tools(
+    resolved_tools: Vec<String>,
+    registered_tool_names: &[String],
+    include_dynamic_tools: bool,
+) -> Vec<String> {
+    if !include_dynamic_tools {
+        return resolved_tools;
+    }
+    let resolved_tools = merge_dynamic_mcp_tools(resolved_tools, registered_tool_names);
+    merge_dynamic_acp_tools(resolved_tools, registered_tool_names)
+}
 
 impl AgentRegistry {
     /// Return every effective local agent definition that can participate in
@@ -96,11 +113,11 @@ impl AgentRegistry {
                 let default_tools = entry.agent.default_tools();
                 let config = mode_configs.get(profile_id.as_ref());
                 let resolved_tools = resolve_effective_tools(&default_tools, config, &valid_tools);
-                let allowed_tools = if entry.agent.include_dynamic_mcp_tools() {
-                    merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names)
-                } else {
-                    resolved_tools
-                };
+                let allowed_tools = merge_dynamic_mode_tools(
+                    resolved_tools,
+                    &registered_tool_names,
+                    entry.agent.include_dynamic_mcp_tools(),
+                );
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
