@@ -26,6 +26,5 @@ export const mobileSheetMeta = {
     "space.2",
     "space.3",
     "space.4",
-    "space.12",
   ],
 } as const satisfies ComponentMeta;

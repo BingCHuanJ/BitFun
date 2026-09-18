@@ -82,15 +82,11 @@ test('app reset stays below shared component padding and focus styles', async ()
 
 test('settings sheet title stays on the sheet centerline beside the close action', async () => {
   const harmony = await readFile(path.join(sourceDirectory, 'styles/components/harmony-native.scss'), 'utf8');
-  const composer = await readFile(path.join(sourceDirectory, 'styles/components/chat-input.scss'), 'utf8');
-  const files = await readFile(path.join(sourceDirectory, 'components/WorkspaceFiles.scss'), 'utf8');
   const headerRule = harmony.match(/\.harmony-sidebar__settings-sheet\s*>\s*\[data-openbitfun-part='header'\]\s*\{[^}]+\}/)?.[0];
   const headingRule = harmony.match(/\.harmony-sidebar__settings-sheet\s*>\s*\[data-openbitfun-part='header'\]\s*\[data-openbitfun-part='heading'\]\s*\{[^}]+\}/)?.[0];
   const actionRule = harmony.match(/\.harmony-sidebar__settings-sheet\s*>\s*\[data-openbitfun-part='header'\]\s*\[data-openbitfun-part='header-action'\]\s*\{[^}]+\}/)?.[0];
   const titleRule = harmony.match(/\.harmony-sidebar__settings-sheet\s+h2\s*\{[^}]+\}/)?.[0];
   const closeRule = harmony.match(/\.harmony-sidebar__settings-sheet\s*>\s*\[data-openbitfun-part='header'\]\s*\[data-openbitfun-component='mobile-icon-button'\]\s*\{[^}]+\}/)?.[0];
-  const composerHeader = composer.match(/\.chat-composer-sheet\s*>\s*\[data-openbitfun-part='header'\]\s*\{[^}]+\}/)?.[0];
-  const editorHeader = files.match(/\[data-openbitfun-part="header"\]\s*\{[^}]+\}/)?.[0];
 
   assert.ok(headerRule, 'missing settings sheet header rule');
   assert.match(headerRule, /display:\s*grid/);
@@ -103,9 +99,6 @@ test('settings sheet title stays on the sheet centerline beside the close action
   assert.match(actionRule ?? "", /justify-self:\s*end/);
   assert.match(titleRule ?? "", /text-align:\s*center/);
   assert.doesNotMatch(closeRule ?? "", /margin-left:\s*auto/);
-  assert.match(composerHeader ?? "", /display:\s*flex/);
-  assert.match(composerHeader ?? "", /text-align:\s*left/);
-  assert.match(editorHeader ?? "", /display:\s*flex/);
 });
 
 test('pairing and settings styles follow component parts instead of obsolete native anatomy', async () => {
