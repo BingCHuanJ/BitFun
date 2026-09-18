@@ -262,10 +262,10 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   const searchLimitNotice =
     searchMode === 'content'
       ? contentTruncated
-        ? t('search.limitReachedContent', { count: contentLimit })
+        ? t('search.limitReachedContentCompact', { count: contentLimit })
         : null
       : filenameTruncated
-        ? t('search.limitReachedFiles', { count: filenameLimit })
+        ? t('search.limitReachedFilesCompact', { count: filenameLimit })
         : null;
   const contentSearchBackendLabel = contentSearchMetadata
     ? t(`search.backend.${contentSearchMetadata.backend}`, {
@@ -1013,8 +1013,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [onExplorerToolbarApi]);
 
   return (
-    <div data-overflow-trigger
-      data-openbitfun-component="files-panel"
+    <div data-openbitfun-component="files-panel"
       data-openbitfun-part="root"
       ref={panelRef}
       data-resource-surface={resourceScope.surfaceId}
@@ -1122,12 +1121,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         ) : viewMode === 'search' ? (
           searchQuery ? (
             <div className="openbitfun-files-panel__search-content">
-              {searchLimitNotice && (
-                <div className="openbitfun-files-panel__search-limit-notice">
-                  <span>{searchLimitNotice}</span>
-                </div>
-              )}
-
               {showContentSearchMetadata && contentSearchMetadata && (
                 <div className="openbitfun-files-panel__search-backend">
                   <div className="openbitfun-files-panel__search-backend-badges">
@@ -1180,6 +1173,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                   resourceScope={resourceScope}
                   results={searchResults}
                   searchQuery={searchQuery}
+                  limitNotice={searchLimitNotice}
                   onFileSelect={handleSearchResultSelect}
                   onFolderNavigate={handleSearchFolderNavigate}
                   workspacePath={workspacePath}

@@ -115,8 +115,8 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     600: colors.accent[600],
   };
   const scrollbar = colors.scrollbar ?? {
-    thumb: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)',
-    thumbHover: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.3)',
+    thumb: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+    thumbHover: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
   };
   const button = palette.components?.button;
   const values: Record<ThemeTokenName, ThemeValue> = { ...themes[palette.type] };
@@ -220,8 +220,8 @@ function createChromeThemeTokens(
     if (name.startsWith('color.status.')) values[name] = statusTheme[name];
   }
   const scrollbar = chrome.scrollbar ?? palette.colors.scrollbar ?? {
-    thumb: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)',
-    thumbHover: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.3)',
+    thumb: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+    thumbHover: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
   };
 
   Object.assign(values, {
