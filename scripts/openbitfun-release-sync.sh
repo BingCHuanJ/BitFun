@@ -683,7 +683,7 @@ prune_old_versions() {
   local dirs=() total remove_count i
   while IFS= read -r d; do
     dirs+=("$d")
-  done < <(find "$WEBSITE_RELEASE_DIR" -mindepth 1 -maxdepth 1 -type d | sort -V)
+  done < <(find -H "$WEBSITE_RELEASE_DIR" -mindepth 1 -maxdepth 1 -type d | sort -V)
   total=${#dirs[@]}
   if [ "$total" -le "$KEEP_VERSIONS" ]; then
     return 0

@@ -448,6 +448,7 @@ test('the mirror keeps only the two newest versions and skips an unchanged lates
   assert.ok(keep, 'KEEP_VERSIONS must be set');
   assert.equal(Number(keep[1]), 2);
   assert.match(syncScript, /Already mirroring \$VERSION; nothing to fetch/);
+  assert.match(syncScript, /find -H "\$WEBSITE_RELEASE_DIR"/);
   assert.doesNotMatch(syncScript, /! -name '0\.2\.\*'/);
 });
 
