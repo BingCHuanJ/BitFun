@@ -63,6 +63,8 @@ use Desktop or a capable peer host.
 
 ## Directory structure
 
+Dependency versions are locked by the repository-root `pnpm-lock.yaml`.
+
 ```
 src/web-ui/
 ├── README.md                     # This file
@@ -70,7 +72,6 @@ src/web-ui/
 ├── LOGGING.md                    # Logging & debugging notes
 ├── index.html                    # Entry HTML
 ├── package.json                  # Dependencies & scripts
-├── package-lock.json             # Locked dependency versions
 ├── public/                       # Static assets
 ├── src/                          # Frontend source
 │   ├── app/                      # Main app UI

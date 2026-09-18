@@ -48,6 +48,8 @@ ACP 和 Detached Dispatch 会话保留文字交互；共享语音历史需要目
 
 ## 目录结构
 
+依赖版本统一由仓库根目录的 `pnpm-lock.yaml` 锁定。
+
 ```
 src/web-ui/
 ├── README.md                     # 英文版说明
@@ -55,7 +57,6 @@ src/web-ui/
 ├── LOGGING.md                    # 日志与调试说明
 ├── index.html                    # 入口 HTML
 ├── package.json                  # 依赖与脚本
-├── package-lock.json             # 锁定依赖版本
 ├── public/                       # 静态资源
 ├── src/                          # 前端源代码
 │   ├── app/                      # 应用主界面
