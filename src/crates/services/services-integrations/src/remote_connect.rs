@@ -1128,9 +1128,7 @@ pub fn remote_session_info(
 /// command path is flat, so they would surface as standalone conversations.
 /// Drop them here, before pagination, so `has_more` counts what is actually
 /// sent.
-pub fn visible_remote_sessions(
-    metadata: Vec<RemoteSessionMetadata>,
-) -> Vec<RemoteSessionMetadata> {
+pub fn visible_remote_sessions(metadata: Vec<RemoteSessionMetadata>) -> Vec<RemoteSessionMetadata> {
     metadata
         .into_iter()
         .filter(|session| !session.is_child_session())
