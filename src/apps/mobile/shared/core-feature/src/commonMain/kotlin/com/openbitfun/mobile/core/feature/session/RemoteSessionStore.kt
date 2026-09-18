@@ -21,7 +21,7 @@ import com.openbitfun.mobile.core.persistence.PersistedRemoteMessage
 import com.openbitfun.mobile.core.persistence.PersistedRemoteSession
 import com.openbitfun.mobile.core.domain.RemoteSession
 import com.openbitfun.mobile.core.domain.SessionNaming
-import com.openbitfun.mobile.core.domain.SessionAgentTypes
+import com.openbitfun.mobile.core.domain.SessionListVisibility
 import com.openbitfun.mobile.core.domain.TranscriptIntegrityPolicy
 import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
 import com.openbitfun.mobile.core.protocol.ActiveTurnSnapshotResponse
@@ -57,6 +57,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -375,7 +376,7 @@ public class RemoteSessionStore internal constructor(
         )
         val server = response.sessions
             .map(RemoteResponseMapper::session)
-            .filter { SessionAgentTypes.isMobileVisible(it.agentType) }
+            .filter { SessionListVisibility.isMobileVisible(it) }
             .map { session ->
                 session.copy(workspacePath = session.workspacePath?.takeIf { it.isNotBlank() } ?: normalizedPath, workspaceIdentity = identity)
             }
@@ -565,6 +566,7 @@ public class RemoteSessionStore internal constructor(
             },
         )
         sessionUpdates?.cancel()
+        transcriptWrite?.cancel()
         _connectionPhase.value = ConnectionPhase.DISCONNECTED
     }
 
@@ -708,7 +710,7 @@ public class RemoteSessionStore internal constructor(
             val response = sendListSessions(pageSize, pageOffset, trimmedQuery, identity)
             val sessions = response.sessions.map(RemoteResponseMapper::session).map { it.copy(workspaceIdentity = identity) }
             sessions.filterTo(filtered) {
-                SessionAgentTypes.isMobileVisible(it.agentType) && filter.matches(it.agentType)
+                SessionListVisibility.isMobileVisible(it) && filter.matches(it.agentType)
             }
             hasMore = response.hasMore
             pageOffset += sessions.size
@@ -734,7 +736,7 @@ public class RemoteSessionStore internal constructor(
         val known = sessions.mapTo(mutableSetOf()) { it.id }
         val local = locallyCreatedSessions.values.filter { session ->
             session.id !in known &&
-                SessionAgentTypes.isMobileVisible(session.agentType) &&
+                SessionListVisibility.isMobileVisible(session) &&
                 filter.matches(session.agentType) &&
                 (query.isEmpty() || session.title.contains(query, ignoreCase = true) ||
                     session.workspaceName.orEmpty().contains(query, ignoreCase = true) ||
@@ -894,6 +896,29 @@ public class RemoteSessionStore internal constructor(
     }
 
     private var sessionHistoryHasMore = false
+    private var transcriptWrite: Job? = null
+
+    /**
+     * Holds the transcript write to one per [TRANSCRIPT_WRITE_DEBOUNCE_MS] while a turn streams.
+     *
+     * Every chunk of a streaming reply restates the whole session, and writing
+     * it re-encrypts and rewrites all of it — dozens of times a second, on the
+     * thread that draws the screen. Nothing reads the cache until the app is
+     * reopened, so only the last write of a burst ever mattered.
+     */
+    private fun scheduleTranscriptWrite(sessionId: String) {
+        if (transcriptWrite?.isActive == true) return
+        transcriptWrite = scope.launch {
+            delay(TRANSCRIPT_WRITE_DEBOUNCE_MS)
+            persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore)
+        }
+    }
+
+    private fun writeTranscriptNow(sessionId: String) {
+        transcriptWrite?.cancel()
+        transcriptWrite = null
+        persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore)
+    }
 
     private fun publishDurableTimeline() {
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
@@ -907,6 +932,7 @@ public class RemoteSessionStore internal constructor(
         val initialHistory = CompletableDeferred<Unit>()
         permissionMailbox.select(sessionId)
         sessionUpdates?.cancel()
+        transcriptWrite?.cancel()
         sessionHistoryHasMore = false
         sessionUpdates = scope.launch {
             try {
@@ -914,10 +940,35 @@ public class RemoteSessionStore internal constructor(
                 val store = relayStreamStore ?: error("Durable session storage unavailable")
                 val records = SessionRecordReplica(sessionId)
                 var caughtUp = false
+                /**
+                 * Renders everything received so far and reports the turn's phase.
+                 *
+                 * The cost is the whole session's length, so it runs only where
+                 * something can read the result. The initial replay of a long
+                 * session arrives one record at a time and used to render on each
+                 * of them, for a screen fenced behind [caughtUp] that nobody could
+                 * see yet — which is what made the first seconds after an open
+                 * impossible to scroll.
+                 */
+                fun render(): ChatSyncPhase {
+                    timelineStore.clearActiveTurn()
+                    val messages = records.messages()
+                    val active = messages.lastOrNull()?.takeIf { it.role == "assistant" && it.status == "streaming" }
+                    timelineStore.setPersistedMessages(if (active == null) messages else messages.dropLast(1))
+                    timelineStore.setActiveTurn(active)
+                    val phase = when (messages.lastOrNull()?.status) {
+                        "streaming" -> ChatSyncPhase.STREAMING
+                        "failed" -> ChatSyncPhase.ERROR
+                        else -> ChatSyncPhase.IDLE
+                    }
+                    timelineStore.setSyncPhase(phase)
+                    return phase
+                }
                 source.subscribe(sessionId, PersistentSessionReplica(store, source.streamIdentity + ":session:" + sessionId),
                     { handleFailure(it, _state.value as? RemoteSessionUiState.Ready) },
                     {
                         caughtUp = true
+                        if (!records.isEmpty) render()
                         publishDurableTimeline()
                         persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore)
                         initialHistory.complete(Unit)
@@ -932,17 +983,15 @@ public class RemoteSessionStore internal constructor(
                                 val kind = (payload["toolEvent"] as? JsonObject)?.get("event_type")?.jsonPrimitive?.content
                                 if (kind in setOf("ConfirmationNeeded", "Confirmed", "Rejected", "Cancelled")) permissionMailbox.invalidate()
                             }
-                            timelineStore.clearActiveTurn()
-                            val messages = records.messages()
-                            val active = messages.lastOrNull()?.takeIf { it.role == "assistant" && it.status == "streaming" }
-                            timelineStore.setPersistedMessages(if (active == null) messages else messages.dropLast(1))
-                            timelineStore.setActiveTurn(active)
-                            timelineStore.setSyncPhase(when (messages.lastOrNull()?.status) {
-                                "streaming" -> ChatSyncPhase.STREAMING
-                                "failed" -> ChatSyncPhase.ERROR
-                                else -> ChatSyncPhase.IDLE
-                            })
-                            if (caughtUp) { publishDurableTimeline(); persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore) }
+                            if (caughtUp) {
+                                val phase = render()
+                                publishDurableTimeline()
+                                // A streaming turn rewrites the same rows on every
+                                // chunk; anything else is a settled transcript worth
+                                // keeping now.
+                                if (phase == ChatSyncPhase.STREAMING) scheduleTranscriptWrite(sessionId)
+                                else writeTranscriptNow(sessionId)
+                            }
                         }
                         "relay://session-resumed", "session-interaction-changed" -> permissionMailbox.invalidate()
                         "relay://session-ready" -> {
@@ -1281,6 +1330,7 @@ public class RemoteSessionStore internal constructor(
                 val closingOpenSession = current.selectedSessionId == normalized
                 if (closingOpenSession) {
                     sessionUpdates?.cancel()
+                    transcriptWrite?.cancel()
                     timelineStore.reset("")
                 }
                 if (!isCurrentWork(operationToken)) return@launch
@@ -1853,6 +1903,9 @@ public class RemoteSessionStore internal constructor(
         /** One screenful of sessions. Matches the desktop's own `list_sessions` default. */
         private const val PAGE_SIZE: Int = 30
 
+        /** Long enough to swallow a burst of stream chunks, short enough to lose nothing on a kill. */
+        private const val TRANSCRIPT_WRITE_DEBOUNCE_MS = 400L
+
         /**
          * Window used while narrowing by agent type. The desktop clamps `limit`
          * to 100, so asking for more only costs round trips.
@@ -1928,6 +1981,10 @@ internal object RemoteResponseMapper {
             messageCount = item.messageCount ?: 0,
             workspacePath = item.workspacePath,
             workspaceName = item.workspaceName,
+            // Callers attach the identity of the workspace they listed under.
+            workspaceIdentity = null,
+            parentSessionId = item.parentSessionId,
+            relationshipKind = item.relationshipKind,
         )
     }
 

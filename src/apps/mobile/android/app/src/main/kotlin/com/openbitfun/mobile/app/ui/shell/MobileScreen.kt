@@ -70,6 +70,7 @@ import com.openbitfun.mobile.core.feature.layout.SettingsPlacementPolicy
 import com.openbitfun.mobile.core.feature.layout.SettingsSheetKind
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.session.RemoteSessionIntent
+import com.openbitfun.mobile.core.feature.session.WorkspaceSessionDirectoryUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteFilePreviewUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
@@ -133,6 +134,7 @@ internal fun MobileScreen() {
     val accountState by accountViewModel.state.collectAsStateWithLifecycle()
     val accountRemoteState by accountViewModel.remoteState.collectAsStateWithLifecycle()
     val accountPhase by accountViewModel.connectionPhase.collectAsStateWithLifecycle()
+    val accountWorkspaceDirectory by accountViewModel.workspaceDirectory.collectAsStateWithLifecycle()
     val readyAccount = accountState as? AccountUiState.Ready
     val linkContext = androidx.compose.ui.platform.LocalContext.current
     var pendingDeviceLink by rememberSaveable { mutableStateOf<String?>(null) }
@@ -179,6 +181,10 @@ internal fun MobileScreen() {
     val activeRemoteState = when (controlSummary.source) {
         RemoteControlSource.ACCOUNT_DEVICE -> accountRemoteState
         RemoteControlSource.NONE -> RemoteSessionUiState.Idle
+    }
+    val activeWorkspaceDirectory = when (controlSummary.source) {
+        RemoteControlSource.ACCOUNT_DEVICE -> accountWorkspaceDirectory
+        RemoteControlSource.NONE -> WorkspaceSessionDirectoryUiState(emptyList())
     }
 
     fun dispatchActiveWorkspace(intent: RemoteWorkspaceIntent) {
@@ -316,6 +322,7 @@ internal fun MobileScreen() {
             remoteDeviceName = controlSummary.desktopName,
             remoteState = activeRemoteState,
             workspaceState = activeWorkspaceState,
+            workspaceDirectory = activeWorkspaceDirectory,
             remoteActive = shell.surface == MobileSurface.REMOTE,
             remoteSelectedSessionId = shell.remoteSessionId,
             query = shell.sidebarQuery,
@@ -373,6 +380,16 @@ internal fun MobileScreen() {
                 shell.show(MobileSurface.REMOTE)
                 shell.closeRemoteSession()
                 closeDrawer()
+            },
+            onExpandRemoteWorkspace = { path, connectionId, sshHost ->
+                dispatchActiveSession(
+                    RemoteSessionIntent.LoadWorkspaceSessions(path, connectionId, sshHost),
+                )
+            },
+            onRetryRemoteWorkspaceSessions = { path, connectionId, sshHost ->
+                dispatchActiveSession(
+                    RemoteSessionIntent.RetryWorkspaceSessions(path, connectionId, sshHost),
+                )
             },
             onDeleteRemoteSession = { id -> dispatchActiveSession(RemoteSessionIntent.DeleteSession(id)) },
             onOpenSettings = {
