@@ -494,7 +494,7 @@ impl WorkspaceService {
         {
             let connection_id = connection_id.ok_or_else(|| {
                 OpenBitFunError::service(
-                    "Opening a new remote workspace requires its saved SSH connection ID",
+                    "Opening a remote workspace with an explicit SSH host requires its saved SSH connection ID",
                 )
             })?;
             if !path.starts_with('/') || path.contains('\0') {

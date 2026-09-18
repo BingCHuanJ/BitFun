@@ -421,7 +421,7 @@ fn workspace_metadata_string(
 }
 
 #[cfg(feature = "remote-connect")]
-fn remote_workspace_metadata(
+pub(crate) fn remote_workspace_metadata(
     kind: &crate::service::workspace::WorkspaceKind,
     metadata: &std::collections::HashMap<String, serde_json::Value>,
     key: &str,
