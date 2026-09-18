@@ -201,13 +201,13 @@
   }
 
   &__diff-line--add {
-    color: var(--openbitfun-color-status-success-content);
-    background: var(--openbitfun-color-status-success-surface);
+    color: var(--openbitfun-color-code-change-added);
+    background: color-mix(in srgb, var(--openbitfun-color-code-change-added) 10%, transparent);
   }
 
   &__diff-line--delete {
-    color: var(--openbitfun-color-status-danger-content);
-    background: var(--openbitfun-color-status-danger-surface);
+    color: var(--openbitfun-color-code-change-removed);
+    background: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 10%, transparent);
   }
 
   &__diff-line--meta {

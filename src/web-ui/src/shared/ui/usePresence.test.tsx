@@ -53,7 +53,7 @@ describe('overlay presence', () => {
     expect(host.childElementCount).toBe(0);
   });
 
-  it('settles an in-progress exit when the motion preference changes', () => {
+  it('keeps an in-progress exit on its committed deadline when the motion preference changes', () => {
     const media = new EventTarget();
     let reduced = false;
     Object.defineProperty(media, 'matches', { get: () => reduced });
@@ -61,7 +61,38 @@ describe('overlay presence', () => {
     render(true);
     act(() => vi.advanceTimersByTime(48));
     render(false);
-    act(() => { reduced = true; media.dispatchEvent(new Event('change')); });
+    act(() => {
+      vi.advanceTimersByTime(99);
+      reduced = true;
+      media.dispatchEvent(new Event('change'));
+    });
+    expect(host.childElementCount).toBe(1);
+    act(() => vi.advanceTimersByTime(1));
     expect(host.childElementCount).toBe(0);
+  });
+
+  it('does not replay an entrance when reduced motion is disabled on an open surface', () => {
+    const media = new EventTarget();
+    let reduced = false;
+    Object.defineProperty(media, 'matches', { get: () => reduced });
+    vi.stubGlobal('matchMedia', () => media);
+    render(true);
+    act(() => vi.advanceTimersByTime(48));
+    expect(host.firstElementChild?.getAttribute('data-state')).toBe('entered');
+    act(() => { reduced = true; media.dispatchEvent(new Event('change')); });
+    act(() => { reduced = false; media.dispatchEvent(new Event('change')); });
+    expect(host.firstElementChild?.getAttribute('data-state')).toBe('entered');
+  });
+
+  it('keeps the ordinary exit lifecycle when matchMedia is unavailable', () => {
+    vi.stubGlobal('matchMedia', undefined);
+    render(true);
+    act(() => vi.advanceTimersByTime(48));
+    const surface = host.firstElementChild!;
+    render(false);
+    expect(surface.getAttribute('data-state')).toBe('exiting');
+    expect(surface.isConnected).toBe(true);
+    act(() => vi.advanceTimersByTime(100));
+    expect(surface.isConnected).toBe(false);
   });
 });
