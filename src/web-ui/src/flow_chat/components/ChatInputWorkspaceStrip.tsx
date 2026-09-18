@@ -10,7 +10,7 @@
  * the track.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Circle, Shield, ShieldAlert, ShieldCheck, Square, SquareCheck } from 'lucide-react';
@@ -158,6 +158,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const branchTriggerRef = useRef<HTMLButtonElement>(null);
+  const branchPickerId = useId();
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const permissionMenuLayout = useAnchoredPopoverPosition({
     open: permissionMenuOpen,
@@ -514,14 +515,15 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
 
     return (
       <>
-        <Tooltip content={branchTooltipContent} placement="top">
+        <Tooltip content={branchTooltipContent} placement="top" disabled={branchMenuOpen}>
           <button
             ref={branchTriggerRef}
             type="button"
             className="openbitfun-chat-input-workspace-strip__chip openbitfun-chat-input-workspace-strip__chip--branch openbitfun-chat-input-workspace-strip__chip--branch-switchable"
             aria-label={t('workspaceStrip.branchSwitchLabel', { branch: branchLabel })}
-            aria-haspopup="listbox"
+            aria-haspopup="dialog"
             aria-expanded={branchMenuOpen}
+            aria-controls={branchMenuOpen ? branchPickerId : undefined}
             data-testid="chat-input-branch-trigger"
             onClick={event => {
               event.stopPropagation();
@@ -532,6 +534,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
           </button>
         </Tooltip>
         <BranchQuickSwitch
+          id={branchPickerId}
           isOpen={branchMenuOpen}
           onClose={() => setBranchMenuOpen(false)}
           repositoryPath={trimmedPath}

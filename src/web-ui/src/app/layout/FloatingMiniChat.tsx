@@ -260,7 +260,7 @@ export function FloatingMiniChat() {
       onClick={() => dock.setOpen(true)} onPointerDown={event => { if (event.button === 0) dock.setOpen(true); }}>
       {live ? <Phone size={16} /> : tv('voiceCall.call.launcherCompactLabel')}
     </LauncherButton>
-    <div ref={panelRef} role="dialog" aria-modal="false" aria-label={t('dock.open')} aria-hidden={!dock.open}
+    <div ref={panelRef} role="dialog" aria-modal="false" aria-label={t('dock.open')} aria-hidden={!dock.open} data-motion="presence"
       {...(!dock.open ? { inert: '' } : {})}
       className={['openbitfun-fmc__panel', dock.open && 'openbitfun-fmc__panel--open', drop && 'openbitfun-fmc__panel--drop'].filter(Boolean).join(' ')}
       data-openbitfun-component="floating-mini-chat" data-openbitfun-part="panel">

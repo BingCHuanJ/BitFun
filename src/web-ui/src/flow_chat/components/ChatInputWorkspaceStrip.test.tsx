@@ -228,7 +228,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       '[data-testid="chat-input-branch-trigger"]',
     );
     expect(trigger).not.toBeNull();
-    expect(trigger?.getAttribute('aria-haspopup')).toBe('listbox');
+    expect(trigger?.getAttribute('aria-haspopup')).toBe('dialog');
     expect(trigger?.getAttribute('aria-expanded')).toBe('false');
 
     await act(async () => {
