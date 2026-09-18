@@ -99,7 +99,7 @@ function Harness({ onSwitchSuccess, initiallyOpen = true, blockMessagePointer = 
       <BranchQuickSwitch
         isOpen={open}
         onClose={() => setOpen(false)}
-        repositoryPath="/repo"
+        repositoryPath={{ workspaceId: 'workspace-1' }}
         currentBranch="main"
         anchorRef={anchorRef}
         onSwitchSuccess={onSwitchSuccess}
@@ -315,9 +315,9 @@ describe('BranchQuickSwitch', () => {
       )?.click();
     });
 
-    expect(mocks.checkoutBranch).toHaveBeenCalledWith('/repo', 'feature');
+    expect(mocks.checkoutBranch).toHaveBeenCalledWith({ workspaceId: 'workspace-1' }, 'feature');
     expect(mocks.emit).toHaveBeenCalledWith('branch:changed', expect.objectContaining({
-      repositoryPath: '/repo',
+      repositoryPath: { workspaceId: 'workspace-1' },
       branch: expect.objectContaining({ name: 'feature', current: true }),
     }));
     expect(onSwitchSuccess).toHaveBeenCalledWith('feature');
@@ -391,12 +391,12 @@ describe('BranchQuickSwitch', () => {
       )?.click();
     });
 
-    expect(mocks.addFiles).toHaveBeenCalledWith('/repo', { files: [], all: true });
-    expect(mocks.commit).toHaveBeenCalledWith('/repo', {
+    expect(mocks.addFiles).toHaveBeenCalledWith({ workspaceId: 'workspace-1' }, { files: [], all: true });
+    expect(mocks.commit).toHaveBeenCalledWith({ workspaceId: 'workspace-1' }, {
       message: 'Save work before branch switch',
     });
     expect(mocks.checkoutBranch).toHaveBeenCalledTimes(2);
-    expect(mocks.checkoutBranch).toHaveBeenLastCalledWith('/repo', 'feature');
+    expect(mocks.checkoutBranch).toHaveBeenLastCalledWith({ workspaceId: 'workspace-1' }, 'feature');
     expect(onSwitchSuccess).toHaveBeenCalledWith('feature');
     expect(document.querySelector('[data-testid="branch-switch-commit-dialog"]')).toBeNull();
   });

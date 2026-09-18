@@ -45,6 +45,7 @@ import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.session.WorkspaceSessionDirectoryUiState
 import com.openbitfun.mobile.core.feature.layout.SettingsPlacement
 import com.openbitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
+import com.openbitfun.mobile.core.feature.shell.RemoteSidebarWorkspaceRow
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 
 internal const val SIDEBAR_TEST_TAG: String = "app-sidebar"
@@ -90,10 +91,10 @@ internal fun AppSidebar(
     directoryRefreshError: String? = null,
     onSelectRemoteDevice: (String) -> Unit,
     onOpenRemoteSession: (String) -> Unit,
-    onCreateRemoteInWorkspace: (String, String?, String?, String) -> Unit,
-    onOpenRemoteWorkspace: (String) -> Unit,
-    onExpandRemoteWorkspace: (String, String?, String?) -> Unit,
-    onRetryRemoteWorkspaceSessions: (String, String?, String?) -> Unit,
+    onCreateRemoteInWorkspace: (RemoteSidebarWorkspaceRow, String) -> Unit,
+    onOpenRemoteWorkspace: (RemoteSidebarWorkspaceRow) -> Unit,
+    onExpandRemoteWorkspace: (RemoteSidebarWorkspaceRow) -> Unit,
+    onRetryRemoteWorkspaceSessions: (RemoteSidebarWorkspaceRow) -> Unit,
     onAddRemoteWorkspace: (() -> Unit)? = null,
     onWorkspaceTool: (String, String?, Boolean) -> Unit,
     onDeleteRemoteSession: (String) -> Unit,

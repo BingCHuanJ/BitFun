@@ -18,12 +18,15 @@ export class RemoteResponseMapper {
     const workspacePath = response.path || '';
     const workspaceName = response.project_name || RemoteResponseMapper.basename(workspacePath);
     return {
+      workspaceId: response.workspace_id,
       path: workspacePath,
       name: workspaceName || 'Workspace',
       hasWorkspace: response.has_workspace !== false && workspacePath.length > 0,
       gitBranch: response.git_branch || '',
       workspaceKind: response.workspace_kind || 'normal',
-      assistantId: response.assistant_id
+      assistantId: response.assistant_id,
+      remoteConnectionId: (response.workspace_kind === 'normal' || response.workspace_kind === 'assistant') ? undefined : response.remote_connection_id,
+      remoteSshHost: (response.workspace_kind === 'normal' || response.workspace_kind === 'assistant') ? undefined : response.remote_ssh_host
     };
   }
 
@@ -31,20 +34,22 @@ export class RemoteResponseMapper {
     const workspacePath = response.path || response.workspace_path || '';
     const workspaceName = response.project_name || response.workspace_name || RemoteResponseMapper.basename(workspacePath);
     return {
+      workspaceId: response.workspace_id,
       path: workspacePath,
       name: workspaceName || 'Workspace',
       hasWorkspace: response.has_workspace !== false && workspacePath.length > 0,
       gitBranch: response.git_branch || '',
       workspaceKind: response.workspace_kind || 'normal',
       assistantId: response.assistant_id,
-      remoteConnectionId: response.remote_connection_id,
-      remoteSshHost: response.remote_ssh_host
+      remoteConnectionId: (response.workspace_kind === 'normal' || response.workspace_kind === 'assistant') ? undefined : response.remote_connection_id,
+      remoteSshHost: (response.workspace_kind === 'normal' || response.workspace_kind === 'assistant') ? undefined : response.remote_ssh_host
     };
   }
 
   static recentWorkspaces(items: RecentWorkspaceEntryResponse[]): RecentWorkspaceEntry[] {
     return items.map((item: RecentWorkspaceEntryResponse) => {
       const workspace: RecentWorkspaceEntry = {
+        workspaceId: item.workspace_id,
         path: item.path || '',
         name: item.name || RemoteResponseMapper.basename(item.path || '') || 'Workspace',
         lastOpened: RemoteResponseMapper.firstTimeValue([
@@ -53,8 +58,8 @@ export class RemoteResponseMapper {
           item.updated_at,
           item.updatedAt
         ]),
-        remoteSshHost: item.remote_ssh_host,
-        remoteConnectionId: item.remote_connection_id,
+        remoteSshHost: (item.workspace_kind === 'normal' || item.workspace_kind === 'assistant') ? undefined : item.remote_ssh_host,
+        remoteConnectionId: (item.workspace_kind === 'normal' || item.workspace_kind === 'assistant') ? undefined : item.remote_connection_id,
         workspaceKind: item.workspace_kind || 'normal'
       };
       return workspace;
@@ -106,6 +111,12 @@ export class RemoteResponseMapper {
         parentSessionId: item.parent_session_id,
         relationshipKind: item.relationship_kind
       };
+      // An ID-aware host pins every session to its workspace record. Keep that
+      // ID as the identity; the listing scope may later fill in display facts.
+      const workspaceId = (item.workspace_id || '').trim();
+      if (workspaceId.length > 0) {
+        session.workspaceIdentity = { workspaceId: workspaceId, path: item.workspace_path || '' };
+      }
       return session;
     });
   }

@@ -6,7 +6,6 @@ use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, AgentSubagentOverrideConfig};
 use crate::util::errors::OpenBitFunResult;
 use std::collections::HashMap;
-use std::path::Path;
 
 /// Tool-name prefixes of the tool families that are registered dynamically at
 /// runtime and therefore cannot appear in an Agent's static tool manifest.
@@ -44,9 +43,10 @@ pub(super) async fn get_subagent_overrides() -> AgentSubagentOverrideConfig {
 }
 
 pub(super) async fn load_project_subagent_overrides_local(
-    workspace_root: &Path,
+    workspace_id: &str,
 ) -> OpenBitFunResult<AgentSubagentOverrideConfig> {
-    let document = load_project_agent_profiles_document_local(workspace_root).await?;
+    let record = require_local_workspace(workspace_id).await?;
+    let document = load_project_agent_profiles_document_local(&record.root_path).await?;
     Ok(document
         .keys()
         .map(|profile_id| {
@@ -60,10 +60,11 @@ pub(super) async fn load_project_subagent_overrides_local(
 }
 
 pub(super) async fn save_project_subagent_overrides_local(
-    workspace_root: &Path,
+    workspace_id: &str,
     overrides: &AgentSubagentOverrideConfig,
 ) -> OpenBitFunResult<()> {
-    let mut document = load_project_agent_profiles_document_local(workspace_root).await?;
+    let record = require_local_workspace(workspace_id).await?;
+    let mut document = load_project_agent_profiles_document_local(&record.root_path).await?;
 
     let existing_profile_ids: Vec<String> = document.keys().cloned().collect();
     for profile_id in existing_profile_ids {
@@ -75,7 +76,7 @@ pub(super) async fn save_project_subagent_overrides_local(
         set_project_subagent_overrides(&mut document, profile_id, profile_overrides.clone());
     }
 
-    save_project_agent_profiles_document_local(workspace_root, &document).await
+    save_project_agent_profiles_document_local(&record.root_path, &document).await
 }
 
 fn merge_dynamic_tool_names(
@@ -99,6 +100,50 @@ fn merge_dynamic_tool_names(
     }
 
     configured_tools
+}
+
+pub(super) async fn require_workspace(
+    id: &str,
+) -> OpenBitFunResult<crate::service::workspace::WorkspaceInfo> {
+    let service = crate::service::workspace::get_global_workspace_service()
+        .ok_or_else(|| crate::OpenBitFunError::service("Workspace service is unavailable"))?;
+    service.require_workspace(id).await
+}
+
+/// Resolves the local directory that project-scoped agent files are read from
+/// and written to. Remote workspaces are a hard error here: their project
+/// agent documents live on the remote host, and silently reading or writing a
+/// same-named local path would leak or lose user configuration.
+pub(super) async fn require_local_workspace(
+    id: &str,
+) -> OpenBitFunResult<crate::service::workspace::WorkspaceInfo> {
+    let record = require_workspace(id).await?;
+    if record.workspace_kind == crate::service::workspace::WorkspaceKind::Remote {
+        return Err(crate::OpenBitFunError::service(
+            "Local agent discovery cannot read a remote workspace",
+        ));
+    }
+    Ok(record)
+}
+
+/// Resolves the project agent discovery root for a workspace record.
+///
+/// Local records yield their root directory. Remote records yield `None`:
+/// project agent discovery on the remote host is not a supported capability,
+/// so the registry publishes an empty project set for them instead of failing
+/// the whole load and leaving user-level custom agents unloaded.
+pub(super) async fn project_agent_discovery_root(
+    id: &str,
+) -> OpenBitFunResult<Option<std::path::PathBuf>> {
+    let record = require_workspace(id).await?;
+    if record.workspace_kind == crate::service::workspace::WorkspaceKind::Remote {
+        log::debug!(
+            "Project agent discovery skipped for remote workspace: workspace_id={}",
+            record.id
+        );
+        return Ok(None);
+    }
+    Ok(Some(record.root_path))
 }
 
 pub(super) fn merge_dynamic_mcp_tools(

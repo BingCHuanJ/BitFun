@@ -8,6 +8,7 @@ import {
   RecentWorkspaceEntry,
   RemoteModelCatalog,
   RemoteSession,
+  RemoteWorkspaceIdentity,
   SelectedImageAttachment,
   SessionSummary
 } from '../../model/RemoteModels';
@@ -43,6 +44,8 @@ export class RemotePageState {
   @Trace showRemoteUrlInput: boolean = false;
   @Trace workspaceName: string = '';
   @Trace workspacePath: string = '';
+  /** Stable record ID of the active workspace; empty for pre-ID hosts. */
+  @Trace workspaceId: string = '';
   @Trace workspaceConnectionId: string = '';
   @Trace workspaceSshHost: string = '';
   @Trace workspaceBranch: string = '';
@@ -197,15 +200,30 @@ export class RemotePageState {
     workspaceBranch: string = '',
     workspaceKind: string = 'normal',
     remoteConnectionId: string = '',
-    remoteSshHost: string = ''
+    remoteSshHost: string = '',
+    workspaceId: string = ''
   ): void {
     this.workspaceName = workspaceName;
     this.workspacePath = workspacePath;
     this.workspaceConnectionId = remoteConnectionId;
     this.workspaceSshHost = remoteSshHost;
+    this.workspaceId = workspaceId;
     this.assistantId = assistantId;
     this.workspaceBranch = workspaceBranch;
     this.workspaceKind = workspaceKind;
+  }
+
+  /**
+   * The active workspace as a reference. Empty strings from the page state
+   * become absent fields so the identity compares like catalog rows do.
+   */
+  workspaceIdentity(): RemoteWorkspaceIdentity {
+    return {
+      workspaceId: this.workspaceId.length > 0 ? this.workspaceId : undefined,
+      path: this.workspacePath,
+      remoteConnectionId: this.workspaceConnectionId.length > 0 ? this.workspaceConnectionId : undefined,
+      remoteSshHost: this.workspaceSshHost.length > 0 ? this.workspaceSshHost : undefined
+    };
   }
 
   setRecentWorkspaces(recentWorkspaces: RecentWorkspaceEntry[]): void {

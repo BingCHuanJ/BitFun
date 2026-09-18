@@ -51,6 +51,7 @@ import com.openbitfun.mobile.core.feature.connection.ConnectionStatusPresenter
 import com.openbitfun.mobile.core.feature.connection.RemoteControlSource
 import com.openbitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
 import com.openbitfun.mobile.core.feature.shell.RemoteSidebarWorkspaceLoad
+import com.openbitfun.mobile.core.feature.shell.RemoteSidebarWorkspaceRow
 import com.openbitfun.mobile.core.feature.session.WorkspaceSessionDirectoryUiState
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
@@ -82,10 +83,11 @@ internal fun SidebarRemoteWorkspaceSection(
     onSelectDevice: (String) -> Unit,
     onOpenSession: (String) -> Unit,
     onOpenActions: (RemoteSidebarSessionRow, IntRect) -> Unit,
-    onCreateInWorkspace: (String, String?, String?, String) -> Unit,
-    onOpenWorkspace: (String) -> Unit,
-    onExpandWorkspace: (String, String?, String?) -> Unit,
-    onRetryWorkspaceSessions: (String, String?, String?) -> Unit,
+    /** The row carries the workspace identity (ID first); the agent type follows. */
+    onCreateInWorkspace: (RemoteSidebarWorkspaceRow, String) -> Unit,
+    onOpenWorkspace: (RemoteSidebarWorkspaceRow) -> Unit,
+    onExpandWorkspace: (RemoteSidebarWorkspaceRow) -> Unit,
+    onRetryWorkspaceSessions: (RemoteSidebarWorkspaceRow) -> Unit,
     onAddWorkspace: (() -> Unit)? = null,
     onWorkspaceTool: (String, String?, Boolean) -> Unit,
 ) {
@@ -240,10 +242,11 @@ private fun SidebarActiveDeviceBody(
     onOpenSession: (String) -> Unit,
     onOpenActions: (RemoteSidebarSessionRow, IntRect) -> Unit,
     canActOnSessions: Boolean,
-    onCreateInWorkspace: (String, String?, String?, String) -> Unit,
-    onOpenWorkspace: (String) -> Unit,
-    onExpandWorkspace: (String, String?, String?) -> Unit,
-    onRetryWorkspaceSessions: (String, String?, String?) -> Unit,
+    /** The row carries the workspace identity (ID first); the agent type follows. */
+    onCreateInWorkspace: (RemoteSidebarWorkspaceRow, String) -> Unit,
+    onOpenWorkspace: (RemoteSidebarWorkspaceRow) -> Unit,
+    onExpandWorkspace: (RemoteSidebarWorkspaceRow) -> Unit,
+    onRetryWorkspaceSessions: (RemoteSidebarWorkspaceRow) -> Unit,
     onAddWorkspace: (() -> Unit)? = null,
     onWorkspaceTool: (String, String?, Boolean) -> Unit,
 ) {
@@ -341,10 +344,10 @@ private fun SidebarActiveDeviceBody(
                                     // `list_sessions` answers per workspace, so
                                     // this branch's rows only exist once asked
                                     // for. The store ignores a repeat.
-                                    onExpandWorkspace(path, entry.remoteConnectionId, entry.remoteSshHost)
+                                    onExpandWorkspace(entry)
                                 }
                             },
-                            onLongClick = { onOpenWorkspace(path) },
+                            onLongClick = { onOpenWorkspace(entry) },
                         )
                         .semantics(mergeDescendants = true) {
                             contentDescription = entry.name.ifBlank { path.substringAfterLast('/') }
@@ -385,7 +388,7 @@ private fun SidebarActiveDeviceBody(
                         expanded = createMenuOpen,
                         onToggle = { createMenuOpen = !createMenuOpen },
                         onDismiss = { createMenuOpen = false },
-                        onCreateAgent = { agent -> createMenuOpen = false; onCreateInWorkspace(path, entry.remoteConnectionId, entry.remoteSshHost, agent) },
+                        onCreateAgent = { agent -> createMenuOpen = false; onCreateInWorkspace(entry, agent) },
                     )
                     Icon(
                         painterResource(
@@ -404,7 +407,7 @@ private fun SidebarActiveDeviceBody(
                         RemoteSidebarWorkspaceLoad.LOADING,
                         -> if (workspaceSessions.isEmpty()) DeviceLoadingRow(startPadding = 26.dp)
                         RemoteSidebarWorkspaceLoad.FAILED -> WorkspaceFailedRow {
-                            onRetryWorkspaceSessions(path, entry.remoteConnectionId, entry.remoteSshHost)
+                            onRetryWorkspaceSessions(entry)
                         }
                         RemoteSidebarWorkspaceLoad.READY -> if (workspaceSessions.isEmpty()) {
                             Text(

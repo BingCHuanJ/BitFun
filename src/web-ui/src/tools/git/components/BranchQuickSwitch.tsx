@@ -1,3 +1,4 @@
+import type { GitWorkspaceScope } from '@/infrastructure/api/service-api/GitAPI';
 /** Searchable branch picker with guarded checkout and commit-then-switch recovery. */
 
 import React, {
@@ -45,6 +46,7 @@ import {
   parseUnifiedDiffStats,
   type BranchSwitchFileStats,
 } from './branchSwitchFailure';
+import { useStableGitWorkspaceScope } from '../hooks/useStableGitWorkspaceScope';
 import './BranchQuickSwitch.scss';
 
 const log = createLogger('BranchQuickSwitch');
@@ -59,13 +61,13 @@ export interface BranchQuickSwitchProps {
   id?: string;
   isOpen: boolean;
   onClose: () => void;
-  repositoryPath: string;
+  repositoryPath: GitWorkspaceScope;
   currentBranch: string;
   anchorRef: React.RefObject<HTMLElement | null>;
   onSwitchSuccess?: (branchName: string) => void;
 }
 
-const branchListFromCache = (repositoryPath: string): GitBranch[] | undefined => (
+const branchListFromCache = (repositoryPath: GitWorkspaceScope): GitBranch[] | undefined => (
   gitStateManager.getState(repositoryPath)?.branches
 );
 
@@ -73,11 +75,12 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   id,
   isOpen,
   onClose,
-  repositoryPath,
+  repositoryPath: workspaceReference,
   currentBranch,
   anchorRef,
   onSwitchSuccess,
 }) => {
+  const repositoryPath = useStableGitWorkspaceScope(workspaceReference);
   const { t } = useI18n('panels/git');
   const [branches, setBranches] = useState<GitBranch[]>([]);
   const [searchTerm, setSearchTerm] = useState('');

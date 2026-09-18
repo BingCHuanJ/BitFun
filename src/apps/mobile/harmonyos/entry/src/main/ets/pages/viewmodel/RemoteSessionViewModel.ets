@@ -25,7 +25,7 @@ export interface RemoteSessionViewModelHooks {
   readonly onLoadActiveMessages: () => Promise<void>;
   readonly onCreatedSession: (session: SessionSummary) => Promise<void>;
   readonly onRefreshSessions: () => Promise<void>;
-  readonly onSelectWorkspace: (path: string) => Promise<void>;
+  readonly onSelectWorkspace: (path: string, workspaceId?: string) => Promise<void>;
 }
 
 /** Owns remote session commands and their page lifecycle effects. */
@@ -129,7 +129,8 @@ export class RemoteSessionViewModel {
     modelId: string,
     workspacePath: string = '',
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    workspaceId?: string
   ): Promise<SessionSummary | undefined> {
     const created = await this.sessions.create(
       agentType,
@@ -156,7 +157,8 @@ export class RemoteSessionViewModel {
       modelId,
       workspacePath,
       remoteConnectionId,
-      remoteSshHost
+      remoteSshHost,
+      workspaceId
     );
     if (created && (created.initialTurnId || '').length > 0) {
       // The first poll may have observed the newly allocated session before
@@ -176,7 +178,8 @@ export class RemoteSessionViewModel {
     modelId: string = '',
     routeBeforeCreate: boolean = true,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    workspaceId?: string
   ): Promise<void> {
     if (this.hooks.isBusy() || !this.hooks.remoteAvailable()) {
       return;
@@ -185,7 +188,7 @@ export class RemoteSessionViewModel {
     this.beginSessionCreation(onRouteChat, routeBeforeCreate);
     let created: SessionSummary | undefined;
     try {
-      created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId, path, remoteConnectionId, remoteSshHost);
+      created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId, path, remoteConnectionId, remoteSshHost, workspaceId);
       if (!created && routeBeforeCreate) {
         this.restoreAfterFailedCreation(previousSession, onRouteChat);
       }

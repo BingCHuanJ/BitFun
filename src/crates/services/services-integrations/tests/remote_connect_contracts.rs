@@ -745,6 +745,7 @@ impl RecordingDialogHost {
         remote_ssh_host: &str,
     ) -> Self {
         self.binding_workspace = Some(RemoteDialogWorkspaceBinding {
+            workspace_id: None,
             workspace_path: workspace_path.to_string(),
             remote_connection_id: Some(remote_connection_id.to_string()),
             remote_ssh_host: Some(remote_ssh_host.to_string()),
@@ -1002,6 +1003,7 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
     async fn handle_workspace_command(&self, _command: &RemoteCommand) -> RemoteResponse {
         self.events.lock().unwrap().push("workspace".to_string());
         RemoteResponse::WorkspaceInfo {
+            workspace_id: None,
             has_workspace: false,
             path: None,
             project_name: None,
@@ -1018,8 +1020,10 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
         self.events.lock().unwrap().push("session".to_string());
         RemoteResponse::SessionCreated {
             session_id: "session-created".to_string(),
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
+            remote_ssh_host: None,
         }
     }
 
@@ -1298,6 +1302,7 @@ async fn remote_connect_command_owner_preserves_cancel_and_group_routing() {
         &RemoteCommand::GetFileInfo {
             path: "README.md".to_string(),
             session_id: None,
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
         },
@@ -1920,6 +1925,7 @@ impl RemoteWorkspaceFileRuntimeHost for UnavailableSessionFileHost {
         session: Option<&str>,
         _: Option<&str>,
         _: Option<&str>,
+        _: Option<&str>,
         _: u64,
         _: u64,
     ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
@@ -1931,6 +1937,7 @@ impl RemoteWorkspaceFileRuntimeHost for UnavailableSessionFileHost {
         &self,
         _: &str,
         session: Option<&str>,
+        _: Option<&str>,
         _: Option<&str>,
         _: Option<&str>,
     ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
@@ -1953,12 +1960,14 @@ async fn remote_connect_file_provider_errors_never_fall_back_to_local_files() {
             session_id: session_id.clone(),
             offset: 0,
             limit: 3,
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
         },
         RemoteCommand::GetFileInfo {
             path,
             session_id,
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
         },
@@ -1983,12 +1992,14 @@ impl RemoteWorkspaceFileRuntimeHost for ExplicitFileWorkspaceHost {
         &self,
         _: &str,
         session: Option<&str>,
+        workspace_id: Option<&str>,
         workspace: Option<&str>,
         connection: Option<&str>,
         _: u64,
         _: u64,
     ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
         assert_eq!(session, None);
+        assert_eq!(workspace_id, None);
         assert_eq!(workspace, Some("/captured/workspace"));
         assert_eq!(connection, Some("saved-runtime-profile"));
         Ok(None)
@@ -1997,13 +2008,71 @@ impl RemoteWorkspaceFileRuntimeHost for ExplicitFileWorkspaceHost {
         &self,
         _: &str,
         session: Option<&str>,
+        workspace_id: Option<&str>,
         workspace: Option<&str>,
         connection: Option<&str>,
     ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
         assert_eq!(session, None);
+        assert_eq!(workspace_id, None);
         assert_eq!(workspace, Some("/captured/workspace"));
         assert_eq!(connection, Some("saved-runtime-profile"));
         Ok(None)
+    }
+}
+
+struct WorkspaceIdFileHost;
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for WorkspaceIdFileHost {
+    async fn resolve_remote_file_workspace_root(&self, _: Option<&str>) -> Option<PathBuf> {
+        panic!("Workspace ID identity must never fall back to the selected local workspace")
+    }
+    async fn read_remote_file_chunk(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        workspace_id: Option<&str>,
+        workspace: Option<&str>,
+        connection: Option<&str>,
+        _: u64,
+        _: u64,
+    ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
+        assert_eq!(session, None);
+        assert_eq!(workspace_id, Some("workspace-42"));
+        assert_eq!(workspace, None);
+        assert_eq!(connection, None);
+        Ok(None)
+    }
+    async fn remote_file_info(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        workspace_id: Option<&str>,
+        workspace: Option<&str>,
+        connection: Option<&str>,
+    ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
+        assert_eq!(session, None);
+        assert_eq!(workspace_id, Some("workspace-42"));
+        assert_eq!(workspace, None);
+        assert_eq!(connection, None);
+        Ok(None)
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_workspace_id_file_identity_is_forwarded_without_local_fallback() {
+    for name in ["read_file_chunk", "get_file_info"] {
+        let command: RemoteCommand = serde_json::from_value(serde_json::json!({
+            "cmd": name, "path": "file.bin", "workspace_id": "workspace-42",
+            "offset": 0, "limit": 3
+        }))
+        .unwrap();
+        assert_eq!(
+            handle_remote_workspace_file_command(&WorkspaceIdFileHost, &command).await,
+            RemoteResponse::Error {
+                message: "This host cannot resolve an explicit file workspace".into()
+            }
+        );
     }
 }
 
@@ -2091,6 +2160,7 @@ fn remote_connect_execution_response_helpers_preserve_wire_shape() {
 #[test]
 fn remote_connect_workspace_response_helpers_own_wire_shape() {
     let workspace = RemoteWorkspaceFacts {
+        workspace_id: "test-workspace".to_string(),
         path: "D:/workspace/project".to_string(),
         name: "project".to_string(),
         git_branch: Some("main".to_string()),
@@ -2114,6 +2184,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
     assert_eq!(
         info_json["capabilities"],
         serde_json::json!([
+            "workspace_id_references_v1",
             REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
             REMOTE_CAPABILITY_DIALOG_STEER_V1,
             REMOTE_CAPABILITY_PLAN_BUILD_V1,
@@ -2139,6 +2210,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
 
     let recent_json = serde_json::to_value(remote_recent_workspaces_response(vec![
         RemoteRecentWorkspaceFacts {
+            workspace_id: "test-workspace".to_string(),
             path: workspace.path.clone(),
             name: workspace.name.clone(),
             last_opened: "2026-05-25T00:00:00Z".to_string(),
@@ -2162,6 +2234,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
 
     let assistant_json = serde_json::to_value(remote_assistant_list_response(vec![
         RemoteAssistantWorkspaceFacts {
+            workspace_id: "test-workspace".to_string(),
             path: "D:/workspace/assistant".to_string(),
             name: "assistant".to_string(),
             assistant_id: Some("assistant-2".to_string()),
@@ -2176,12 +2249,14 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
 
     assert_eq!(
         remote_workspace_updated_response(Ok(RemoteWorkspaceUpdate {
+            workspace_id: "test-workspace".to_string(),
             path: "D:/workspace/project".to_string(),
             name: "project".to_string(),
             remote_connection_id: None,
             remote_ssh_host: None,
         })),
         RemoteResponse::WorkspaceUpdated {
+            workspace_id: Some("test-workspace".to_string()),
             success: true,
             path: Some("D:/workspace/project".to_string()),
             project_name: Some("project".to_string()),
@@ -2193,6 +2268,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
     assert_eq!(
         remote_assistant_updated_response(Err("open failed".to_string())),
         RemoteResponse::AssistantUpdated {
+            workspace_id: None,
             success: false,
             path: None,
             name: None,
@@ -2262,6 +2338,7 @@ fn remote_connect_session_info_carries_child_lineage_to_clients() {
 fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
     let metadata = vec![
         RemoteSessionMetadata {
+            workspace_id: None,
             session_id: "session-1".to_string(),
             name: "first".to_string(),
             agent_type: "Standard".to_string(),
@@ -2272,6 +2349,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             relationship_kind: None,
         },
         RemoteSessionMetadata {
+            workspace_id: None,
             session_id: "session-2".to_string(),
             name: "second".to_string(),
             agent_type: "Cowork".to_string(),
@@ -2282,6 +2360,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             relationship_kind: None,
         },
         RemoteSessionMetadata {
+            workspace_id: None,
             session_id: "session-3".to_string(),
             name: "third".to_string(),
             agent_type: "Cowork".to_string(),
@@ -2320,6 +2399,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
 
     let initial = remote_initial_sync_response(
         Some(RemoteWorkspaceFacts {
+            workspace_id: "test-workspace".to_string(),
             path: "D:/workspace/project".to_string(),
             name: "project".to_string(),
             git_branch: Some("main".to_string()),
@@ -2345,6 +2425,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
     assert_eq!(
         initial_json["capabilities"],
         serde_json::json!([
+            "workspace_id_references_v1",
             REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
             REMOTE_CAPABILITY_DIALOG_STEER_V1,
             REMOTE_CAPABILITY_PLAN_BUILD_V1,
@@ -2366,8 +2447,10 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
         remote_session_created_response("session-new"),
         RemoteResponse::SessionCreated {
             session_id: "session-new".to_string(),
+            workspace_id: None,
             workspace_path: None,
             remote_connection_id: None,
+            remote_ssh_host: None,
         }
     );
     assert_eq!(
@@ -2549,6 +2632,7 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(cancel["turn_id"], "turn-1");
 
     let list = serde_json::to_value(RemoteCommand::ListSessions {
+        workspace_id: None,
         workspace_path: Some("/workspace/project".to_string()),
         remote_connection_id: Some("conn-1".to_string()),
         remote_ssh_host: Some("host-1".to_string()),

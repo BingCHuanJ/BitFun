@@ -354,16 +354,18 @@ internal fun MobileScreen() {
                 closeDrawer()
                 dispatchActiveSession(RemoteSessionIntent.Open(sessionId))
             },
-            onCreateRemoteInWorkspace = { path, connectionId, sshHost, agentType ->
+            onCreateRemoteInWorkspace = { workspace, agentType ->
+                // With an ID the create carries only the ID; the legacy triple is for pre-ID rows.
                 dispatchActiveSession(
                     RemoteSessionIntent.CreateSession(
                         agentType = agentType,
                         title = "",
                         instruction = "",
                         modelId = null,
-                        workspacePath = path,
-                        remoteConnectionId = connectionId,
-                        remoteSshHost = sshHost,
+                        workspacePath = workspace.path,
+                        remoteConnectionId = workspace.remoteConnectionId,
+                        remoteSshHost = workspace.remoteSshHost,
+                        workspaceId = workspace.workspaceId,
                     ),
                 )
                 shell.show(MobileSurface.REMOTE)
@@ -375,20 +377,25 @@ internal fun MobileScreen() {
                 closeDrawer()
             },
             onAddRemoteWorkspace = { workspacePickerOpen = true },
-            onOpenRemoteWorkspace = { path ->
-                dispatchActiveWorkspace(RemoteWorkspaceIntent.SelectWorkspace(path))
+            onOpenRemoteWorkspace = { workspace ->
+                dispatchActiveWorkspace(RemoteWorkspaceIntent.SelectWorkspace(workspace.path, workspace.remoteConnectionId, workspace.remoteSshHost, false, workspace.workspaceId))
                 shell.show(MobileSurface.REMOTE)
                 shell.closeRemoteSession()
                 closeDrawer()
             },
-            onExpandRemoteWorkspace = { path, connectionId, sshHost ->
+            onExpandRemoteWorkspace = { workspace ->
+                // The branch is loaded by workspace ID; the legacy triple only serves pre-ID rows.
                 dispatchActiveSession(
-                    RemoteSessionIntent.LoadWorkspaceSessions(path, connectionId, sshHost),
+                    RemoteSessionIntent.LoadWorkspaceSessions(
+                        workspace.path, workspace.remoteConnectionId, workspace.remoteSshHost, workspace.workspaceId,
+                    ),
                 )
             },
-            onRetryRemoteWorkspaceSessions = { path, connectionId, sshHost ->
+            onRetryRemoteWorkspaceSessions = { workspace ->
                 dispatchActiveSession(
-                    RemoteSessionIntent.RetryWorkspaceSessions(path, connectionId, sshHost),
+                    RemoteSessionIntent.RetryWorkspaceSessions(
+                        workspace.path, workspace.remoteConnectionId, workspace.remoteSshHost, workspace.workspaceId,
+                    ),
                 )
             },
             onDeleteRemoteSession = { id -> dispatchActiveSession(RemoteSessionIntent.DeleteSession(id)) },

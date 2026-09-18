@@ -40,9 +40,11 @@ public data class RemoteSidebarWorkspaceRow public constructor(
     public val sessions: List<RemoteSidebarSessionRow>,
     public val remoteConnectionId: String?,
     public val remoteSshHost: String?,
+    public val workspaceId: String?,
     public val load: RemoteSidebarWorkspaceLoad = RemoteSidebarWorkspaceLoad.READY,
 ) {
-    public val key: String get() = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost).key
+    public val key: String get() = RemoteWorkspaceIdentity(path, remoteConnectionId, remoteSshHost, workspaceId).key
+    public constructor(path: String, name: String, selected: Boolean, sessions: List<RemoteSidebarSessionRow>, remoteConnectionId: String?, remoteSshHost: String?) : this(path, name, selected, sessions, remoteConnectionId, remoteSshHost, null)
     public constructor(path: String, name: String, selected: Boolean, sessions: List<RemoteSidebarSessionRow>, remoteConnectionId: String?) : this(path, name, selected, sessions, remoteConnectionId, null)
     public constructor(path: String, name: String, selected: Boolean, sessions: List<RemoteSidebarSessionRow>) : this(path, name, selected, sessions, null)
 }
@@ -95,10 +97,10 @@ public object RemoteSidebarPresentation {
         val catalogIdentities = workspaceRows.map { row -> row.identity() }
         return workspaceRows.map { workspace ->
             val identity = workspace.identity()
-            val isSelected = selected != null && identity.matches(
-                RemoteWorkspaceIdentity(selected.path, selected.remoteConnectionId, selected.remoteSshHost))
+            // ID-first: IDs decide when both sides carry one; a pre-ID row falls back to the legacy triple.
+            val isSelected = selected != null && identity.sameWorkspace(selected.identity())
             val bucketed = sessions.filter { it.belongsTo(identity, catalogIdentities) }
-            val branch = directory?.workspace(workspace.path, workspace.remoteConnectionId, workspace.remoteSshHost)
+            val branch = directory?.workspace(identity)
             // The selected workspace is the one `list_sessions` was asked about,
             // so its bucket is authoritative even before any branch was loaded.
             val load = when {
@@ -122,6 +124,7 @@ public object RemoteSidebarPresentation {
                 selected = isSelected,
                 remoteConnectionId = workspace.remoteConnectionId,
                 remoteSshHost = workspace.remoteSshHost,
+                workspaceId = workspace.workspaceId,
                 load = load,
                 sessions = owned.map { session ->
                     RemoteSidebarSessionRow(
