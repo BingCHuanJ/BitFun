@@ -1,6 +1,6 @@
 /**
  * Virtual item renderer wrapper styles.
- * A4-like reading width with centered content.
+ * Shared transcript row geometry and content rhythm.
  */
 @use '../../flat-markdown-surfaces' as flatMarkdownSurfaces;
 @use '../../markdown-typography' as markdownTypography;
@@ -17,11 +17,10 @@
   display: flow-root;
 
   /*
-   * Single reading column shared by every item type (model rounds, explore
-   * groups, user messages, notices). Matches ChatInput's 900px so headers,
-   * `>` collapse rows, and message text all sit on the same leading edge.
-   * transcript-layout owns the shared content inset; user-bubble decoration
-   * extends into that gutter without shifting the reading column.
+   * One transcript row is shared by every item type (model rounds, explore
+   * groups, user messages, notices). transcript-layout reserves the turn-rail
+   * lane; leaf content owns its inset, and user-bubble decoration may extend
+   * into that gutter without shifting the text.
    */
   margin-block: 0;
   min-height: 1px;

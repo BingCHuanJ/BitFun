@@ -118,8 +118,8 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
       }
     })();
     
-    // A4-like layout: wrap with a max-width container.
-    // Render the container even when content is empty to avoid zero-size issues.
+    // The wrapper owns shared transcript geometry and virtualization measurement.
+    // Render it even when content is empty to avoid zero-size issues.
     // data-turn-id is used for long-image export.
     return (
       <div
