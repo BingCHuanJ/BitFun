@@ -91,16 +91,46 @@ pub(super) fn merge_dynamic_mcp_tools(
     configured_tools
 }
 
-pub(super) async fn require_local_workspace(
+pub(super) async fn require_workspace(
     id: &str,
 ) -> OpenBitFunResult<crate::service::workspace::WorkspaceInfo> {
     let service = crate::service::workspace::get_global_workspace_service()
         .ok_or_else(|| crate::OpenBitFunError::service("Workspace service is unavailable"))?;
-    let record = service.require_workspace(id).await?;
+    service.require_workspace(id).await
+}
+
+/// Resolves the local directory that project-scoped agent files are read from
+/// and written to. Remote workspaces are a hard error here: their project
+/// agent documents live on the remote host, and silently reading or writing a
+/// same-named local path would leak or lose user configuration.
+pub(super) async fn require_local_workspace(
+    id: &str,
+) -> OpenBitFunResult<crate::service::workspace::WorkspaceInfo> {
+    let record = require_workspace(id).await?;
     if record.workspace_kind == crate::service::workspace::WorkspaceKind::Remote {
         return Err(crate::OpenBitFunError::service(
             "Local agent discovery cannot read a remote workspace",
         ));
     }
     Ok(record)
+}
+
+/// Resolves the project agent discovery root for a workspace record.
+///
+/// Local records yield their root directory. Remote records yield `None`:
+/// project agent discovery on the remote host is not a supported capability,
+/// so the registry publishes an empty project set for them instead of failing
+/// the whole load and leaving user-level custom agents unloaded.
+pub(super) async fn project_agent_discovery_root(
+    id: &str,
+) -> OpenBitFunResult<Option<std::path::PathBuf>> {
+    let record = require_workspace(id).await?;
+    if record.workspace_kind == crate::service::workspace::WorkspaceKind::Remote {
+        log::debug!(
+            "Project agent discovery skipped for remote workspace: workspace_id={}",
+            record.id
+        );
+        return Ok(None);
+    }
+    Ok(Some(record.root_path))
 }

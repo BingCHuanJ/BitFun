@@ -243,7 +243,7 @@ const TodosScene: React.FC = () => {
     setDraft(jobToDraft(job, DEFAULT_AGENT_TYPE));
     setSelectedWorkspaceId(matchedOption?.value ?? '');
     setEditorOpen(true);
-  }, [defaultWorkspaceId, editingJob, editorOpen, resetEditor, workspaceOptions]);
+  }, [editingJob, editorOpen, resetEditor, workspaceOptions]);
 
   const handleToggleEnabled = useCallback(async (job: CronJob, enabled: boolean) => {
     try {

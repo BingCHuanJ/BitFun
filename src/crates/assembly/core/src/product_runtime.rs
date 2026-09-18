@@ -2922,6 +2922,11 @@ mod tests {
                 Uuid::new_v4()
             ));
             std::fs::create_dir_all(&path).expect("test workspace should be created");
+            // Sessions only exist inside registered workspaces; register the
+            // fixture directory like a host that opened this folder. Keep the
+            // canonical path so record-derived IO projections compare equal.
+            let path = dunce::canonicalize(&path).expect("test workspace should canonicalize");
+            crate::service::workspace::legacy_compat::register_local_fixture_blocking(&path);
             Self {
                 path,
                 snapshot_id: std::sync::OnceLock::new(),
@@ -3466,16 +3471,44 @@ mod tests {
             .and_then(|source| source.split("impl AgentSessionUsagePort").next())
             .expect("session fork implementation");
 
+        // The three port entry points resolve the workspace record and hand
+        // off to one shared fork path; that path owns the single Coordinator
+        // ownership gate, evaluated on the resolved binding before restore.
         assert_eq!(
-            fork_impl
-                .matches("ensure_workspace_runtime_ownership")
-                .count(),
+            fork_impl.matches("self.fork_at_persisted_turn(").count(),
             3,
             "latest-turn, explicit-turn, and before-turn forks must share the Coordinator ownership gate"
         );
         assert!(fork_impl.contains("fork_session_before_turn"));
+        assert!(
+            !fork_impl.contains("ensure_workspace_runtime_ownership"),
+            "port entry points must not duplicate the shared ownership gate"
+        );
+        let shared_fork = source
+            .split("async fn fork_at_persisted_turn(")
+            .nth(1)
+            .and_then(|source| source.split("fn runtime_port_error(").next())
+            .expect("shared fork implementation");
+        let ownership_gate = shared_fork
+            .find("ensure_workspace_runtime_ownership")
+            .expect("shared fork path must pass through the Coordinator ownership gate");
+        let restore = shared_fork
+            .find("restore_session_from_storage_path")
+            .expect("shared fork path restores the source session");
+        assert!(
+            ownership_gate < restore,
+            "ownership must be checked before the fork touches session state"
+        );
+        assert_eq!(
+            shared_fork
+                .matches("ensure_workspace_runtime_ownership")
+                .count(),
+            1
+        );
         assert!(!fork_impl.contains("RuntimeOwnershipKey"));
         assert!(!fork_impl.contains("try_acquire"));
+        assert!(!shared_fork.contains("RuntimeOwnershipKey"));
+        assert!(!shared_fork.contains("try_acquire"));
     }
 
     #[test]
@@ -4176,8 +4209,10 @@ mod tests {
             None,
         )
         .await;
+        // Remote roots are POSIX on every client OS; a host temp path (Windows
+        // drive letters) is not a valid remote workspace path.
         let remote = crate::service::workspace::legacy_compat::register_remote_fixture(
-            &directory.path().to_string_lossy(),
+            "/srv/fork/remote-project",
             "fork-ssh",
             "fork-host",
         )

@@ -183,6 +183,8 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
     toolCall?.id,
     toolItem.id,
     toolItem.toolName,
+    session?.config.workspaceId,
+    session?.workspaceId,
   ]);
 
   const summary = (

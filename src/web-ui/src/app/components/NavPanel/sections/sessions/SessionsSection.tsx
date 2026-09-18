@@ -188,10 +188,6 @@ interface SessionsSectionProps {
   workspaceId?: string;
   /** IO/display projection of the scoped workspace root; never a scope key. */
   workspacePath?: string;
-  /** Remote SSH IO projection forwarded to session dialogs; never a scope key. */
-  remoteConnectionId?: string | null;
-  /** Remote SSH IO projection forwarded to session dialogs; never a scope key. */
-  remoteSshHost?: string | null;
   isActiveWorkspace?: boolean;
   showCreateActions?: boolean;
   /** Product presentation for assistant-owned sessions. Project sessions use the compact row. */
@@ -215,8 +211,6 @@ export interface WorkspaceSessionScope {
 const SessionsSection: React.FC<SessionsSectionProps> = ({
   workspaceId,
   workspacePath,
-  remoteConnectionId = null,
-  remoteSshHost = null,
   isActiveWorkspace = true,
   presentation,
   isVisible = true,
@@ -1997,10 +1991,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             <ScheduledJobsModal
               isOpen={scheduledJobsSession != null}
               onClose={() => setScheduledJobsSessionId(null)}
-              workspacePath={retainedScheduledJobsSession.workspacePath || workspacePath}
               workspaceId={retainedScheduledJobsSession.workspaceId || workspaceId}
-              remoteConnectionId={retainedScheduledJobsSession.remoteConnectionId || remoteConnectionId}
-              remoteSshHost={retainedScheduledJobsSession.remoteSshHost || remoteSshHost}
               sessionId={retainedScheduledJobsSession.sessionId}
               targetKind="session"
               lockSessionId

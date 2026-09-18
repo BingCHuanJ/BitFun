@@ -4617,6 +4617,11 @@ mod tests {
                 Uuid::new_v4()
             ));
             std::fs::create_dir_all(&path).expect("test workspace should be created");
+            // Sessions only exist inside registered workspaces; register the
+            // fixture directory like a host that opened this folder. Keep the
+            // canonical path so record-derived IO projections compare equal.
+            let path = dunce::canonicalize(&path).expect("test workspace should canonicalize");
+            crate::service::workspace::legacy_compat::register_local_fixture_blocking(&path);
             Self { path }
         }
 
@@ -7628,11 +7633,19 @@ mod tests {
         let workspace = TestWorkspace::new();
         let path_manager = workspace.path_manager();
         let manager = PersistenceManager::new(path_manager.clone()).expect("persistence manager");
+        let remote_path = format!("/home/wsp/corrupt-index-{}", Uuid::new_v4());
+        let remote_workspace = crate::service::workspace::legacy_compat::register_remote_fixture(
+            &remote_path,
+            "ssh-1",
+            "dev-host",
+        )
+        .await;
         let sessions_dir = crate::service::WorkspaceRuntimeService::new(path_manager)
-            .context_for_remote_workspace("dev-host", "/home/wsp/project")
+            .context_for_remote_workspace("dev-host", &remote_path)
             .sessions_dir;
         let config = SessionConfig {
-            workspace_path: Some("/home/wsp/project".to_string()),
+            workspace_id: Some(remote_workspace.id.clone()),
+            workspace_path: Some(remote_path.clone()),
             remote_connection_id: Some("ssh-1".to_string()),
             remote_ssh_host: Some("dev-host".to_string()),
             ..Default::default()

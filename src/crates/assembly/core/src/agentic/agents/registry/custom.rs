@@ -49,10 +49,15 @@ impl AgentRegistry {
     }
 
     /// Load user custom agents globally and project subagents for the given workspace.
+    ///
+    /// A remote workspace has no locally discoverable project agents; the
+    /// registry still reloads user-level custom agents and publishes an empty
+    /// project set under that workspace ID so callers do not retry the scan on
+    /// every query. Only an unknown workspace ID aborts the load.
     pub async fn load_custom_agents(&self, workspace_id: Option<&str>) {
         let root = match workspace_id {
-            Some(id) => match super::support::require_local_workspace(id).await {
-                Ok(record) => Some(record.root_path),
+            Some(id) => match super::support::project_agent_discovery_root(id).await {
+                Ok(root) => root,
                 Err(error) => {
                     log::warn!("Cannot load workspace agents: {error}");
                     return;

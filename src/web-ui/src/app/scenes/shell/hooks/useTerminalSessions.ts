@@ -141,7 +141,7 @@ export function useTerminalSessions(options: UseTerminalSessionsOptions) {
     await refreshSessions();
     assertCurrent();
     return { session, created: true };
-  }, [assertCurrent, currentConnectionId, refreshSessions, sessionMap, workspacePath, workspaceId]);
+  }, [assertCurrent, refreshSessions, sessionMap, workspacePath, workspaceId]);
 
   const createManualSession = useCallback(async (shellType?: string, directory?: string, shellId?: string) => {
     assertCurrent();
@@ -153,7 +153,7 @@ export function useTerminalSessions(options: UseTerminalSessionsOptions) {
     await refreshSessions();
     assertCurrent();
     return session;
-  }, [assertCurrent, currentConnectionId, refreshSessions, workspacePath, workspaceId]);
+  }, [assertCurrent, refreshSessions, workspacePath, workspaceId]);
   const stopEntrySession = useCallback(async (entry: ShellEntry) => {
     if (entry.isRunning) await closeSessionIfPresent(entry.sessionId);
   }, [closeSessionIfPresent]);

@@ -3622,18 +3622,22 @@ mod tests {
         assert!(remote_opened_workspace_catalog(&service).await.is_empty());
     }
 
+    /// Builds a session create request bound to a registered workspace record.
+    /// The record is authoritative for local/remote; paths are IO projections.
     #[cfg(feature = "opencode-plugin-host")]
-    fn plugin_session_request() -> AgentSessionCreateRequest {
+    fn plugin_session_request(
+        workspace: &crate::service::workspace::WorkspaceInfo,
+    ) -> AgentSessionCreateRequest {
         AgentSessionCreateRequest {
             session_name: "session".to_string(),
             agent_type: "Code".to_string(),
             agent_route_key: None,
-            workspace_path: Some("project".to_string()),
+            workspace_path: Some(workspace.root_path.to_string_lossy().into_owned()),
             project_workspace_path: None,
             execution_target: Some(openbitfun_core_types::SessionExecutionTarget::local(
                 "project-worktree",
             )),
-            workspace_id: Some("workspace-a".to_string()),
+            workspace_id: Some(workspace.id.clone()),
             remote_connection_id: None,
             remote_ssh_host: None,
             model_id: None,
@@ -3641,10 +3645,25 @@ mod tests {
         }
     }
 
+    /// Registers a temporary local workspace; the guard keeps its directory
+    /// alive for the calling test.
+    #[cfg(feature = "opencode-plugin-host")]
+    async fn local_plugin_workspace(
+    ) -> (tempfile::TempDir, crate::service::workspace::WorkspaceInfo) {
+        let directory = tempfile::tempdir().expect("plugin workspace");
+        let record = crate::service::workspace::legacy_compat::register_local_fixture(
+            directory.path(),
+            None,
+        )
+        .await;
+        (directory, record)
+    }
+
     #[cfg(feature = "opencode-plugin-host")]
     #[tokio::test]
     async fn configured_plugins_bind_to_the_session_execution_root() {
-        let request = plugin_session_request();
+        let (_workspace_dir, workspace) = local_plugin_workspace().await;
+        let request = plugin_session_request(&workspace);
 
         assert_eq!(
             configured_plugin_execution_root(&request)
@@ -3657,10 +3676,35 @@ mod tests {
     #[cfg(feature = "opencode-plugin-host")]
     #[tokio::test]
     async fn configured_plugins_do_not_execute_for_remote_sessions() {
-        let mut request = plugin_session_request();
-        request.remote_connection_id = Some("remote-a".to_string());
+        let remote = crate::service::workspace::legacy_compat::register_remote_fixture(
+            &format!("/srv/plugin-remote/{}", uuid::Uuid::new_v4()),
+            "remote-a",
+            "remote.example",
+        )
+        .await;
+        let request = plugin_session_request(&remote);
 
-        assert!(configured_plugin_execution_root(&request).await.is_err());
+        assert_eq!(
+            configured_plugin_execution_root(&request)
+                .await
+                .expect("remote session is supported"),
+            None
+        );
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[tokio::test]
+    async fn configured_plugins_ignore_stale_transport_hints_on_a_local_record() {
+        let (_workspace_dir, workspace) = local_plugin_workspace().await;
+        let mut request = plugin_session_request(&workspace);
+        request.remote_connection_id = Some("stale-remote".to_string());
+
+        assert_eq!(
+            configured_plugin_execution_root(&request)
+                .await
+                .expect("the workspace record decides local vs remote"),
+            Some(std::path::PathBuf::from("project-worktree"))
+        );
     }
 
     #[cfg(feature = "opencode-plugin-host")]
@@ -3683,7 +3727,8 @@ mod tests {
     #[cfg(feature = "opencode-plugin-host")]
     #[tokio::test]
     async fn configured_plugin_failure_does_not_block_native_session_creation() {
-        let mut request = plugin_session_request();
+        let (_workspace_dir, workspace) = local_plugin_workspace().await;
+        let mut request = plugin_session_request(&workspace);
         request.workspace_path = None;
         request.execution_target = None;
 

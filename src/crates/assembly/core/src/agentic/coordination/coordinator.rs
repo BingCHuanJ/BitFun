@@ -15450,6 +15450,7 @@ mod tests {
     async fn post_admission_state_write_failure_still_delivers_all_cancellation_signals() {
         let (coordinator, session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let session_id = format!("lineage-cancel-{}", uuid::Uuid::new_v4());
         let turn_id = format!("turn-{}", uuid::Uuid::new_v4());
         session_manager
@@ -15639,6 +15640,7 @@ mod tests {
     async fn manual_compaction_fails_closed_before_admission_when_external_agent_is_unavailable() {
         let (coordinator, session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let session_id = format!("external-compact-{}", uuid::Uuid::new_v4());
         let external_agent_id = format!("missing-external-{}", uuid::Uuid::new_v4());
         session_manager
@@ -15684,6 +15686,7 @@ mod tests {
     async fn explicit_agent_change_switches_owner_but_case_variant_does_not() {
         let (_coordinator, session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let session_id = format!("external-to-local-{}", uuid::Uuid::new_v4());
         let external_agent_id = format!("external-profile-{}", uuid::Uuid::new_v4());
         session_manager
@@ -15858,6 +15861,7 @@ mod tests {
     async fn manual_compaction_cancelled_before_setup_preserves_context_and_settles_turn() {
         let (coordinator, session_manager) = test_coordinator();
         let workspace = tempfile::tempdir().unwrap();
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let session = session_manager
             .create_session(
                 "Cancelled compaction".to_string(),
@@ -15921,6 +15925,7 @@ mod tests {
         let root = tempfile::tempdir().expect("test root");
         let workspace = root.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("workspace should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace);
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(
             root.path().join("user-root"),
         ));
@@ -16399,6 +16404,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         let workspace_path_string = workspace_path.to_string_lossy().into_owned();
         let session = TEST_AGENT_MODEL_DEFAULTS
             .scope(
@@ -16445,6 +16451,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         let workspace_path_string = workspace_path.to_string_lossy().into_owned();
         let session = TEST_AGENT_MODEL_DEFAULTS
             .scope(
@@ -16492,6 +16499,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         let workspace_path_string = workspace_path.to_string_lossy().into_owned();
         let session = TEST_AGENT_MODEL_DEFAULTS
             .scope(
@@ -16545,6 +16553,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         let workspace_path_string = workspace_path.to_string_lossy().into_owned();
         let session = TEST_AGENT_MODEL_DEFAULTS
             .scope(
@@ -16832,6 +16841,7 @@ mod tests {
     #[tokio::test]
     async fn control_conversation_reset_preserves_history_and_retries_one_selection() {
         let workspace = tempfile::tempdir().expect("control workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         // Installs the global workspace service the control conversation
         // registers its app-owned folder with.
         crate::service::workspace::legacy_compat::register_local_fixture(workspace.path(), None)
@@ -16918,6 +16928,7 @@ mod tests {
     #[tokio::test]
     async fn completed_persisted_turn_emits_a_durable_history_fence() {
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let (coordinator, session_manager) = test_persistent_coordinator();
         let session = session_manager
             .create_session(
@@ -16991,6 +17002,7 @@ mod tests {
     #[tokio::test]
     async fn transient_turns_keep_authoritative_terminal_results() {
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let (coordinator, session_manager) = test_persistent_coordinator();
         let session = session_manager
             .create_transient_session_with_id_and_details(
@@ -17199,6 +17211,7 @@ mod tests {
     async fn stale_targeted_revert_keeps_an_existing_staged_suffix() {
         let (coordinator, session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let session_id = format!("targeted-stale-{}", uuid::Uuid::new_v4());
         let storage_path =
             create_staged_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id)
@@ -17250,6 +17263,7 @@ mod tests {
     async fn staged_revert_is_committed_before_local_and_maintenance_turns() {
         let (coordinator, session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
 
         let local_session_id = format!("local-revert-{}", uuid::Uuid::new_v4());
         let local_storage = create_staged_two_turn_session(
@@ -17388,6 +17402,7 @@ mod tests {
     async fn mutating_restore_reconciles_a_marker_written_before_workspace_apply() {
         let (coordinator, session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let file_path = workspace.path().join("src/lib.rs");
         std::fs::create_dir_all(file_path.parent().expect("file parent"))
             .expect("create file parent");
@@ -17498,6 +17513,7 @@ mod tests {
     async fn coordinator_delete_reconciles_an_unfinished_revert_before_cleanup() {
         let (coordinator, session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let session_id = format!("delete-revert-{}", uuid::Uuid::new_v4());
         let storage_path =
             create_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id).await;
@@ -17533,6 +17549,7 @@ mod tests {
         let (coordinator, session_manager) = test_persistent_coordinator();
         let coordinator = Arc::new(coordinator);
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let session_id = format!("transcript-mutation-{}", uuid::Uuid::new_v4());
         let storage_path =
             create_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id).await;
@@ -17584,6 +17601,7 @@ mod tests {
     async fn transient_transcript_locked_fallback_does_not_reenter_session_mutation() {
         let (coordinator, session_manager) = test_coordinator();
         let workspace = tempfile::tempdir().expect("transient workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let session = session_manager
             .create_session(
                 "Transient transcript".to_string(),
@@ -17629,6 +17647,7 @@ mod tests {
     async fn create_session_checks_runtime_ownership_before_persisting() {
         let ownership_root = tempfile::tempdir().expect("ownership root");
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let key = openbitfun_services_core::runtime_ownership::RuntimeOwnershipKey::for_workspace(
             workspace.path(),
             "openbitfun",
@@ -17672,6 +17691,9 @@ mod tests {
 
         for agent_type in ["CodeReview", "DeepReview"] {
             let workspace = tempfile::tempdir().expect("review workspace");
+            crate::service::workspace::legacy_compat::register_local_fixture_blocking(
+                workspace.path(),
+            );
             let session = coordinator
                 .create_session_with_workspace(
                     None,
@@ -17695,6 +17717,7 @@ mod tests {
     async fn review_fixer_turn_is_admitted_after_updating_a_deep_review_session_binding() {
         let (coordinator, session_manager) = test_coordinator();
         let workspace = tempfile::tempdir().expect("review workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let workspace_path = workspace.path().to_string_lossy().into_owned();
         let session = session_manager
             .create_session(
@@ -17755,6 +17778,7 @@ mod tests {
     async fn assistant_bootstrap_checks_runtime_ownership_before_files_or_attach() {
         let ownership_root = tempfile::tempdir().expect("ownership root");
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let key = openbitfun_services_core::runtime_ownership::RuntimeOwnershipKey::for_workspace(
             workspace.path(),
             "openbitfun",
@@ -17989,6 +18013,7 @@ mod tests {
     async fn unverified_remote_hint_cannot_bypass_local_workspace_ownership() {
         let ownership_root = tempfile::tempdir().expect("ownership root");
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let key = openbitfun_services_core::runtime_ownership::RuntimeOwnershipKey::for_workspace(
             workspace.path(),
             "openbitfun",
@@ -18042,6 +18067,7 @@ mod tests {
     async fn attach_and_mutation_paths_check_runtime_ownership_before_side_effects() {
         let ownership_root = tempfile::tempdir().expect("ownership root");
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let key = openbitfun_services_core::runtime_ownership::RuntimeOwnershipKey::for_workspace(
             workspace.path(),
             "openbitfun",
@@ -18161,6 +18187,7 @@ mod tests {
     #[tokio::test]
     async fn user_shell_command_persists_a_standard_exec_command_tool_turn() {
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let (coordinator, session_manager) = test_persistent_user_shell_coordinator();
         let session = session_manager
             .create_session(
@@ -18242,6 +18269,7 @@ mod tests {
     #[tokio::test]
     async fn user_shell_command_auto_approves_ask_but_preserves_project_denies() {
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let permission_path = workspace
             .path()
             .join(".openbitfun")
@@ -18315,6 +18343,7 @@ mod tests {
     #[tokio::test]
     async fn user_shell_command_reports_a_nonzero_exit_as_a_tool_error() {
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let (coordinator, session_manager) = test_persistent_user_shell_coordinator();
         let session = session_manager
             .create_session(
@@ -18361,6 +18390,7 @@ mod tests {
     #[tokio::test]
     async fn user_shell_command_cancelled_during_validation_never_executes() {
         let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
         let validation_started = Arc::new(Notify::new());
         let release_validation = Arc::new(Notify::new());
         let call_count = Arc::new(AtomicUsize::new(0));
@@ -19140,6 +19170,10 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let workspace_record =
+            crate::service::workspace::legacy_compat::register_local_fixture_blocking(
+                &workspace_path,
+            );
         let mut metadata = serde_json::Map::new();
         metadata.insert(
             "createdBy".to_string(),
@@ -19155,7 +19189,7 @@ mod tests {
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
-                workspace_id: Some("workspace-1".to_string()),
+                workspace_id: Some(workspace_record.id.clone()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
                 model_id: Some("explicit-model".to_string()),
@@ -19171,7 +19205,10 @@ mod tests {
         assert_eq!(result.session_name, "Worker");
         assert_eq!(result.session_name, created.session_name);
         assert_eq!(created.created_by.as_deref(), Some("session-parent"));
-        assert_eq!(created.config.workspace_id.as_deref(), Some("workspace-1"));
+        assert_eq!(
+            created.config.workspace_id.as_deref(),
+            Some(workspace_record.id.as_str())
+        );
         assert_eq!(created.config.model_id.as_deref(), Some("explicit-model"));
 
         let _ = std::fs::remove_dir_all(workspace_path);
@@ -19185,6 +19222,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         let workspace = workspace_path.to_string_lossy().into_owned();
         let created = AgentSubmissionPort::create_session(
             &coordinator,
@@ -19326,6 +19364,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
 
         let result = AgentSubmissionPort::create_session_with_id(
             &coordinator,
@@ -19398,7 +19437,10 @@ mod tests {
             .unload_session_from_memory("fixed-session-id")
             .await
             .expect("fixed-id session should unload"));
-        let unloaded_default_workspace_goal = AgentThreadGoalManagementPort::get_thread_goal(
+        // Once the session is unloaded there is no in-memory workspace to
+        // inherit and "." is not a registered workspace record, so the read
+        // must fail loudly instead of guessing a current-directory store.
+        let unloaded_default_workspace_error = AgentThreadGoalManagementPort::get_thread_goal(
             &coordinator,
             AgentThreadGoalGetRequest {
                 session_id: "fixed-session-id".to_string(),
@@ -19408,8 +19450,14 @@ mod tests {
             },
         )
         .await
-        .expect("unloaded local session should retain the current-directory fallback");
-        assert_eq!(unloaded_default_workspace_goal, None);
+        .expect_err("unloaded session without a workspace scope must not resolve storage");
+        assert!(
+            unloaded_default_workspace_error
+                .message
+                .contains("does not resolve to a local workspace"),
+            "{}",
+            unloaded_default_workspace_error.message
+        );
     }
 
     #[tokio::test]
@@ -19701,6 +19749,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         let workspace_path_string = workspace_path.to_string_lossy().into_owned();
 
         let first = TEST_AGENT_MODEL_DEFAULTS
@@ -19791,6 +19840,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         let workspace = workspace_path.to_string_lossy().into_owned();
         let request = |name: &str| AgentSessionCreateRequest {
             session_name: name.to_string(),
@@ -19986,6 +20036,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         struct TempWorkspaceGuard(std::path::PathBuf);
         impl Drop for TempWorkspaceGuard {
             fn drop(&mut self) {
@@ -20082,8 +20133,12 @@ mod tests {
     async fn fresh_subagent_inherits_matching_parent_worktree_binding() {
         let (coordinator, session_manager) = test_coordinator();
         let temp_root = tempfile::tempdir().expect("temp root should exist");
-        let project_path = temp_root.path().join("OpenBitFun");
-        let worktree_path = temp_root.path().join("managed-worktree");
+        // Workspace records store canonical roots (macOS `/var` -> `/private/var`);
+        // build the expected IO projections from the same canonical root.
+        let canonical_root =
+            dunce::canonicalize(temp_root.path()).expect("temp root should canonicalize");
+        let project_path = canonical_root.join("OpenBitFun");
+        let worktree_path = canonical_root.join("managed-worktree");
         std::fs::create_dir_all(&project_path).expect("project dir should exist");
         std::fs::create_dir_all(&worktree_path).expect("worktree dir should exist");
         let project_workspace_path = project_path.to_string_lossy().into_owned();
@@ -20176,6 +20231,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         struct TempWorkspaceGuard(std::path::PathBuf);
         impl Drop for TempWorkspaceGuard {
             fn drop(&mut self) {
@@ -20322,6 +20378,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         struct TempWorkspaceGuard(std::path::PathBuf);
         impl Drop for TempWorkspaceGuard {
             fn drop(&mut self) {
@@ -20486,6 +20543,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         struct TempWorkspaceGuard(std::path::PathBuf);
         impl Drop for TempWorkspaceGuard {
             fn drop(&mut self) {
@@ -20596,6 +20654,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         struct TempWorkspaceGuard(std::path::PathBuf);
         impl Drop for TempWorkspaceGuard {
             fn drop(&mut self) {
@@ -20637,6 +20696,7 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace_path);
         struct TempWorkspaceGuard(std::path::PathBuf);
         impl Drop for TempWorkspaceGuard {
             fn drop(&mut self) {
@@ -20711,25 +20771,22 @@ mod tests {
     #[tokio::test]
     async fn btw_session_persists_relationship_and_seeds_forked_listing_baselines() {
         let (coordinator, session_manager) = test_persistent_coordinator();
-        let workspace_path = std::env::temp_dir().join(format!(
-            "openbitfun-btw-baseline-test-{}",
-            uuid::Uuid::new_v4()
-        ));
-        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
-        struct TempWorkspaceGuard(std::path::PathBuf);
-        impl Drop for TempWorkspaceGuard {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.0);
-            }
-        }
-        let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
+        // The parent lives in a registered remote workspace; the child must
+        // inherit that record's SSH facts rather than transport hints.
+        let remote_workspace = crate::service::workspace::legacy_compat::register_remote_fixture(
+            &format!("/srv/btw-baseline/{}", uuid::Uuid::new_v4()),
+            "ssh-user@example.test:22",
+            "example.test",
+        )
+        .await;
 
         let parent_session = session_manager
             .create_session(
                 "Parent".to_string(),
                 "Standard".to_string(),
                 SessionConfig {
-                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    workspace_id: Some(remote_workspace.id.clone()),
+                    workspace_path: Some(remote_workspace.root_path.to_string_lossy().into_owned()),
                     remote_connection_id: Some("ssh-user@example.test:22".to_string()),
                     remote_ssh_host: Some("example.test".to_string()),
                     ..Default::default()
@@ -20851,7 +20908,13 @@ mod tests {
         let session_storage_path = session_manager
             .storage_path_binding_for_test(&child_session.session_id)
             .expect("BTW storage path should be bound");
-        let _storage_guard = TempWorkspaceGuard(session_storage_path.clone());
+        struct TempStorageGuard(std::path::PathBuf);
+        impl Drop for TempStorageGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _storage_guard = TempStorageGuard(session_storage_path.clone());
         let metadata = session_manager
             .load_session_metadata(&session_storage_path, &child_session.session_id)
             .await

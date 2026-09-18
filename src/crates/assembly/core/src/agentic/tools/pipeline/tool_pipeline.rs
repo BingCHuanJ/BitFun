@@ -2946,15 +2946,24 @@ mod tests {
     #[test]
     fn remote_workspace_never_resolves_a_local_plugin_hook_scope() {
         let workspace = tempfile::tempdir().expect("workspace");
-        let local = WorkspaceBinding::new(None, workspace.path().to_path_buf());
+        // The plugin scope is the workspace record ID, never the root path.
+        let local = WorkspaceBinding::new(
+            Some("workspace-local".to_string()),
+            workspace.path().to_path_buf(),
+        );
         let mut remote = local.clone();
         remote.backend = crate::agentic::workspace::WorkspaceBackend::Remote {
             connection_id: "remote-a".to_string(),
             connection_name: "Remote A".to_string(),
         };
+        let unregistered = WorkspaceBinding::new(None, workspace.path().to_path_buf());
 
-        assert!(local_plugin_workspace_scope(&local).is_some());
+        assert_eq!(
+            local_plugin_workspace_scope(&local).as_deref(),
+            Some("workspace-local")
+        );
         assert!(local_plugin_workspace_scope(&remote).is_none());
+        assert!(local_plugin_workspace_scope(&unregistered).is_none());
     }
 
     #[test]

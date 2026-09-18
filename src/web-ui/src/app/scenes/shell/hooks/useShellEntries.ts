@@ -45,8 +45,11 @@ export function useShellEntries(targetWorkspace?: WorkspaceInfo | null): UseShel
   const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
   const isRemote = workspace?.workspaceKind === 'remote';
   const currentConnectionId = isRemote ? workspace?.connectionId ?? null : null;
-  const profileWorkspace = useMemo(() => workspace ? { surfaceId: scope.surfaceId, workspaceId: workspace.id } : undefined,
-    [scope.surfaceId, workspace?.id]);
+  const workspaceId = workspace?.id;
+  const profileWorkspace = useMemo(
+    () => (workspaceId ? { surfaceId: scope.surfaceId, workspaceId } : undefined),
+    [scope.surfaceId, workspaceId],
+  );
   const profileKey = scope.key('terminal-profiles', workspace?.id);
 
   const [editingState, setEditingTerminal] = useState<EditingTerminalState | null>(null);

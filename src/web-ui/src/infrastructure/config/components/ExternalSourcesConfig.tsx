@@ -552,7 +552,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         }
       }
     }
-  }, [acceptReadSnapshot, requestScope, workspacePath, workspace?.id]);
+  }, [acceptReadSnapshot, requestScope, workspace?.id]);
 
   useEffect(() => {
     setSnapshotState(null);
@@ -812,7 +812,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         currentSnapshot.preferenceRevision ?? 0,
       ),
     );
-  }, [runMutation, workspacePath, workspace?.id]);
+  }, [runMutation, workspace?.id]);
 
   const setSafeMode = useCallback(async (enabled: boolean) => {
     const currentSnapshot = snapshotRef.current;
@@ -830,7 +830,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       'canSetSafeMode',
       'none',
     );
-  }, [runMutation, t, workspacePath, workspace?.id]);
+  }, [runMutation, t, workspace?.id]);
 
   const chooseConflict = useCallback(async (conflictKey: string, candidateId: string) => {
     if (!snapshot) return;
@@ -847,7 +847,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       undefined,
       'canApproveRuntime',
     );
-  }, [runMutation, snapshot, workspacePath, workspace?.id]);
+  }, [runMutation, snapshot, workspace?.id]);
 
   const decideToolTarget = useCallback(async (
     approvalKey: string,
@@ -869,7 +869,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       undefined,
       'canApproveRuntime',
     );
-  }, [runMutation, snapshot, workspacePath, workspace?.id]);
+  }, [runMutation, snapshot, workspace?.id]);
 
   const chooseToolConflict = useCallback(async (conflictKey: string, candidateId: string) => {
     if (!snapshot) return;
@@ -886,7 +886,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       undefined,
       'canApproveRuntime',
     );
-  }, [runMutation, snapshot, workspacePath, workspace?.id]);
+  }, [runMutation, snapshot, workspace?.id]);
 
   const decideAgent = useCallback(async (candidateId: string, decisionKey: string, approved: boolean) => {
     if (!snapshot) return false;
@@ -909,7 +909,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     );
     if (accepted) await loadSnapshot(true, false);
     return accepted;
-  }, [loadSnapshot, runMutation, snapshot, t, workspacePath, workspace?.id]);
+  }, [loadSnapshot, runMutation, snapshot, t, workspace?.id]);
 
   const setAgentModelBinding = useCallback(async (
     group: ExternalSubagentModelBindingGroup,
@@ -932,7 +932,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       'canApproveRuntime',
     );
     if (accepted) await loadSnapshot(true, false);
-  }, [loadSnapshot, runMutation, t, workspacePath, workspace?.id]);
+  }, [loadSnapshot, runMutation, t, workspace?.id]);
 
   const chooseAgentConflict = useCallback(async (
     conflictKey: string,
@@ -958,7 +958,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       'canApproveRuntime',
     );
     if (accepted) await loadSnapshot(true, false);
-  }, [loadSnapshot, runMutation, snapshot, t, workspacePath, workspace?.id]);
+  }, [loadSnapshot, runMutation, snapshot, t, workspace?.id]);
 
   const decideMcpServer = useCallback(async (
     candidateId: string,
@@ -983,7 +983,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     );
     if (accepted) await loadSnapshot(true, false);
     return accepted;
-  }, [loadSnapshot, runMutation, snapshot, t, workspacePath, workspace?.id]);
+  }, [loadSnapshot, runMutation, snapshot, t, workspace?.id]);
 
   const chooseMcpConflict = useCallback(async (
     conflictKey: string,
@@ -1008,7 +1008,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     );
     if (accepted) await loadSnapshot(true, false);
     return accepted;
-  }, [loadSnapshot, runMutation, snapshot, t, workspacePath, workspace?.id]);
+  }, [loadSnapshot, runMutation, snapshot, t, workspace?.id]);
 
   const setToolTargetsEnabled = useCallback(async (enabled: boolean) => {
     const current = snapshotRef.current;
@@ -1036,7 +1036,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       t(enabled ? 'bulkActions.enabled' : 'bulkActions.disabled'),
       'canApproveRuntime',
     );
-  }, [runMutation, t, workspacePath, workspace?.id]);
+  }, [runMutation, t, workspace?.id]);
 
   const setSubagentsEnabled = useCallback(async (enabled: boolean) => {
     const current = snapshotRef.current;
@@ -1059,7 +1059,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       'canApproveRuntime',
     );
     if (accepted) await loadSnapshot(true, false);
-  }, [loadSnapshot, runMutation, t, workspacePath, workspace?.id]);
+  }, [loadSnapshot, runMutation, t, workspace?.id]);
 
   const setMcpServersEnabled = useCallback(async (enabled: boolean) => {
     const current = snapshotRef.current;
@@ -1085,7 +1085,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       'canApproveRuntime',
     );
     if (accepted) await loadSnapshot(true, false);
-  }, [loadSnapshot, runMutation, t, workspacePath, workspace?.id]);
+  }, [loadSnapshot, runMutation, t, workspace?.id]);
 
   const isRemote = workspace?.workspaceKind === WorkspaceKind.Remote
     || Boolean(workspace?.connectionId);
@@ -1200,7 +1200,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         ? 'compatible_or_incompatible'
         : 'compatible',
     );
-  }, [policyScope, runMutation, snapshot, t, workspacePath, workspace?.id]);
+  }, [policyScope, runMutation, snapshot, t, workspace?.id]);
 
   const toggleApplication = useCallback(async (
     application: ExternalApplicationView,
@@ -1335,7 +1335,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       }
       return false;
     }
-  }, [requestScope, t, workspacePath, workspace?.id]);
+  }, [requestScope, t, workspace?.id]);
 
   const renderPathLink = useCallback((location: string, sourceKey?: string) => {
     const display = abbreviatedLocation(location);

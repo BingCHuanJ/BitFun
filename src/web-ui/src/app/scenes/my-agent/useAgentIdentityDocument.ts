@@ -152,7 +152,7 @@ export function useAgentIdentityDocument(
         setLoading(false);
       }
     }
-  }, [identityFilePath, workspacePath]);
+  }, [identityFilePath, workspacePath, workspaceId]);
 
   useEffect(() => {
     void loadDocument();

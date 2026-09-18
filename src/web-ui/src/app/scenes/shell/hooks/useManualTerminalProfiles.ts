@@ -23,8 +23,16 @@ interface UseManualTerminalProfilesReturn {
 }
 
 export function useManualTerminalProfiles(
-  workspace?: TerminalProfileWorkspace,
+  workspaceInput?: TerminalProfileWorkspace,
 ): UseManualTerminalProfilesReturn {
+  // Callers may build the scope inline on every render; profile reads and the
+  // refresh effect must key on its identifying facts, not on object identity.
+  const surfaceId = workspaceInput?.surfaceId;
+  const workspaceId = workspaceInput?.workspaceId;
+  const workspace = useMemo<TerminalProfileWorkspace | undefined>(
+    () => (surfaceId && workspaceId ? { surfaceId, workspaceId } : undefined),
+    [surfaceId, workspaceId],
+  );
   const workspaceKey = workspace ? terminalProfileWorkspaceKey(workspace) : undefined;
   const [snapshot, setSnapshot] = useState<{
     key: string | undefined; profiles: ManualTerminalProfile[]; error: string | null;

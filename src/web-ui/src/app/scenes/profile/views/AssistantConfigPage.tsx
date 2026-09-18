@@ -392,7 +392,6 @@ const AssistantConfigPage: React.FC = () => {
                 )}
               >
                 <ScheduledJobsView
-                  workspacePath={workspacePath}
                   workspaceId={workspace?.id}
                   workspaceKind={workspace?.workspaceKind}
                   assistantName={identityName}

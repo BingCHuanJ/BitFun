@@ -235,6 +235,42 @@ async fn review_lookup_cold_loads_the_requested_project_registry() {
     );
 }
 
+#[tokio::test]
+async fn remote_workspace_load_publishes_an_empty_project_set_and_keeps_user_agents() {
+    let remote = crate::service::workspace::legacy_compat::register_remote_fixture(
+        "/srv/agents/remote-project",
+        "agents-ssh",
+        "agents-host",
+    )
+    .await;
+    let registry = AgentRegistry::new();
+
+    registry.load_custom_agents(Some(&remote.id)).await;
+
+    assert!(
+        registry.user_custom_agents_loaded(),
+        "a remote workspace must not leave user-level custom agents unloaded"
+    );
+    let project_subagents = registry.read_project_subagents();
+    let published = project_subagents
+        .get(remote.id.as_str())
+        .expect("remote workspace publishes a project set so queries stop rescanning");
+    assert!(
+        published.is_empty(),
+        "remote hosts have no locally discoverable project agents"
+    );
+    drop(project_subagents);
+
+    let unknown = String::from("workspace-does-not-exist");
+    registry.load_custom_agents(Some(&unknown)).await;
+    assert!(
+        !registry
+            .read_project_subagents()
+            .contains_key(unknown.as_str()),
+        "an unknown workspace ID must not be published as a project set"
+    );
+}
+
 #[test]
 fn top_level_modes_default_to_auto() {
     for agent_type in [

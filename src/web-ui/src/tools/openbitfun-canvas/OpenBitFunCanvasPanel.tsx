@@ -323,14 +323,7 @@ export const OpenBitFunCanvasPanel: React.FC<OpenBitFunCanvasPanelProps> = ({
     const canvas = response.canvas ?? null;
     applyLoadedCanvas(canvas, reason);
     return canvas;
-  }, [
-    applyLoadedCanvas,
-    artifactReference,
-    remoteConnectionId,
-    remoteSshHost,
-    workspacePath,
-    workspaceId,
-  ]);
+  }, [applyLoadedCanvas, artifactReference, workspaceId]);
 
   const loadState = useCallback(async () => {
     if (!artifactReference) return null;
@@ -340,7 +333,7 @@ export const OpenBitFunCanvasPanel: React.FC<OpenBitFunCanvasPanelProps> = ({
       artifactReference,
     });
     return response.state ?? null;
-  }, [artifactReference, remoteConnectionId, remoteSshHost, workspacePath, workspaceId]);
+  }, [artifactReference, workspaceId]);
 
   const requestCanvasAutoRepair = useCallback(async (data: {
     message: string;
@@ -471,11 +464,8 @@ export const OpenBitFunCanvasPanel: React.FC<OpenBitFunCanvasPanelProps> = ({
   }, [
     applyLoadedCanvas,
     artifactReference,
-    remoteConnectionId,
-    remoteSshHost,
     requestCanvasAutoRepair,
     renderedCanvas.revision,
-    workspacePath,
     workspaceId,
   ]);
 
@@ -540,11 +530,8 @@ export const OpenBitFunCanvasPanel: React.FC<OpenBitFunCanvasPanelProps> = ({
     artifactReference,
     loadedCanvas?.compiledPayload?.runtimeVersion,
     loadedCanvas?.compiledPayload?.sdkVersion,
-    remoteConnectionId,
-    remoteSshHost,
     renderedCanvas.revision,
     renderedCanvas.runtime,
-    workspacePath,
     workspaceId,
   ]);
 

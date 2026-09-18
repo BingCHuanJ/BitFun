@@ -9922,20 +9922,37 @@ mod tests {
 
     struct TestWorkspace {
         path: PathBuf,
+        workspace_id: String,
     }
 
     impl TestWorkspace {
+        /// Creates the directory and registers it as a local workspace record
+        /// in the shared fixture catalog. Sessions only exist inside registered
+        /// workspaces, so a path-only `SessionConfig` naming this directory
+        /// resolves to that record exactly like a folder a host has opened.
+        /// The path is canonical so IO projections written back from the
+        /// record compare equal on hosts with symlinked temp roots.
         fn new() -> Self {
             let path = std::env::temp_dir().join(format!(
                 "openbitfun-session-restore-test-{}",
                 Uuid::new_v4()
             ));
             std::fs::create_dir_all(&path).expect("test workspace should be created");
-            Self { path }
+            let path = dunce::canonicalize(&path).expect("test workspace should canonicalize");
+            let record =
+                crate::service::workspace::legacy_compat::register_local_fixture_blocking(&path);
+            Self {
+                path,
+                workspace_id: record.id,
+            }
         }
 
         fn path(&self) -> &Path {
             &self.path
+        }
+
+        fn workspace_id(&self) -> &str {
+            &self.workspace_id
         }
 
         fn path_manager(&self) -> Arc<PathManager> {
@@ -11024,7 +11041,7 @@ mod tests {
                     execution_target: Some(SessionExecutionTarget::local(
                         original_workspace.clone(),
                     )),
-                    workspace_id: Some("workspace-original".to_string()),
+                    workspace_id: Some(workspace.workspace_id().to_string()),
                     ..SessionConfig::default()
                 },
             )
@@ -13085,12 +13102,18 @@ mod tests {
             .await
             .expect("session should create");
 
-        manager
-            .sessions
-            .get_mut(&session.session_id)
-            .expect("loaded session")
-            .config
-            .workspace_path = None;
+        {
+            // Simulate a session whose persistence location can no longer be
+            // resolved: neither its workspace record nor an IO projection.
+            let mut loaded = manager
+                .sessions
+                .get_mut(&session.session_id)
+                .expect("loaded session");
+            loaded.config.workspace_id = None;
+            loaded.config.project_workspace_id = None;
+            loaded.config.workspace_path = None;
+            loaded.config.project_workspace_path = None;
+        }
 
         manager
             .update_session_title(&session.session_id, "Not persisted")
@@ -14716,30 +14739,54 @@ mod tests {
     #[tokio::test]
     async fn core_session_store_port_resolves_unresolved_remote_storage_path() {
         use openbitfun_runtime_ports::{
-            SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
+            PortErrorKind, SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
         };
 
         let workspace = TestWorkspace::new();
-        let port = CoreSessionStorePort::with_path_manager_for_tests(workspace.path_manager());
-        let resolution = port
+        let path_manager = workspace.path_manager();
+        let port = CoreSessionStorePort::with_path_manager_for_tests(path_manager.clone());
+
+        // A connection ID alone is transport metadata, not a workspace
+        // identity. Without a registered remote record the request must fail
+        // loudly instead of inventing an `_unresolved` mirror.
+        let error = port
             .resolve_session_storage_path(SessionStoragePathRequest {
                 workspace_path: PathBuf::from("/remote/project"),
                 remote_connection_id: Some("conn-1".to_string()),
                 remote_ssh_host: None,
             })
             .await
-            .expect("storage path should resolve");
+            .expect_err("unregistered remote reference must not resolve storage");
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+        assert!(
+            error.message.contains("does not resolve"),
+            "unexpected error: {}",
+            error.message
+        );
 
+        // Sessions already persisted under a legacy `_unresolved` mirror stay
+        // readable: the resolved sessions dir passes through with its kind.
+        let legacy_unresolved_dir =
+            openbitfun_services_core::workspace_identity::unresolved_remote_session_storage_dir(
+                path_manager.remote_ssh_mirror_root_dir(),
+                "conn-1",
+                "/remote/project",
+            );
+        let resolution = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: legacy_unresolved_dir.clone(),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("legacy unresolved sessions dir should pass through");
         assert_eq!(
             resolution.storage_kind,
             SessionStorageKind::UnresolvedRemote
         );
         assert!(resolution.is_remote_storage());
         assert_eq!(resolution.remote_connection_id.as_deref(), Some("conn-1"));
-        assert_ne!(
-            resolution.effective_storage_path,
-            PathBuf::from("/remote/project")
-        );
+        assert_eq!(resolution.effective_storage_path, legacy_unresolved_dir);
     }
 
     #[cfg(feature = "remote-workspace")]

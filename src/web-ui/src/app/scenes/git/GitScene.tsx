@@ -90,7 +90,7 @@ const GitScene: React.FC<GitSceneProps> = ({
     } finally {
       setIsTrusting(false);
     }
-  }, [workspacePath, isTrusting, refresh]);
+  }, [workspacePath, isTrusting, refresh, workspace?.id]);
 
   const renderView = useCallback(() => {
     switch (activeView) {
@@ -102,7 +102,7 @@ const GitScene: React.FC<GitSceneProps> = ({
       default:
         return <WorkingCopyView workspaceId={workspace?.id} workspacePath={workspacePath} isActive={isActive} />;
     }
-  }, [activeView, isActive, workspacePath]);
+  }, [activeView, isActive, workspacePath, workspace?.id]);
 
   if (!isActive) {
     return <div className="openbitfun-git-scene" aria-hidden="true" data-openbitfun-scene="git" data-openbitfun-part="root" data-openbitfun-view="hidden" />;

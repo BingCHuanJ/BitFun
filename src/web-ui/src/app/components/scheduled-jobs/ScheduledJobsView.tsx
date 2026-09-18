@@ -61,11 +61,8 @@ const log = createLogger('ScheduledJobsView');
 const NEW_JOB_ID = '__new__';
 
 export interface ScheduledJobsViewProps {
-  workspacePath?: string;
   workspaceId?: string;
   workspaceKind?: WorkspaceKind;
-  remoteConnectionId?: string | null;
-  remoteSshHost?: string | null;
   sessionId?: string;
   assistantName?: string;
   headerTitle?: string | null;
@@ -189,11 +186,8 @@ function buildWorkspaceAgentOptions(
 }
 
 const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
-  workspacePath,
   workspaceId,
   workspaceKind,
-  remoteConnectionId,
-  remoteSshHost,
   sessionId,
   headerTitle,
   targetLabel,
@@ -223,7 +217,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
   );
   const workspaceRef = useMemo(
     () => buildWorkspaceRef(workspaceId),
-    [remoteConnectionId, remoteSshHost, workspaceId, workspacePath],
+    [workspaceId],
   );
 
   const [draft, setDraft] = useState<JobDraft>(() =>
@@ -272,7 +266,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
         return Boolean(workspaceId && sessionBelongsToWorkspaceNavRow(s, workspaceId));
       })
       .sort(compareSessionsForDisplay);
-  }, [flowChatState.sessions, remoteConnectionId, remoteSshHost, workspaceId, workspacePath]);
+  }, [flowChatState.sessions, workspaceId]);
 
   const defaultSessionIdForWorkspace = useMemo(
     () => sessionId || workspaceSessions[0]?.sessionId || '',

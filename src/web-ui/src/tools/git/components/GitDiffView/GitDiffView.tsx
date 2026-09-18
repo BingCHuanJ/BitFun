@@ -8,6 +8,7 @@ import { FileText, Minus, EyeOff, AlertCircle } from 'lucide-react';
 
 import { gitService } from '../../services';
 import { createLogger } from '@/shared/utils/logger';
+import { useStableGitWorkspaceScope } from '../../hooks/useStableGitWorkspaceScope';
 import './GitDiffView.scss';
 
 const log = createLogger('GitDiffView');
@@ -115,7 +116,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
   showStaged = false,
   className = ''
 }) => {
-  const repositoryPath = React.useMemo(() => workspaceReference, [workspaceReference.workspaceId]);
+  const repositoryPath = useStableGitWorkspaceScope(workspaceReference);
   const { t } = useTranslation('panels/git');
   const [diffFiles, setDiffFiles] = useState<DiffFile[]>([]);
   const [loading, setLoading] = useState(false);

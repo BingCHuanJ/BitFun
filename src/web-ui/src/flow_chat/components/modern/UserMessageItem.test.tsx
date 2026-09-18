@@ -273,6 +273,7 @@ describe('UserMessageItem steering tag', () => {
     activeSessionRef.current = {
       sessionId: 'main-session',
       sessionKind: 'normal',
+      workspaceId: workspaceRecords.local.id,
       dialogTurns: [{ id: 'turn-1', status: 'completed' }],
     };
 

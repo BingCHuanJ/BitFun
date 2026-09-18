@@ -1903,6 +1903,19 @@ pub async fn create_session(
                 repaired = true;
             }
             if repaired {
+                // Repairing persisted metadata is a session mutation; it must
+                // hold runtime ownership of the project workspace, resolved by
+                // record ID first like every other desktop mutation.
+                runtime
+                    .session_application()
+                    .ensure_workspace_runtime_ownership(desktop_session_scope(
+                        project_workspace_id.clone(),
+                        project_workspace_path.clone(),
+                        remote_conn.clone(),
+                        remote_ssh_host.clone(),
+                    ))
+                    .await
+                    .map_err(|error| error.to_string())?;
                 let relationship = request.relationship.clone();
                 let deep_review_run_manifest = request.deep_review_run_manifest.clone();
                 let review_target_evidence = request.review_target_evidence.clone();

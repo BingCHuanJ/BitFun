@@ -161,7 +161,7 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
     }
     setLoadFailures(failures);
     setLoading(false);
-  }, [automaticDiscovery, cache, localImportSupported, runtime.spec.ecosystemId, workspacePath, workspace?.id]);
+  }, [automaticDiscovery, cache, localImportSupported, runtime.spec.ecosystemId, workspace?.id]);
 
   useEffect(() => {
     alive.current = true;
@@ -252,7 +252,7 @@ export default function ExternalAgentContent({ scopeKey, refreshControlRef, onRe
     setPlan(next);
     setPlanFailed(next === null);
     setPlanLoading(false);
-  }, [automaticDiscovery, hasMcp, localImportSupported, workspacePath, workspace?.id]);
+  }, [automaticDiscovery, hasMcp, localImportSupported, workspace?.id]);
   useEffect(() => {
     void refreshMcpPlan();
     return () => { mcpPlanSequence.current += 1; };

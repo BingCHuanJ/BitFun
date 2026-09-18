@@ -43,6 +43,7 @@ import {
   parseUnifiedDiffStats,
   type BranchSwitchFileStats,
 } from './branchSwitchFailure';
+import { useStableGitWorkspaceScope } from '../hooks/useStableGitWorkspaceScope';
 import './BranchQuickSwitch.scss';
 
 const log = createLogger('BranchQuickSwitch');
@@ -74,7 +75,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   anchorRef,
   onSwitchSuccess,
 }) => {
-  const repositoryPath = React.useMemo(() => workspaceReference, [workspaceReference.workspaceId]);
+  const repositoryPath = useStableGitWorkspaceScope(workspaceReference);
   const { t } = useI18n('panels/git');
   const [branches, setBranches] = useState<GitBranch[]>([]);
   const [searchTerm, setSearchTerm] = useState('');

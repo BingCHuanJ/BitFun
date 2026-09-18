@@ -113,6 +113,10 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { currentWorkspace } = useWorkspaceContext();
+  // Callbacks key on the workspace record's identifying facts, not the context
+  // object, so a provider re-render cannot restart pull-request loading.
+  const currentWorkspaceId = currentWorkspace?.id;
+  const currentWorkspaceRootPath = currentWorkspace?.rootPath;
   const sceneChrome = useSceneChromeContext();
   const isSceneChromeActive = sceneChrome?.activeSceneId === 'session';
   const [isSessionOverviewOpen, setIsSessionOverviewOpen] = useState(false);
@@ -200,9 +204,10 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const loadPullRequestOverview = useCallback(async () => {
     const requestId = pullRequestOverviewRequestRef.current + 1;
     pullRequestOverviewRequestRef.current = requestId;
-    const repositoryPath = currentWorkspace?.rootPath;
+    const workspaceId = currentWorkspaceId;
+    const repositoryPath = currentWorkspaceRootPath;
 
-    if (!repositoryPath) {
+    if (!workspaceId || !repositoryPath) {
       setPullRequestOverview({ status: 'no-workspace', items: [], totalCount: 0 });
       return;
     }
@@ -210,7 +215,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     setPullRequestOverview({ status: 'loading', items: [], totalCount: 0 });
 
     try {
-      const isGitRepository = await gitAPI.isGitRepository({ workspaceId: currentWorkspace!.id });
+      const isGitRepository = await gitAPI.isGitRepository({ workspaceId });
       if (pullRequestOverviewRequestRef.current !== requestId) return;
       if (!isGitRepository) {
         setPullRequestOverview({ status: 'not-git', items: [], totalCount: 0 });
@@ -218,7 +223,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       }
 
       const snapshot = await reviewPlatformAPI.getWorkspaceSnapshot(
-        { workspaceId: currentWorkspace!.id, repositoryPath },
+        { workspaceId, repositoryPath },
         null,
         1,
         PULL_REQUEST_OVERVIEW_LIMIT,
@@ -234,7 +239,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       if (pullRequestOverviewRequestRef.current !== requestId) return;
       setPullRequestOverview({ status: 'error', items: [], totalCount: 0 });
     }
-  }, [currentWorkspace]);
+  }, [currentWorkspaceId, currentWorkspaceRootPath]);
 
   useEffect(() => {
     if (!isSessionOverviewOpen) return undefined;
@@ -382,23 +387,23 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   };
 
   const handleOpenPullRequests = useCallback(() => {
-    if (!currentWorkspace) return;
-    createReviewPlatformTab(currentWorkspace.id, currentWorkspace.rootPath);
+    if (!currentWorkspaceId) return;
+    createReviewPlatformTab(currentWorkspaceId, currentWorkspaceRootPath);
     closeSessionOverview(false);
-  }, [closeSessionOverview, currentWorkspace]);
+  }, [closeSessionOverview, currentWorkspaceId, currentWorkspaceRootPath]);
 
   const handleOpenPullRequest = useCallback((pullRequest: ReviewPlatformPullRequest) => {
-    if (!currentWorkspace) return;
+    if (!currentWorkspaceId) return;
     createReviewPlatformPullRequestDetailTab({
-      workspaceId: currentWorkspace.id,
-      workspacePath: currentWorkspace?.rootPath,
+      workspaceId: currentWorkspaceId,
+      workspacePath: currentWorkspaceRootPath,
       remoteId: pullRequest.providerId ?? undefined,
       pullRequestId: pullRequest.id,
       pullRequestUrl: pullRequest.webUrl,
       title: `#${pullRequest.number} ${pullRequest.title}`,
     });
     closeSessionOverview(false);
-  }, [closeSessionOverview, currentWorkspace]);
+  }, [closeSessionOverview, currentWorkspaceId, currentWorkspaceRootPath]);
 
   const handleCommandSectionMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -778,7 +783,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   {sessionId ? (
                     <SessionTreePopover
                       sessionId={sessionId}
-                      fallbackWorkspaceId={currentWorkspace?.id}
+                      fallbackWorkspaceId={currentWorkspaceId}
                       onSelectSession={onOpenSessionTreeSession}
                       hasActiveDescendants={hasActiveSessionTreeDescendants}
                       onCancelSession={onCancelSessionTreeSession}

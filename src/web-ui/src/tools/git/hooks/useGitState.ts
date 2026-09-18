@@ -29,7 +29,7 @@ import type { GitWorkspaceScope } from '@/infrastructure/api/service-api/GitAPI'
  * ```
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { gitStateManager } from '../state/GitStateManager';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import {
@@ -39,6 +39,7 @@ import {
   RefreshOptions,
 } from '../state/types';
 import type { GitBranch, GitCommit } from '../types/repository';
+import { useStableGitWorkspaceScope } from './useStableGitWorkspaceScope';
 
 const DEFAULT_CANCEL_PENDING_REFRESH_SOURCES: readonly string[] = [];
 
@@ -65,10 +66,7 @@ export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
     layers,
   } = options;
 
-  const normalizedPath = useMemo(
-    () => repositoryPath,
-    [repositoryPath.workspaceId, repositoryPath.repositoryPath]
-  );
+  const normalizedPath = useStableGitWorkspaceScope(repositoryPath);
 
   const [state, setState] = useState<GitState | null>(() =>
     normalizedPath.workspaceId ? gitStateManager.getState(normalizedPath) : null

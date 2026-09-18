@@ -15,6 +15,7 @@ import type { GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
 import { i18nService } from '@/infrastructure/i18n';
 import { describeGitTrustFailure } from '../../services/GitService';
 import { createLogger } from '@/shared/utils/logger';
+import { useStableGitWorkspaceScope } from '../../hooks/useStableGitWorkspaceScope';
 import './GitBranchHistoryView.scss';
 
 const log = createLogger('GitBranchHistoryView');
@@ -87,7 +88,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
   className = '',
   onCherryPickSuccess
 }) => {
-  const repositoryPath = React.useMemo(() => workspaceReference, [workspaceReference.workspaceId]);
+  const repositoryPath = useStableGitWorkspaceScope(workspaceReference);
   const { t } = useTranslation('panels/git');
   const { t: tComponents } = useI18n('components');
   const [commits, setCommits] = useState<CommitInfo[]>([]);

@@ -562,6 +562,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     acpClientId,
     isAcpSession,
     sessionId,
+    activeSession?.config.workspaceId,
+    activeSession?.workspaceId,
   ]);
 
   useEffect(() => {
@@ -1386,6 +1388,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     sessionId,
     t,
     targetIsSubagent,
+    activeSession?.config.workspaceId,
+    activeSession?.workspaceId,
   ]);
 
   const handleSelectReasoningPreset = useCallback(async (presetId: string | null) => {
@@ -1507,6 +1511,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     loading,
     reasoningLoading,
     sessionId,
+    activeSession?.config.workspaceId,
+    activeSession?.workspaceId,
   ]);
 
   const handleSelectAcpReasoning = useCallback(async (presetId: string | null) => {
@@ -1544,6 +1550,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     reasoningLoading,
     sessionId,
     t,
+    activeSession?.config.workspaceId,
+    activeSession?.workspaceId,
   ]);
 
   const handleSelectReasoningPresetFromMenu = useCallback(async (presetId: string | null) => {
@@ -1610,6 +1618,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     loading,
     sessionId,
     t,
+    activeSession?.config.workspaceId,
+    activeSession?.workspaceId,
   ]);
 
   const handleTriggerKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {

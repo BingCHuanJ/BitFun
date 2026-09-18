@@ -139,7 +139,15 @@ export function useInstalledSkills({
         setLoading(false);
       }
     }
-  }, [capabilityIsCurrent, currentCapabilityEpoch, isRemoteWorkspace, notifyScanInfo, notifyScanWarning, t, workspacePath, workspace?.id]);
+  }, [
+    capabilityIsCurrent,
+    currentCapabilityEpoch,
+    isRemoteWorkspace,
+    notifyScanInfo,
+    notifyScanWarning,
+    t,
+    workspace?.id,
+  ]);
 
   useEffect(() => {
     const refresh = () => { void loadSkills(); };
@@ -286,7 +294,20 @@ export function useInstalledSkills({
         setIsAdding(false);
       }
     }
-  }, [capabilityIsCurrent, currentCapabilityEpoch, formLevel, formPath, hasWorkspace, isRemoteWorkspace, loadSkills, notification, resetForm, t, validationResult, workspacePath, workspace?.id]);
+  }, [
+    capabilityIsCurrent,
+    currentCapabilityEpoch,
+    formLevel,
+    formPath,
+    hasWorkspace,
+    isRemoteWorkspace,
+    loadSkills,
+    notification,
+    resetForm,
+    t,
+    validationResult,
+    workspace?.id,
+  ]);
 
   const handleDelete = useCallback(async (skill: SkillInfo) => {
     const capabilityEpoch = currentCapabilityEpoch();
@@ -318,7 +339,7 @@ export function useInstalledSkills({
       );
       return false;
     }
-  }, [capabilityIsCurrent, currentCapabilityEpoch, loadSkills, notification, t, workspacePath, workspace?.id]);
+  }, [capabilityIsCurrent, currentCapabilityEpoch, loadSkills, notification, t, workspace?.id]);
 
   const canToggleSkill = useCallback((skill: SkillInfo) => (
     directManagementSupported || (skill.level === 'user' && isOpenBitFunManagedSkill(skill))
@@ -369,7 +390,15 @@ export function useInstalledSkills({
         setSavingGlobalSkillKey(null);
       }
     }
-  }, [canToggleSkill, capabilityIsCurrent, currentCapabilityEpoch, directManagementSupported, notification, t, workspacePath, workspace?.id]);
+  }, [
+    canToggleSkill,
+    capabilityIsCurrent,
+    currentCapabilityEpoch,
+    directManagementSupported,
+    notification,
+    t,
+    workspace?.id,
+  ]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
 

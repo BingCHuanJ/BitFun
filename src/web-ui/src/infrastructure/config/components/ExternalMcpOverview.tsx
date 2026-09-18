@@ -166,7 +166,7 @@ const ExternalMcpOverview: React.FC = () => {
         setLoading(false);
       }
     }
-  }, [requestScope, workspacePath, workspace?.id]);
+  }, [requestScope, workspace?.id]);
 
   useEffect(() => {
     void loadSnapshot();

@@ -122,7 +122,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [repositoryPath, t]);
+  }, [repositoryPath, t, workspaceId]);
 
   useEffect(() => {
     if (isOpen && repositoryPath) {

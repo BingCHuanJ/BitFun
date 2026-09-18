@@ -3250,6 +3250,15 @@ mod tests {
         assert_eq!(error.kind, PortErrorKind::InvalidRequest);
     }
 
+    /// Creates a fixture workspace directory and registers it as a local
+    /// workspace record. Sessions only exist inside registered workspaces, so
+    /// path-only session configs naming it resolve like a host-opened folder.
+    fn fixture_workspace_dir(path: PathBuf) -> PathBuf {
+        std::fs::create_dir_all(&path).expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&path);
+        path
+    }
+
     fn test_scheduler() -> (
         Arc<DialogScheduler>,
         Arc<SessionManager>,
@@ -3338,8 +3347,7 @@ mod tests {
     async fn submission_preflight_commits_a_persisted_revert_marker() {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "reverted-session";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -3400,8 +3408,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "parent-session";
         let turn_id = "parent-turn";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -3460,8 +3467,7 @@ mod tests {
     async fn idle_background_result_uses_the_session_logical_agent_route() {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "external-parent-session";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -3508,7 +3514,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler_with_persistence(true);
         let session_id = "evicted-interrupted-session";
         let turn_id = "interrupted-turn";
-        let workspace = root.path().join("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         let model_binding_fingerprint = model_runtime_binding_fingerprint(&AIModelConfig {
             id: "model-original".to_string(),
             name: "model-original".to_string(),
@@ -3592,8 +3598,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "goal-parent-session";
         let turn_id = "goal-parent-turn";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -3724,8 +3729,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler_with_persistence(true);
         let session_id = "interrupted-queue-hold";
         let turn_id = "turn-interrupted";
-        let workspace = root.path().join("workspace-interrupted-hold");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace-interrupted-hold"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -3780,8 +3784,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let parent_session_id = "parent-session";
         let child_session_id = "background-child-session";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(parent_session_id.to_string()),
@@ -3853,8 +3856,7 @@ mod tests {
     #[tokio::test]
     async fn dialog_port_preserves_not_found_for_a_missing_session() {
         let (scheduler, _, _, root) = test_scheduler();
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
 
         let error = scheduler
             .submit_dialog_turn(AgentDialogTurnRequest {
@@ -3898,8 +3900,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "queued-session";
         let turn_id = "queued-turn";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -3975,8 +3976,7 @@ mod tests {
     async fn delegated_dialog_turn_rejects_instead_of_queueing_behind_an_active_turn() {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "delegated-busy-session";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -4035,8 +4035,7 @@ mod tests {
     async fn delegated_dialog_turn_does_not_clear_a_queue_from_an_error_session() {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "delegated-error-session";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -4131,8 +4130,7 @@ mod tests {
     async fn reject_busy_dialog_port_does_not_enqueue_or_replace_the_active_turn() {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "acp-session";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -4202,8 +4200,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "duplicate-active-session";
         let turn_id = "duplicate-turn";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -4260,10 +4257,8 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "workspace-bound-session";
         let turn_id = "wrong-workspace-turn";
-        let workspace_a = root.path().join("workspace-a");
-        let workspace_b = root.path().join("workspace-b");
-        std::fs::create_dir_all(&workspace_a).expect("workspace a");
-        std::fs::create_dir_all(&workspace_b).expect("workspace b");
+        let workspace_a = fixture_workspace_dir(root.path().join("workspace-a"));
+        let workspace_b = fixture_workspace_dir(root.path().join("workspace-b"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -4313,8 +4308,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "invalid-agent-session";
         let turn_id = "invalid-agent-turn";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -4358,8 +4352,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "known-turn-session";
         let turn_id = "known-turn";
-        let workspace = root.path().join("workspace");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -4424,8 +4417,7 @@ mod tests {
         session_id: &str,
         turn_id: &str,
     ) {
-        let workspace = root.path().join(format!("workspace-{session_id}"));
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join(format!("workspace-{session_id}")));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),
@@ -4628,8 +4620,7 @@ mod tests {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "session-maintenance-retire";
         let turn_id = "turn-active";
-        let workspace = root.path().join("workspace-maintenance-retire");
-        std::fs::create_dir_all(&workspace).expect("workspace");
+        let workspace = fixture_workspace_dir(root.path().join("workspace-maintenance-retire"));
         session_manager
             .create_session_with_id(
                 Some(session_id.to_string()),

@@ -59,7 +59,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath, workspaceId 
     } finally {
       setBranchLoading(false);
     }
-  }, [selectedBranchName, workspacePath]);
+  }, [selectedBranchName, workspacePath, workspaceId]);
 
   const loadCommits = useCallback(
     async (branchRef: string | null) => {
@@ -78,7 +78,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath, workspaceId 
         setCommitLoading(false);
       }
     },
-    [workspacePath]
+    [workspacePath, workspaceId]
   );
 
   useEffect(() => {
@@ -191,7 +191,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath, workspaceId 
         setIsResetting(false);
       }
     },
-    [workspacePath, notification, t, selectedBranchName, loadBranches, loadCommits]
+    [workspacePath, notification, t, selectedBranchName, loadBranches, loadCommits, workspaceId]
   );
 
   if (!workspacePath) {

@@ -116,7 +116,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
       setImportError(t('imports.loadFailed'));
     }
     setLoading(false);
-  }, [remoteWorkspace, t, workspacePath, workspace?.id]);
+  }, [remoteWorkspace, t, workspace?.id]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -149,7 +149,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
         setImportLoading(false);
       }
     }
-  }, [remoteWorkspace, t, workspacePath, workspace?.id]);
+  }, [remoteWorkspace, t, workspace?.id]);
 
   const updateConfig = useCallback(
     async <K extends keyof AgentHooksConfigShape>(key: K, value: AgentHooksConfigShape[K]) => {
@@ -194,7 +194,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
     } finally {
       if (mountedRef.current) setBusyKey(null);
     }
-  }, [notifyError, t, workspacePath, workspace?.id]);
+  }, [notifyError, t, workspace?.id]);
 
   const applyReviewedPlan = useCallback(async () => {
     if (!reviewPlan) return;
@@ -231,7 +231,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
     } finally {
       if (mountedRef.current) setBusyKey(null);
     }
-  }, [config.enabled, notifyError, notifySuccess, reviewPlan, t, workspacePath, workspace?.id]);
+  }, [config.enabled, notifyError, notifySuccess, reviewPlan, t, workspace?.id]);
 
   const mutateImport = useCallback(async (
     action: ExternalHookImportMutation,
@@ -282,7 +282,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
     } finally {
       if (mountedRef.current) setBusyKey(null);
     }
-  }, [importSnapshot, notifyError, notifySuccess, t, workspacePath, workspace?.id]);
+  }, [importSnapshot, notifyError, notifySuccess, t, workspace?.id]);
 
   const confirmMutation = useCallback(() => {
     if (!confirmation) return;

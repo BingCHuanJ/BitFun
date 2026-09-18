@@ -1010,8 +1010,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           <SessionsSection
             workspaceId={workspace.id}
             workspacePath={workspace.rootPath}
-            remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-            remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
             isActiveWorkspace={isActive}
             isVisible={!sessionsCollapsed}
             useWorkspaceViewPreferences
@@ -1054,11 +1052,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             <ScheduledJobsModal
               isOpen={scheduledJobsModalOpen}
               onClose={() => setScheduledJobsModalOpen(false)}
-              workspacePath={workspace.rootPath}
               workspaceId={workspace.id}
               workspaceKind={workspace.workspaceKind}
-              remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-              remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
               targetKind="workspace"
               title={t('nav.scheduledJobs.title')}
               targetLabel={workspaceDisplayName}
@@ -1520,8 +1515,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         <SessionsSection
           workspaceId={workspace.id}
           workspacePath={workspace.rootPath}
-          remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-          remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
           isActiveWorkspace={isActive}
           isVisible={!sessionsCollapsed}
           useWorkspaceViewPreferences
@@ -1587,11 +1580,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           <ScheduledJobsModal
             isOpen={scheduledJobsModalOpen}
             onClose={() => setScheduledJobsModalOpen(false)}
-            workspacePath={workspace.rootPath}
             workspaceId={workspace.id}
             workspaceKind={workspace.workspaceKind}
-            remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-            remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
             targetKind="workspace"
             title={t('nav.scheduledJobs.title')}
             targetLabel={workspaceDisplayName}

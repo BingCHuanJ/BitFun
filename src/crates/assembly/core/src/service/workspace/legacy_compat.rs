@@ -324,6 +324,32 @@ pub(crate) async fn register_local_fixture(
     service.require_workspace(&record.id).await.unwrap()
 }
 
+/// Synchronous form of [`register_local_fixture`] for test helpers that build
+/// their workspace directory outside an async context (for example a
+/// `TestWorkspace::new()` constructor). Production hosts register a directory
+/// before creating sessions in it; a fixture directory used as a session
+/// workspace must do the same, otherwise path-only session configs are
+/// (correctly) rejected as unavailable legacy references.
+///
+/// The registration runs on its own thread with a private current-thread
+/// runtime so it can be called from inside or outside another Tokio runtime.
+#[cfg(test)]
+pub(crate) fn register_local_fixture_blocking(path: &std::path::Path) -> WorkspaceInfo {
+    let path = path.to_path_buf();
+    std::thread::Builder::new()
+        .name("workspace-fixture-registration".into())
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("fixture registration runtime")
+                .block_on(register_local_fixture(&path, None))
+        })
+        .expect("spawn fixture registration thread")
+        .join()
+        .expect("fixture registration thread")
+}
+
 /// Test fixtures register real persisted workspace records before exercising
 /// session routing; transport metadata alone is deliberately insufficient.
 #[cfg(test)]

@@ -363,7 +363,7 @@ export function useAgentsList({
         setLoading(false);
       }
     }
-  }, [canQueryToolCatalog, workspacePath, workspace?.id, renderedPeerDeviceId, t]);
+  }, [canQueryToolCatalog, workspace?.id, renderedPeerDeviceId, t]);
 
   useEffect(() => {
     void loadAgents();
@@ -479,7 +479,7 @@ export function useAgentsList({
     } catch {
       notification.error(t('agentsOverview.toolsResetFailed'));
     }
-  }, [getModeProfile, notification, t, workspacePath, workspace?.id]);
+  }, [getModeProfile, notification, t, workspace?.id]);
 
   const handleSetSkills = useCallback(async (agentId: string, enabledSkillKeys: string[]) => {
     const profile = getModeProfile(agentId);
@@ -510,7 +510,7 @@ export function useAgentsList({
       notification.error(t('agentsOverview.skillToggleFailed'));
       return false;
     }
-  }, [getModeProfile, notification, t, workspacePath, workspace?.id]);
+  }, [getModeProfile, notification, t, workspace?.id]);
 
   const handleResetSkills = useCallback(async (agentId: string) => {
     const profile = getModeProfile(agentId);
@@ -540,7 +540,7 @@ export function useAgentsList({
       notification.error(t('agentsOverview.skillToggleFailed'));
       return false;
     }
-  }, [getModeProfile, notification, t, workspacePath, workspace?.id]);
+  }, [getModeProfile, notification, t, workspace?.id]);
 
   const handleSetSubagentEnabled = useCallback(async (
     agentId: string,
@@ -585,7 +585,7 @@ export function useAgentsList({
     } catch {
       notification.error(t('agentsOverview.subagentToggleFailed'));
     }
-  }, [getModeProfile, notification, t, workspacePath, workspace?.id]);
+  }, [getModeProfile, notification, t, workspace?.id]);
 
   const handleSetSubagentModel = useCallback(async (
     subagentId: string,
@@ -604,7 +604,7 @@ export function useAgentsList({
     } catch {
       notification.error(t('agentCard.modelSelector.updateFailed'));
     }
-  }, [loadAgents, notification, t, workspacePath, workspace?.id]);
+  }, [loadAgents, notification, t, workspace?.id]);
 
   const filteredAgents = useMemo(() => allAgents.filter((agent) => {
     if (searchQuery) {
