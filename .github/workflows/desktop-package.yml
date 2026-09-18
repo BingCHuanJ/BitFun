@@ -842,7 +842,7 @@ jobs:
             --manifest latest.published.json \
             --version "${{ needs.prepare.outputs.version }}" \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}" \
-            --required-manual-platforms "windows-x86_64" \
+            --required-manual-platforms "windows-x86_64,darwin-aarch64,darwin-x86_64" \
             --check-urls true
 
       - name: Verify published Linux binaries manifest
