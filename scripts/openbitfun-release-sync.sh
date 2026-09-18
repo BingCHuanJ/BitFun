@@ -6,19 +6,14 @@
 #   1. Fetch the selected channel's latest-v1.json from GitHub
 #   2. Mirror the signed Relay image descriptor and Linux binary manifest FIRST
 #      (small trust metadata must not queue behind ~700 MB of Desktop packages)
-#   3. Download every Desktop updater package plus the standalone Windows
-#      installer into release/{version}/
-#   4. Rewrite updater URLs and generate a separate website download manifest
-#   5. Atomically publish versioned and root manifests
-#   6. Remove old version dirs, keeping only the most recent KEEP_VERSIONS
+#   3. If that version is already published, prune to KEEP_VERSIONS and stop
+#   4. Otherwise download the new version, rewrite manifests, then prune
 #
-# The published release/latest-v1.json and release/beta/latest-v1.json files are the
-# stable and beta Tauri updater fallback endpoints.
-# When GitHub is unreachable, the desktop client automatically falls through
-# to https://openbitfun.com/release/latest-v1.json and downloads from this mirror.
-# The published release/downloads.json is for the website. Its Windows and macOS
-# URLs point at real installers — the manual_installers entry, or for macOS the
-# mirrored .dmg — while the updater keeps the versioned Tauri package URLs.
+# Desktop / CLI auto-update reads latest-v1.json and linux-binaries-v1.json.
+# Those files always name the current version, so the updater never needs a
+# retained older directory. downloads.json is website-only and substitutes
+# each manual_installers entry (Windows installer, macOS .dmg) for the
+# corresponding updater package.
 #
 # Cron (every 10 minutes). Run the in-repo script from the OpenBitFun checkout so a
 # new host only needs this repository, not a detached AutoUpdate copy:
@@ -81,12 +76,8 @@ LOCK_FILE="${OPENBITFUN_RELEASE_SYNC_LOCK:-/var/lock/openbitfun-release-sync.loc
 WINDOWS_INSTALLER_FILENAME="openbitfun-installer.exe"
 WINDOWS_INSTALLER_URL=""
 WINDOWS_INSTALLER_SIGNATURE_URL=""
-MACOS_DMG_INSTALLERS=""
 WEBSITE_DOWNLOADS_MANIFEST="downloads.json"
-# Keep enough releases that the mirror still serves a Desktop build a few
-# versions behind and SSH Dispatch can finish an already-confirmed install even
-# after a newer release becomes current.
-KEEP_VERSIONS=6
+KEEP_VERSIONS=2
 CONNECT_TIMEOUT=30
 MAX_TIME=1800          # per-request ceiling (30 min; installer packages can be large)
 MAX_RETRIES=3
@@ -180,90 +171,9 @@ if entry:
     "${VERSION_DIR}/${WINDOWS_INSTALLER_FILENAME}.sig" || exit 1
 }
 
-# Mirror the signed macOS .dmg installers.
-#
-# The macOS updater package is a .app.tar.gz: an update payload with no
-# installer UI, which a browser unpacks into a bare .app next to whatever else
-# is in Downloads. It is what the updater consumes, not what a person installs.
-# Releases before 1.0.2 declare manual_installers for windows-x86_64 only, so
-# the website had nothing else to offer macOS visitors and handed them that
-# archive. The .dmg files are published with every Desktop release under
-# deterministic names, so resolve them here and let the website manifest prefer
-# them.
-#
-# Probing rather than assuming: the .dmg and its signature are uploaded by a
-# separate job, so an early cron run can legitimately see neither. A partial set
-# is removed so the next run re-fetches instead of publishing a URL that 404s.
-mirror_macos_dmg_installers() {
-  local platform arch declared filename base_url suffix ready failed
-  MACOS_DMG_INSTALLERS=""
-  for platform in darwin-aarch64 darwin-x86_64; do
-    case "$platform" in
-      darwin-aarch64) arch="aarch64" ;;
-      *) arch="x64" ;;
-    esac
-
-    # A release that declares its own macOS installer wins over the naming
-    # convention, so a future rename does not silently keep mirroring the old
-    # file.
-    declared="$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
-import json, sys
-entry = json.load(sys.stdin).get('manual_installers', {}).get('${platform}')
-if entry:
-    print(entry['url'])
-")"
-    if [ -n "$declared" ]; then
-      if [ "${declared%/*}" != "$RELEASE_ASSET_BASE_URL" ]; then
-        log "ERROR: ${platform} manual installer does not belong to release $VERSION"
-        return 1
-      fi
-      filename="${declared##*/}"
-    else
-      filename="OpenBitFun_${VERSION}_${arch}.dmg"
-    fi
-    base_url="${RELEASE_ASSET_BASE_URL}/${filename}"
-
-    ready=1
-    for suffix in "" .sig; do
-      if ! curl -fsSIL \
-        --connect-timeout "$CONNECT_TIMEOUT" \
-        --max-time "$MAX_TIME" \
-        "${base_url}${suffix}" >/dev/null; then
-        ready=0
-        break
-      fi
-    done
-    if [ "$ready" -ne 1 ]; then
-      log "  macOS installer set is not complete yet: $filename"
-      continue
-    fi
-
-    failed=0
-    for suffix in "" .sig; do
-      log "  Mirroring macOS installer: ${filename}${suffix}"
-      if ! download_asset \
-        "${base_url}${suffix}" \
-        "${VERSION_DIR}/${filename}${suffix}"; then
-        failed=1
-        break
-      fi
-    done
-    if [ "$failed" -ne 0 ]; then
-      rm -f "${VERSION_DIR}/${filename}" "${VERSION_DIR}/${filename}.sig"
-      log "WARN: incomplete macOS installer set removed; retrying next sync."
-      continue
-    fi
-
-    MACOS_DMG_INSTALLERS="${MACOS_DMG_INSTALLERS}${platform}=${filename}"$'\n'
-  done
-  return 0
-}
-
 # Build a website-only manifest from the already rewritten updater manifest.
-# Targets that have a real installer — every declared manual_installers entry,
-# plus the macOS .dmg files resolved above — are replaced with it; the rest keep
-# their mirrored updater package. The updater URLs remain untouched;
-# manual_installers is a mirror/website extension only.
+# Every declared manual_installers entry replaces that platform's updater
+# package; the rest keep the updater URL. The updater manifest is untouched.
 write_website_download_manifest() {
   local output="${VERSION_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}"
   local output_tmp="${output}.part"
@@ -272,11 +182,10 @@ write_website_download_manifest() {
     "${VERSION_DIR}/latest-v1.json" \
     "$output_tmp" \
     "$OPENBITFUN_BASE_URL" \
-    "$WINDOWS_INSTALLER_FILENAME" \
-    "$MACOS_DMG_INSTALLERS" <<'PY'
+    "$WINDOWS_INSTALLER_FILENAME" <<'PY'
 import json, sys
 
-source, dest, base, windows_installer, macos_installers = sys.argv[1:]
+source, dest, base, windows_installer = sys.argv[1:]
 with open(source, encoding="utf-8") as f:
     updater = json.load(f)
 
@@ -292,21 +201,11 @@ windows = platforms.get("windows-x86_64")
 if windows is None:
     raise SystemExit("latest-v1.json is missing windows-x86_64")
 
-# These URLs were rewritten to the mirror together with the updater ones.
 for target, manual in updater.get("manual_installers", {}).items():
     if target not in platforms:
         continue
     platforms[target]["url"] = manual["url"]
     platforms[target]["signatureUrl"] = manual.get("signature_url", manual["url"] + ".sig")
-
-for line in macos_installers.splitlines():
-    if not line:
-        continue
-    target, filename = line.split("=", 1)
-    if target not in platforms or "signatureUrl" in platforms[target]:
-        continue
-    platforms[target]["url"] = f"{version_base}/{filename}"
-    platforms[target]["signatureUrl"] = f"{version_base}/{filename}.sig"
 
 if "signatureUrl" not in windows:
     windows["url"] = f"{version_base}/{windows_installer}"
@@ -635,6 +534,19 @@ main() {
   }
   log "Latest version: $VERSION"
 
+  PUBLISHED_VERSION=""
+  if [ -f "${WEBSITE_RELEASE_DIR}/latest-v1.json" ]; then
+    PUBLISHED_VERSION=$("$PYTHON" -c \
+      "import json,sys;print(json.load(open(sys.argv[1], encoding='utf-8'))['version'])" \
+      "${WEBSITE_RELEASE_DIR}/latest-v1.json") || PUBLISHED_VERSION=""
+  fi
+  if [ -n "$PUBLISHED_VERSION" ] && [ "$PUBLISHED_VERSION" = "$VERSION" ]; then
+    log "Already mirroring $VERSION; nothing to fetch"
+    prune_old_versions
+    log "=== ${RELEASE_CHANNEL} sync complete: version $VERSION (unchanged) ==="
+    exit 0
+  fi
+
   # Resolve one immutable release directory for every artifact. Independent
   # latest/download requests can cross versions while a release is published.
   RELEASE_ASSET_BASE_URL=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
@@ -714,9 +626,24 @@ for p, info in data.get('platforms', {}).items():
     download_asset "$url" "${VERSION_DIR}/${filename}" || exit 1
   done <<< "$ASSET_LIST"
 
-  # Mirror the manual installers separately while preserving the updater URLs.
+  # Mirror declared installers separately; the updater URLs stay in platforms.
   mirror_windows_installer
-  mirror_macos_dmg_installers
+  EXTRA_INSTALLERS=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
+import json, sys
+data = json.load(sys.stdin)
+for target, entry in data.get('manual_installers', {}).items():
+    if target == 'windows-x86_64':
+        continue
+    url = entry.get('url')
+    if url:
+        print(url)
+        print(entry.get('signature_url', url + '.sig'))
+")
+  while IFS= read -r url; do
+    [ -z "$url" ] && continue
+    log "  Mirroring installer: ${url##*/}"
+    download_asset "$url" "${VERSION_DIR}/${url##*/}" || exit 1
+  done <<< "$EXTRA_INSTALLERS"
 
   # 6. Rewrite URLs in latest-v1.json to point at openbitfun.com
   LATEST_MANIFEST_TMP="${VERSION_DIR}/latest-v1.json.part"
@@ -748,21 +675,24 @@ print(json.dumps(data, indent=2))
     "${WEBSITE_RELEASE_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}"
   log "Updated ${WEBSITE_RELEASE_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}"
 
-  # 8. Clean up old versions — keep only the latest KEEP_VERSIONS dirs
-  ALL_DIRS=()
-  while IFS= read -r d; do
-    ALL_DIRS+=("$d")
-  done < <(find "$WEBSITE_RELEASE_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '0.2.*' | sort -V)
-  TOTAL=${#ALL_DIRS[@]}
-  if [ "$TOTAL" -gt "$KEEP_VERSIONS" ]; then
-    REMOVE_COUNT=$((TOTAL - KEEP_VERSIONS))
-    for ((i = 0; i < REMOVE_COUNT; i++)); do
-      log "Removing old version: $(basename "${ALL_DIRS[$i]}")"
-      rm -rf "${ALL_DIRS[$i]}"
-    done
-  fi
-
+  prune_old_versions
   log "=== ${RELEASE_CHANNEL} sync complete: version $VERSION ==="
+}
+
+prune_old_versions() {
+  local dirs=() total remove_count i
+  while IFS= read -r d; do
+    dirs+=("$d")
+  done < <(find "$WEBSITE_RELEASE_DIR" -mindepth 1 -maxdepth 1 -type d | sort -V)
+  total=${#dirs[@]}
+  if [ "$total" -le "$KEEP_VERSIONS" ]; then
+    return 0
+  fi
+  remove_count=$((total - KEEP_VERSIONS))
+  for ((i = 0; i < remove_count; i++)); do
+    log "Removing old version: $(basename "${dirs[$i]}")"
+    rm -rf "${dirs[$i]}"
+  done
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
