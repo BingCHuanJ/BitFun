@@ -728,9 +728,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     disabled={!canRollback}
                     aria-label={rollbackTooltip}
                     icon={sessionMutation?.kind === 'rollback' && sessionMutation.targetTurnId === turnId ? (
-                      <Loader2 size={14} className="user-message-item__rollback-spinner" />
+                      <Icon glyph={Loader2} size="sm" className="user-message-item__rollback-spinner" />
                     ) : (
-                      <RotateCcw size={14} />
+                      <Icon glyph={RotateCcw} size="sm" />
                     )}
                   />
                 </Tooltip>

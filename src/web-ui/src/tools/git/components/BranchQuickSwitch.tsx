@@ -3,6 +3,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -23,6 +24,8 @@ import { OverflowText,
   DialogHeader,
   DialogHeading,
   DialogTitle,
+  useDismissibleLayer,
+  usePresence,
 } from '@openbitfun/ui';
 import { Loader2 } from 'lucide-react';
 
@@ -53,6 +56,7 @@ interface BranchSwitchBlocker {
 }
 
 export interface BranchQuickSwitchProps {
+  id?: string;
   isOpen: boolean;
   onClose: () => void;
   repositoryPath: string;
@@ -66,6 +70,7 @@ const branchListFromCache = (repositoryPath: string): GitBranch[] | undefined =>
 );
 
 export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
+  id,
   isOpen,
   onClose,
   repositoryPath,
@@ -87,11 +92,13 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   const [commitError, setCommitError] = useState<string | null>(null);
   const [commitCreated, setCommitCreated] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [inputCompositionActive, setInputCompositionActive] = useState(false);
+  const { present, state: phase } = usePresence(isOpen, 100);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const commitInputRef = useRef<HTMLInputElement>(null);
   const conflictConfirmRef = useRef<HTMLButtonElement>(null);
-  const inputCompositionActiveRef = useRef(false);
+  const layerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const switchInFlightRef = useRef(false);
@@ -109,14 +116,35 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   }, [branches, searchTerm]);
 
   const popoverLayout = useAnchoredPopoverPosition({
-    open: isOpen,
+    open: present,
     anchorRef,
-    popoverRef: panelRef,
+    popoverRef: layerRef,
     preferredPlacement: 'top',
     alignment: 'start',
     gap: 7,
     layoutRevision: `${isLoading}:${loadFailed}:${filteredBranches.length}`,
   });
+
+  const closePicker = useCallback((restoreFocus = true) => {
+    const panel = panelRef.current;
+    // Async checkout must not take focus back after the user left the picker.
+    if (restoreFocus && panel?.contains(panel.ownerDocument.activeElement)) {
+      anchorRef.current?.focus({ preventScroll: true });
+    }
+    onClose();
+  }, [anchorRef, onClose]);
+
+  useDismissibleLayer({
+    enabled: isOpen,
+    layerRef,
+    branchRefs: [anchorRef],
+    dismissOnEscape: !inputCompositionActive,
+    onDismiss: reason => closePicker(reason !== 'pointer-outside'),
+  });
+  const focusReady = isOpen && present && Boolean(popoverLayout);
+  useLayoutEffect(() => {
+    if (focusReady) inputRef.current?.focus({ preventScroll: true });
+  }, [focusReady]);
 
   const loadBranches = useCallback(async () => {
     setIsLoading(true);
@@ -150,15 +178,16 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   }, [repositoryPath]);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!present) {
       setSearchTerm('');
       setSelectedIndex(0);
-      return;
+      setInputCompositionActive(false);
     }
+  }, [present]);
 
+  useEffect(() => {
+    if (!isOpen) return;
     void loadBranches();
-    const timer = window.setTimeout(() => inputRef.current?.focus(), 50);
-    return () => window.clearTimeout(timer);
   }, [isOpen, loadBranches]);
 
   useEffect(() => {
@@ -168,30 +197,6 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     setCommitError(null);
     setCommitCreated(false);
   }, [repositoryPath]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (
-        !panelRef.current?.contains(target)
-        && !anchorRef.current?.contains(target)
-      ) {
-        onClose();
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [anchorRef, isOpen, onClose]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -229,8 +234,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     setCommitError(null);
     setCommitCreated(false);
     onSwitchSuccess?.(branchName);
-    onClose();
-  }, [onClose, onSwitchSuccess, repositoryPath, t]);
+    closePicker();
+  }, [closePicker, onSwitchSuccess, repositoryPath, t]);
 
   const loadBlockerStats = useCallback(async (targetBranch: string, files: string[]) => {
     if (files.length === 0) return;
@@ -268,7 +273,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
       setCommitMessage('');
       setCommitError(null);
       setCommitCreated(false);
-      onClose();
+      closePicker();
       void loadBlockerStats(targetBranch, files);
       return;
     }
@@ -284,7 +289,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
       title: t('quickSwitch.errors.title'),
       duration: 5000,
     });
-  }, [loadBlockerStats, onClose, repositoryPath, t]);
+  }, [closePicker, loadBlockerStats, repositoryPath, t]);
 
   const handleSwitchBranch = useCallback(async (branchName: string) => {
     if (
@@ -315,9 +320,14 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   const handleListKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (
       (event.key === 'Enter' || event.key === 'Escape')
-      && isImeOwnedKeyboardEvent(event, inputCompositionActiveRef.current)
+      && isImeOwnedKeyboardEvent(event, inputCompositionActive)
     ) {
       event.stopPropagation();
+      return;
+    }
+    if (event.key === 'Tab') {
+      // Resume the page's tab order at the trigger, outside the portal.
+      closePicker();
       return;
     }
     if (filteredBranches.length === 0) return;
@@ -333,7 +343,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
       const selected = filteredBranches[selectedIndex];
       if (selected && !selected.current) void handleSwitchBranch(selected.name);
     }
-  }, [filteredBranches, handleSwitchBranch, selectedIndex]);
+  }, [closePicker, filteredBranches, handleSwitchBranch, inputCompositionActive, selectedIndex]);
 
   const closeRecoveryDialogs = useCallback(() => {
     if (isCommitting) return;
@@ -417,21 +427,18 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     t,
   ]);
 
-  const popover = isOpen ? (
+  const popover = present ? (
     <div
+      id={id}
       ref={panelRef}
       className="branch-quick-switch"
       data-openbitfun-product-component="branch-quick-switch"
       data-openbitfun-product-part="root"
-      data-openbitfun-placement={popoverLayout?.placement ?? 'top'}
       data-testid="branch-quick-switch"
+      data-motion="presence"
       role="dialog"
+      aria-modal={false}
       aria-label={t('quickSwitch.menuLabel')}
-      style={{
-        top: `${popoverLayout?.top ?? 0}px`,
-        left: `${popoverLayout?.left ?? 0}px`,
-        visibility: popoverLayout ? 'visible' : 'hidden',
-      }}
       onKeyDown={handleListKeyDown}
     >
       <div
@@ -447,12 +454,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
           placeholder={t('quickSwitch.searchPlaceholder')}
           value={searchTerm}
           onValueChange={setSearchTerm}
-          onCompositionStart={() => {
-            inputCompositionActiveRef.current = true;
-          }}
-          onCompositionEnd={() => {
-            inputCompositionActiveRef.current = false;
-          }}
+          onCompositionStart={() => setInputCompositionActive(true)}
+          onCompositionEnd={() => setInputCompositionActive(false)}
           data-openbitfun-product-component="branch-quick-switch"
           data-openbitfun-product-part="input"
         />
@@ -517,7 +520,27 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
 
   return (
     <>
-      {popover ? createPortal(popover, getAppearanceOverlayHost()) : null}
+      {popover && createPortal(
+        <div
+          ref={layerRef}
+          className="branch-quick-switch__layer"
+          data-openbitfun-native-webview-occlusion
+          data-openbitfun-placement={popoverLayout?.placement ?? 'top'}
+          data-state={phase}
+          data-motion="presence"
+          aria-hidden={!isOpen || undefined}
+          {...(!isOpen ? { inert: '' } : {})}
+          style={{
+            top: popoverLayout?.bottom === undefined ? `${popoverLayout?.top ?? 0}px` : undefined,
+            bottom: popoverLayout?.bottom === undefined ? undefined : `${popoverLayout.bottom}px`,
+            left: `${popoverLayout?.left ?? 0}px`,
+            visibility: popoverLayout ? 'visible' : 'hidden',
+          }}
+        >
+          {popover}
+        </div>,
+        getAppearanceOverlayHost(),
+      )}
 
       <Dialog
         open={!!blocker && !commitDialogOpen}
