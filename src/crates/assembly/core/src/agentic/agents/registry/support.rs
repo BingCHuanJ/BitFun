@@ -8,6 +8,16 @@ use crate::util::errors::OpenBitFunResult;
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Tool-name prefixes of the tool families that are registered dynamically at
+/// runtime and therefore cannot appear in an Agent's static tool manifest.
+///
+/// These mirror `openbitfun_agent_tools::{ACP_TOOL_PREFIX, MCP_TOOL_PREFIX}`, but
+/// are declared locally on purpose: both of those constants sit behind that
+/// crate's `acp-bridge` / `mcp-bridge` cargo features, while this module also
+/// compiles under `agent-runtime` alone, where neither feature is enabled.
+const DYNAMIC_MCP_TOOL_PREFIX: &str = "mcp__";
+const DYNAMIC_ACP_TOOL_PREFIX: &str = "acp__";
+
 pub(super) async fn get_mode_configs() -> HashMap<String, AgentProfileConfig> {
     if let Ok(config_service) = GlobalConfigManager::get_service().await {
         config_service
@@ -68,12 +78,13 @@ pub(super) async fn save_project_subagent_overrides_local(
     save_project_agent_profiles_document_local(workspace_root, &document).await
 }
 
-pub(super) fn merge_dynamic_mcp_tools(
+fn merge_dynamic_tool_names(
     mut configured_tools: Vec<String>,
     registered_tool_names: &[String],
+    prefixes: &[&str],
 ) -> Vec<String> {
     for tool_name in registered_tool_names {
-        if !tool_name.starts_with("mcp__") {
+        if !prefixes.iter().any(|prefix| tool_name.starts_with(*prefix)) {
             continue;
         }
 
@@ -88,4 +99,34 @@ pub(super) fn merge_dynamic_mcp_tools(
     }
 
     configured_tools
+}
+
+pub(super) fn merge_dynamic_mcp_tools(
+    configured_tools: Vec<String>,
+    registered_tool_names: &[String],
+) -> Vec<String> {
+    merge_dynamic_tool_names(
+        configured_tools,
+        registered_tool_names,
+        &[DYNAMIC_MCP_TOOL_PREFIX],
+    )
+}
+
+/// Append the tools of every ACP client that is enabled as a subagent.
+///
+/// ACP clients are registered as regular tools (`acp__<client>__prompt`) rather
+/// than as agents, so without this step an ACP subagent the user explicitly
+/// enabled stays unreachable: the tool exists in the registry but no Agent
+/// manifest ever lists its name, and the manifest allowlist is what decides
+/// which tools reach the model. Like the MCP merge above, this only applies to
+/// Agents that accept dynamically registered tools.
+pub(super) fn merge_dynamic_acp_tools(
+    configured_tools: Vec<String>,
+    registered_tool_names: &[String],
+) -> Vec<String> {
+    merge_dynamic_tool_names(
+        configured_tools,
+        registered_tool_names,
+        &[DYNAMIC_ACP_TOOL_PREFIX],
+    )
 }
