@@ -362,6 +362,10 @@ test('website download manifest uses installer while updater manifest keeps setu
         url: 'https://openbitfun.test/release/1.2.3/OpenBitFun_1.2.3_windows-x86_64-installer.exe',
         signature_url: 'https://openbitfun.test/release/1.2.3/OpenBitFun_1.2.3_windows-x86_64-installer.exe.sig',
       },
+      'darwin-aarch64': {
+        url: 'https://openbitfun.test/release/1.2.3/OpenBitFun_1.2.3_aarch64.dmg',
+        signature_url: 'https://openbitfun.test/release/1.2.3/OpenBitFun_1.2.3_aarch64.dmg.sig',
+      },
     },
   };
   fs.writeFileSync(updaterPath, `${JSON.stringify(updater, null, 2)}\n`);
@@ -407,7 +411,11 @@ test('website download manifest uses installer while updater manifest keeps setu
   );
   assert.equal(
     website.platforms['darwin-aarch64'].url,
-    updater.platforms['darwin-aarch64'].url
+    'https://openbitfun.test/release/1.2.3/OpenBitFun_1.2.3_aarch64.dmg'
+  );
+  assert.equal(
+    website.platforms['darwin-aarch64'].signatureUrl,
+    'https://openbitfun.test/release/1.2.3/OpenBitFun_1.2.3_aarch64.dmg.sig'
   );
 });
 
@@ -431,19 +439,16 @@ test('stable Linux archives are mirrored before the much larger Desktop packages
   );
 });
 
-test('the mirror retains enough releases for older Desktop builds', () => {
+test('the mirror keeps only the two newest versions and skips an unchanged latest', () => {
   const syncScript = fs.readFileSync(
     path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),
     'utf8'
   );
   const keep = /^KEEP_VERSIONS=(\d+)$/m.exec(syncScript);
   assert.ok(keep, 'KEEP_VERSIONS must be set');
-  // Dispatch confirms an exact release before installation; keep that version
-  // available long enough for a later click or retry to finish safely.
-  assert.ok(
-    Number(keep[1]) >= 4,
-    `KEEP_VERSIONS must retain several releases, got ${keep[1]}`
-  );
+  assert.equal(Number(keep[1]), 2);
+  assert.match(syncScript, /Already mirroring \$VERSION; nothing to fetch/);
+  assert.doesNotMatch(syncScript, /! -name '0\.2\.\*'/);
 });
 
 test('openbitfun sync lock and cron use the in-repo script, not a server-only copy', () => {
