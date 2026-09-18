@@ -5937,7 +5937,8 @@ export const requiredContentRules = [
         message: 'missing remote chat history assembly delegation',
       },
       {
-        regex: /\bproject_remote_chat_user\(\s*turn\.user_message\.metadata\.as_ref\(\),\s*&prompt_visible_content\s*\)/,
+        regex:
+          /\bproject_remote_chat_user\(\s*turn\.user_message\.metadata\.as_ref\(\),\s*&prompt_visible_content,\s*read_image_pixels,?\s*\)/,
         message: 'missing remote chat user projection owner delegation',
       },
       {

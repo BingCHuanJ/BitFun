@@ -676,7 +676,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         </div>
 
         <div className="user-message-item__meta" data-openbitfun-product-component="user-message-item" data-openbitfun-product-part="meta">
-          {sentTime && sentAtLabel && sentTimestamp !== null && (
+          {!isEditing && sentTime && sentAtLabel && sentTimestamp !== null && (
             <time
               className="user-message-item__timestamp"
               data-openbitfun-product-component="user-message-item"

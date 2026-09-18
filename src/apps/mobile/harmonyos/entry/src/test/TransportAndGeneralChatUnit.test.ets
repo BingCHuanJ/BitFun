@@ -97,7 +97,9 @@ import {
   CloudAccountDevice,
   CloudProvisionedDevice,
   CloudAccountRequestError,
-  CloudAccountSession
+  CloudAccountSession,
+  CloudAccountTransportError,
+  retryableAuthorizationPollError
 } from '../main/ets/services/CloudAccountClient';
 import {
   CloudAccountSessionStore,
@@ -587,6 +589,22 @@ class AccountDeviceSwitchHarness {
 
 export default function transportAndGeneralChatUnitTest() {
   describe('Account device links', () => {
+    /**
+     * The sign-in poll runs for the minutes the user spends in a browser and a
+     * mail app, which is where a phone most reliably drops a connection. A
+     * single failure there used to end the sign-in and send them back to the
+     * start, so a transport failure or a relay that is briefly unwilling has to
+     * cost one interval, while a refusal the relay meant still stops the loop.
+     */
+    it('keeps polling for sign-in through transport failures but not refusals', 0, () => {
+      expect(retryableAuthorizationPollError(new CloudAccountTransportError(2300007))).assertTrue();
+      expect(retryableAuthorizationPollError(new CloudAccountRequestError('too many polls', 429))).assertTrue();
+      expect(retryableAuthorizationPollError(new CloudAccountRequestError('relay down', 503))).assertTrue();
+      expect(retryableAuthorizationPollError(new CloudAccountRequestError('denied', 401))).assertFalse();
+      expect(retryableAuthorizationPollError(new CloudAccountRequestError('bad request', 400))).assertFalse();
+      expect(retryableAuthorizationPollError(new Error('unparseable relay response'))).assertFalse();
+    });
+
     it('uses the same device selector for official and LAN endpoints', 0, () => {
       for (const endpoint of ['https://remote.openbitfun.com/v/1.0.1', 'http://192.168.1.10:9700']) {
         const parsed = accountDeviceLink(`${endpoint}/#/pair?did=desktop-1`);
@@ -2027,6 +2045,27 @@ export default function transportAndGeneralChatUnitTest() {
       expect(visible.length).assertEqual(1);
       expect(visible[0].id).assertEqual('native-session');
       expect(raw.length).assertEqual(3);
+    });
+
+    it('hides child sessions so Desktop side questions are not standalone rows', 0, () => {
+      const items: SessionItemResponse[] = [{
+        session_id: 'parent-session',
+        name: 'iOS sidebar spacing'
+      }, {
+        session_id: 'btw-session',
+        name: 'why did it grep with bash',
+        parent_session_id: 'parent-session',
+        relationship_kind: 'btw'
+      }];
+
+      const visible = RemoteResponseMapper.sessions(items);
+      const raw = RemoteResponseMapper.allSessions(items);
+
+      expect(visible.length).assertEqual(1);
+      expect(visible[0].id).assertEqual('parent-session');
+      expect(raw.length).assertEqual(2);
+      expect(raw[1].parentSessionId).assertEqual('parent-session');
+      expect(raw[1].relationshipKind).assertEqual('btw');
     });
 
     it('maps alternate session time fields', 0, () => {

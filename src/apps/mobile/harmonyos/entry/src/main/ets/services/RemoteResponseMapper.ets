@@ -107,7 +107,9 @@ export class RemoteResponseMapper {
         ]),
         messageCount: item.message_count || 0,
         workspacePath: item.workspace_path,
-        workspaceName: item.workspace_name
+        workspaceName: item.workspace_name,
+        parentSessionId: item.parent_session_id,
+        relationshipKind: item.relationship_kind
       };
       // An ID-aware host pins every session to its workspace record. Keep that
       // ID as the identity; the listing scope may later fill in display facts.
@@ -119,13 +121,24 @@ export class RemoteResponseMapper {
     });
   }
 
-  /** ACP sessions are created on Desktop and are not controllable on HarmonyOS. */
+  /**
+   * ACP sessions are created on Desktop and are not controllable on HarmonyOS.
+   * Child sessions (Desktop's 侧问 / review / miniapp / subagent) belong under
+   * their parent, so they must not appear as standalone conversations.
+   */
   static visibleSessions(sessions: RemoteSession[]): RemoteSession[] {
     return sessions.filter((session: RemoteSession) => RemoteResponseMapper.isVisibleSession(session));
   }
 
   static isVisibleSession(session: RemoteSession): boolean {
-    return !(session.agentType || '').trim().toLowerCase().startsWith('acp:');
+    if ((session.agentType || '').trim().toLowerCase().startsWith('acp:')) {
+      return false;
+    }
+    return !RemoteResponseMapper.isChildSession(session);
+  }
+
+  static isChildSession(session: RemoteSession): boolean {
+    return (session.parentSessionId || '').trim().length > 0;
   }
 
   static chatMessage(item: ChatMessageResponse): ChatMessage {

@@ -61,6 +61,9 @@ export interface RemoteSession {
   workspaceIdentity?: RemoteWorkspaceIdentity;
   pinned?: boolean;
   titleGenerated?: boolean;
+  /** Set when the session hangs off another one (btw/review/miniapp/subagent). */
+  parentSessionId?: string;
+  relationshipKind?: string;
   /** Stamped by the phone after mapping; the wire payload has no device id. */
   deviceId?: string;
 }
@@ -275,6 +278,8 @@ export interface SessionItemResponse {
   message_count?: number;
   workspace_path?: string;
   workspace_name?: string;
+  parent_session_id?: string;
+  relationship_kind?: string;
 }
 
 export interface SessionListResponse extends CommandStatusResponse {
