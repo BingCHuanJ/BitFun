@@ -220,9 +220,14 @@ test "$code" = "404"'
 下载目录，避免给旧客户端推送 1.X 或破坏旧下载。GitHub Latest 中的旧清单由
 发布工作流从 v0.2.19 原样保留。完整规则见 [发布指南](../../docs/development/releasing.md)。
 
-Windows 网页安装包文件名以 GitHub `latest-v1.json` 的 `manual_installers` 为准
-（现在是 `OpenBitFun_${version}_windows-x86_64-installer.exe`）。不要再写死
+网页安装包文件名以 GitHub `latest-v1.json` 的 `manual_installers` 为准
+（Windows 现在是 `OpenBitFun_${version}_windows-x86_64-installer.exe`）。不要再写死
 `openbitfun-installer.exe`。
+
+macOS 的 `downloads.json` 必须指向 `.dmg`，不是 `platforms` 里的
+`.app.tar.gz`——后者是 updater 的升级载荷，浏览器只会把它解包成一个裸 `.app`。
+1.0.2 起 `manual_installers` 自带 `darwin-aarch64` / `darwin-x86_64`；更早的版本没有，
+同步脚本按 `OpenBitFun_${version}_{aarch64,x64}.dmg` 探测并镜像，两种来源都要保留。
 
 `release-sync.cron` **就是这台机器的整份 root crontab**。`crontab` 该文件会
 替换所有 root cron。先备份，确认没有其它任务再装。
