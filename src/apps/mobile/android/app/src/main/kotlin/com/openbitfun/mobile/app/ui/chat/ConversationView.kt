@@ -496,7 +496,10 @@ private fun ConversationTimelineViewHost(
  */
 @Composable
 private fun bottomOverlayFade(): Brush = Brush.verticalGradient(
-    0f to Color.Transparent,
+    // The page colour at zero alpha rather than a bare transparent: a gradient
+    // run to plain transparent interpolates through grey and leaves a smudge
+    // over the transcript.
+    0f to overlayFill().copy(alpha = 0f),
     0.45f to overlayFill(),
     1f to overlayFill(),
 )
@@ -513,7 +516,7 @@ private fun ConversationTopEdgeFade() {
         modifier = Modifier
             .fillMaxWidth()
             .height(MobileDesignGeometry.ConversationEdgeFadeHeight)
-            .background(Brush.verticalGradient(listOf(page, Color.Transparent))),
+            .background(Brush.verticalGradient(listOf(page, page.copy(alpha = 0f)))),
     )
 }
 
