@@ -7,10 +7,10 @@
   @include transcriptLayout.content-column;
   position: relative;
   overflow: hidden;
-  /* Fill the shared transcript row so the collapse header (`>`) and the
-   * round's body text share both edges. */
-  width: 100%;
-  margin: 0;
+  /* Same column box as .model-round-item so the collapse header (`>`) and the
+   * round's body text share one leading edge. */
+  width: min(100%, 900px);
+  margin: 0 auto;
   padding-block: 0;
 }
 

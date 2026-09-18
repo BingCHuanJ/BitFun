@@ -43,7 +43,7 @@ describe('UserMessageItem metadata visibility', () => {
     expect(textarea).toContain('min-height: var(--openbitfun-control-height-sm);');
     expect(richInput).toContain('min-height: var(--openbitfun-control-height-sm);');
     expect(bubble).toContain('width: fit-content;');
-    expect(bubble).toContain('min-width: min(8rem, 72%);');
+    expect(bubble).not.toContain('min-width:');
     expect(bubble).toContain('max-width: min(72%, 48rem);');
     expect(bubble).toContain('border: none;');
     expect(main).toContain('justify-content: center;');

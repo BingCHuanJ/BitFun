@@ -25,10 +25,10 @@
 
 
   /*
-   * The scroller spans the full panel width. Message rows reserve their shared
-   * transcript insets, and `overflow-anchor: none` keeps the browser from
-   * adding a second opinion about where the viewport belongs — the viewport
-   * anchor is the only one.
+   * The scroller. It spans the full panel width even though message content
+   * inside it is max-width constrained, and `overflow-anchor: none` keeps the
+   * browser from adding a second opinion about where the viewport belongs —
+   * the viewport anchor is the only one.
    */
   &__scroller {
     --_flow-chat-top-mask-start: transparent 0;

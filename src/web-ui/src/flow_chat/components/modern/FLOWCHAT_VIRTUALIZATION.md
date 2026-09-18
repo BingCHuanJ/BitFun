@@ -181,8 +181,8 @@ actions remain visible at rest, without requiring hover or keyboard focus.
 shells, model rounds, Explore regions, and the runtime-status footer.
 The messages viewport enables a shared outer column rule for virtual rows and
 the runtime footer: reserve the turn rail's offset and hit area plus space-1 on
-the leading side, and only space-2 on the trailing side. Rows use the remaining
-transcript width without a fixed reading-width cap. This rule is local to the
+the leading side, and only space-2 on the trailing side. Columns remain centered
+when there is room for the full 900px reading width. This rule is local to the
 transcript; the composer and welcome surface keep their existing widths, and
 embedded transcripts without a rail keep their own layout. The scroller remains
 full width.
