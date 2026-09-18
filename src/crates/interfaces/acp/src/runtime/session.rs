@@ -34,11 +34,15 @@ impl OpenBitFunAcpRuntime {
     /// ACP names a workspace by its `cwd` directory operand. This is the one
     /// place that external reference is translated into the owning workspace
     /// record; every later runtime call carries the record ID.
+    ///
+    /// The record is registered hidden: an ACP client's `cwd` must not become
+    /// an opened, recent, or current workspace of the desktop that shares the
+    /// same catalog.
     async fn open_cwd_workspace(cwd: &str) -> Result<WorkspaceInfo> {
         let service = get_global_workspace_service()
             .ok_or_else(|| Error::internal_error().data("Workspace service is unavailable"))?;
         service
-            .open_workspace(Path::new(cwd).to_path_buf())
+            .register_local_workspace_record(Path::new(cwd).to_path_buf())
             .await
             .map_err(|error| Error::invalid_params().data(error.to_string()))
     }

@@ -2352,8 +2352,14 @@ mod daemon_command_tests {
     }
 }
 
-/// Explicit CLI folder selection creates/opens a local workspace once. Existing
-/// session and protocol routing must use the resulting record ID.
+/// Resolves the stable workspace record for a directory the CLI is operating in
+/// (its cwd, `--workspace`, or a command operand). Session and protocol routing
+/// must use the resulting record ID.
+///
+/// This registers a hidden record only. The CLI shares the workspace catalog
+/// with the desktop, and running `openbitfun doctor` or a chat in some folder
+/// must not make that folder an opened, recent, or current desktop workspace;
+/// opening a folder for the desktop UI is an explicit user action there.
 async fn create_cli_local_workspace(
     path: &std::path::Path,
 ) -> Result<openbitfun_core::service::workspace::WorkspaceInfo> {
@@ -2372,7 +2378,7 @@ async fn create_cli_local_workspace(
         service
     };
     service
-        .open_workspace(path.to_owned())
+        .register_local_workspace_record(path.to_owned())
         .await
         .map_err(|error| anyhow!(error.to_string()))
 }

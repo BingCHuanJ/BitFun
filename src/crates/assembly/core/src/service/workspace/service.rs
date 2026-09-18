@@ -286,7 +286,22 @@ impl WorkspaceService {
         Ok(service)
     }
 
-    #[cfg(all(test, feature = "agent-runtime"))]
+    /// Builds a workspace service whose catalog, persistence, and runtime
+    /// state live under `user_root` instead of the real user data directory.
+    ///
+    /// In-process tests in downstream crates (CLI, ACP, server hosts) that
+    /// exercise code paths creating workspace records must install this as the
+    /// global workspace service before the first record is created. Otherwise
+    /// the fixtures' temporary folders leak into the developer's real
+    /// `workspace_data.json` as opened, current workspaces and the desktop
+    /// fails to start a session in a folder that no longer exists.
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn new_isolated_for_tests(user_root: PathBuf) -> Self {
+        Self::new_for_test_path_manager(Arc::new(PathManager::with_user_root_for_tests(user_root)))
+            .await
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) async fn new_for_test_path_manager(path_manager: Arc<PathManager>) -> Self {
         path_manager
             .initialize_user_directories()
@@ -326,6 +341,33 @@ impl WorkspaceService {
     pub async fn open_workspace(&self, path: PathBuf) -> OpenBitFunResult<WorkspaceInfo> {
         self.open_workspace_with_options(path, WorkspaceCreateOptions::default())
             .await
+    }
+
+    /// Resolves the stable workspace record for a local directory operand
+    /// without changing what the user sees as open.
+    ///
+    /// `open_workspace` is the explicit "open this folder" action: it marks the
+    /// record opened, pushes it into the recent list, and makes it the current
+    /// workspace of the shared catalog. Hosts that merely receive a directory
+    /// as an operand (CLI commands run in a cwd, ACP `cwd`, headless helpers)
+    /// must not do that, because the same catalog drives the desktop sidebar
+    /// and the desktop's startup workspace. This registers (or touches) the
+    /// record so sessions and runtime ownership can be addressed by ID, and
+    /// leaves opened/recent/current state untouched.
+    pub async fn register_local_workspace_record(
+        &self,
+        path: PathBuf,
+    ) -> OpenBitFunResult<WorkspaceInfo> {
+        self.track_workspace_activity(
+            path,
+            WorkspaceCreateOptions {
+                add_to_recent: false,
+                auto_set_current: false,
+                ..Default::default()
+            },
+            WorkspaceActivityMode::TouchOnly,
+        )
+        .await
     }
 
     async fn register_worktree_project(
@@ -2350,6 +2392,63 @@ mod tests {
         service
             .ensure_workspace_gitignore_best_effort(&remote_workspace, "test")
             .await;
+    }
+
+    /// Directory operands handed to CLI/ACP hosts resolve to a stable record
+    /// without hijacking the desktop's opened, recent, or current workspace.
+    #[tokio::test]
+    async fn register_local_workspace_record_keeps_desktop_selection_untouched() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let opened_project = env.create_workspace_dir("opened-project");
+        let cli_cwd = env.create_workspace_dir("cli-cwd");
+
+        let opened = service
+            .open_workspace(opened_project)
+            .await
+            .expect("explicit open should succeed");
+
+        let hidden = service
+            .register_local_workspace_record(cli_cwd.clone())
+            .await
+            .expect("hidden registration should succeed");
+        assert_eq!(hidden.workspace_kind, WorkspaceKind::Normal);
+        assert_ne!(hidden.id, opened.id);
+
+        let current = service.get_current_workspace().await;
+        assert_eq!(current.map(|w| w.id), Some(opened.id.clone()));
+        let opened_ids: Vec<String> = service
+            .get_opened_workspaces()
+            .await
+            .into_iter()
+            .map(|w| w.id)
+            .collect();
+        assert_eq!(opened_ids, vec![opened.id.clone()]);
+        assert!(
+            !service
+                .get_recent_workspaces()
+                .await
+                .iter()
+                .any(|w| w.id == hidden.id),
+            "hidden record must not enter the recent list"
+        );
+
+        // Registering again resolves the same stable ID, and an explicit open
+        // later surfaces that record instead of creating a second identity.
+        let again = service
+            .register_local_workspace_record(cli_cwd.clone())
+            .await
+            .expect("re-registration should succeed");
+        assert_eq!(again.id, hidden.id);
+        let explicit = service
+            .open_workspace(cli_cwd)
+            .await
+            .expect("explicit open should succeed");
+        assert_eq!(explicit.id, hidden.id);
+        assert_eq!(
+            service.get_current_workspace().await.map(|w| w.id),
+            Some(hidden.id)
+        );
     }
 
     #[tokio::test]

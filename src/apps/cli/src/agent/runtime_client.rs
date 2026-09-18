@@ -2943,10 +2943,49 @@ mod dual_backend_behavior_tests {
 
     use super::CliAgentRuntimeClient;
 
+    /// User root of the isolated workspace catalog every test in this binary
+    /// shares. It lives under the process temp directory and is never the
+    /// developer's real data directory.
+    static ISOLATED_USER_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+    /// Install an isolated global workspace service before any fixture creates
+    /// a record. The production code under test resolves the global service,
+    /// so without this the fixtures' temp folders would be persisted into the
+    /// developer's real `workspace_data.json` as opened, current workspaces.
+    async fn ensure_isolated_workspace_catalog() -> PathBuf {
+        use openbitfun_core::service::workspace::{
+            get_global_workspace_service, set_global_workspace_service, WorkspaceService,
+        };
+
+        let user_root = ISOLATED_USER_ROOT
+            .get_or_init(|| {
+                std::env::temp_dir()
+                    .join("openbitfun-cli-runtime-client-tests")
+                    .join(uuid::Uuid::new_v4().simple().to_string())
+                    .join("user-root")
+            })
+            .clone();
+        if get_global_workspace_service().is_none() {
+            let service = WorkspaceService::new_isolated_for_tests(user_root.clone()).await;
+            set_global_workspace_service(Arc::new(service));
+        }
+        let installed = get_global_workspace_service()
+            .expect("global workspace service installed")
+            .path_manager()
+            .user_root_dir()
+            .to_path_buf();
+        assert_eq!(
+            installed, user_root,
+            "CLI runtime client tests must run against an isolated workspace catalog, not the real user data directory"
+        );
+        user_root
+    }
+
     /// Open the fixture directory as a real local workspace record. The
     /// embedded client, the fixture runtime, and the shared handler all
     /// address that workspace by this ID, exactly as production hosts do.
     async fn open_fixture_workspace(workspace: &Path) -> String {
+        ensure_isolated_workspace_catalog().await;
         crate::create_cli_local_workspace(workspace)
             .await
             .expect("fixture workspace record")
@@ -3527,6 +3566,7 @@ mod dual_backend_behavior_tests {
         tokio::task::JoinHandle<()>,
     ) {
         let (root, client, server_task) = shared_backend(fixture).await;
+        ensure_isolated_workspace_catalog().await;
         (
             root,
             CliAgentRuntimeClient::new_shared(
