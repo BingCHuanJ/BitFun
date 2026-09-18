@@ -20,7 +20,6 @@
    * its radius so the rounded surface and message text meet that column.
    */
   width: fit-content;
-  min-width: min(8rem, 72%);
   max-width: min(72%, 48rem);
   padding: 0.46rem var(--_user-message-padding-inline);
   background: var(--openbitfun-color-action-quiet-hover);
