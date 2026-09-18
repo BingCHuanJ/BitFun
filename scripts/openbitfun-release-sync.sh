@@ -683,7 +683,22 @@ prune_old_versions() {
   local dirs=() total remove_count i
   while IFS= read -r d; do
     dirs+=("$d")
-  done < <(find -H "$WEBSITE_RELEASE_DIR" -mindepth 1 -maxdepth 1 -type d | sort -V)
+  done < <("$PYTHON" - "$WEBSITE_RELEASE_DIR" <<'PY'
+import os, re, sys
+root = sys.argv[1]
+names = [name for name in os.listdir(root) if os.path.isdir(os.path.join(root, name))]
+
+def key(name):
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-(.+))?", name)
+    if not match:
+        return (0, 0, 0, 0, name)
+    pre = match.group(4)
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)), 1 if pre is None else 0, pre or "")
+
+for name in sorted(names, key=key):
+    print(os.path.join(root, name))
+PY
+)
   total=${#dirs[@]}
   if [ "$total" -le "$KEEP_VERSIONS" ]; then
     return 0

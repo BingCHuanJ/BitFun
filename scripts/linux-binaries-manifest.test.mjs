@@ -448,8 +448,35 @@ test('the mirror keeps only the two newest versions and skips an unchanged lates
   assert.ok(keep, 'KEEP_VERSIONS must be set');
   assert.equal(Number(keep[1]), 2);
   assert.match(syncScript, /Already mirroring \$VERSION; nothing to fetch/);
-  assert.match(syncScript, /find -H "\$WEBSITE_RELEASE_DIR"/);
   assert.doesNotMatch(syncScript, /! -name '0\.2\.\*'/);
+});
+
+test('pruning keeps the two newest SemVer releases and drops a newer-looking beta', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-prune-'));
+  for (const name of ['0.2.19', '1.0.0-beta', '1.0.0', '1.0.1']) {
+    fs.mkdirSync(path.join(temp, name));
+  }
+  const result = spawnSync(
+    'bash',
+    ['-c', `
+      source "$SYNC_SCRIPT"
+      WEBSITE_RELEASE_DIR="$TEST_DIR"
+      KEEP_VERSIONS=2
+      PYTHON=python3
+      prune_old_versions
+    `],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SYNC_SCRIPT: path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),
+        TEST_DIR: temp,
+      },
+    }
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(fs.readdirSync(temp).sort(), ['1.0.0', '1.0.1']);
+  fs.rmSync(temp, { recursive: true, force: true });
 });
 
 test('openbitfun sync lock and cron use the in-repo script, not a server-only copy', () => {
