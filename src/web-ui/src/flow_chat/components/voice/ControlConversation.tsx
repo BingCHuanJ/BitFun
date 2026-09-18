@@ -165,7 +165,7 @@ export function ControlConversation({ session, sessionRef, voiceTarget, active, 
     <ConversationModeSurface voiceTarget={voiceTarget} renderHeader={renderHeader} active={active}
       headerAction={newConversationAction}
       requiresTextInput={Boolean(ownedRequests.length || needsAnswer)} onCloseVoice={onClose} onVoiceViewChange={onVoiceViewChange}
-      transcript={<VoiceCallTranscript compact entries={entries} status={status || sessionError} header={historyFeedback}
+      transcript={mode => <VoiceCallTranscript compact presentation={mode} entries={entries} status={status || sessionError} header={historyFeedback}
         onLoadEarlier={active && canLoadEarlier && !historyBusy && !failedHistory ? () => void loadEarlier() : undefined}
         className="openbitfun-conversation-mode-surface__transcript" />}>
       <ControlComposer active={active} />
