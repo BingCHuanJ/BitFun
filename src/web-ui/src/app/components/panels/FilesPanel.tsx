@@ -1107,6 +1107,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         <div
           className={`openbitfun-files-panel__main-content${
             fileDropHighlight ? ' openbitfun-files-panel__main-content--drop-target' : ''
+          }${
+            viewMode === 'search' ? ' openbitfun-files-panel__main-content--search' : ''
           }`}
           data-openbitfun-component="files-panel"
           data-openbitfun-part="main"

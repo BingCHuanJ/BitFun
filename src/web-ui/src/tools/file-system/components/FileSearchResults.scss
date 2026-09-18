@@ -35,10 +35,21 @@ $_icon-size: 16px;
 }
 
 .openbitfun-search-results__header {
+  position: relative;
   padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
-  border-bottom: 1px solid var(--openbitfun-color-border-default);
   background: var(--openbitfun-color-surface-canvas);
   flex-shrink: 0;
+
+  &::after {
+    position: absolute;
+    inset-inline: var(--openbitfun-space-2);
+    bottom: 0;
+    z-index: var(--openbitfun-layer-decoration);
+    height: 1px;
+    background: var(--openbitfun-color-border-default);
+    content: '';
+    pointer-events: none;
+  }
 }
 
 .openbitfun-search-results__count {
