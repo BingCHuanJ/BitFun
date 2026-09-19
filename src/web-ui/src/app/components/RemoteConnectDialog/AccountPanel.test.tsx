@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getDeviceInfo: vi.fn(), accountStatus: vi.fn(), accountLogin: vi.fn(),
   accountRelayCapabilities: vi.fn(), accountUpdateDevice: vi.fn(),
   accountConnectDevices: vi.fn(), accountListDevices: vi.fn(),
+  checkForUpdates: vi.fn(), installUpdate: vi.fn(),
   peerMode: { active: false } as { active: boolean },
   switchToDevice: vi.fn(), switchToLocal: vi.fn(),
   t: (key: string) => key,
@@ -32,6 +33,10 @@ vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({
     switchToLocal: mocks.switchToLocal,
   }),
 }));
+vi.mock('@/infrastructure/api/service-api/SystemAPI', () => ({
+  systemAPI: { checkForUpdates: mocks.checkForUpdates, installUpdate: mocks.installUpdate },
+}));
+vi.mock('@/infrastructure/update/UpdateAvailableDialog', () => ({ UpdateAvailableDialog: () => null }));
 vi.mock('@/infrastructure/confirm-dialog', () => ({ confirmDanger: vi.fn() }));
 vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({ success: vi.fn() }) }));
 vi.mock('@openbitfun/ui', () => {
@@ -113,6 +118,33 @@ it('shows a connection failure while retaining the signed-in account', async () 
   expect(container.textContent).toContain('alice');
   expect(container.textContent).toContain('accountLogin.retryConnect');
   expect(container.textContent).not.toContain('accountLogin.loadingDevices');
+});
+
+it('explains a retired Relay version and offers an update instead of the raw error', async () => {
+  mocks.accountStatus.mockReset().mockRejectedValue(
+    Object.assign(new Error('List devices failed: HTTP 410'), { status: 410 }),
+  );
+  mocks.checkForUpdates.mockResolvedValue({ updateAvailable: true, currentVersion: '1.0.0', latestVersion: '2.0.0', releaseNotes: null, releaseDate: null });
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  // The actionable sentence replaces the raw transport detail and HTTP status.
+  expect(container.textContent).toContain('accountLogin.relayFailureVersionRetired');
+  expect(container.textContent).not.toContain('List devices failed');
+  expect(container.textContent).not.toContain('410');
+  // The retired version can only be fixed by updating, never by retrying here.
+  const updateButton = Array.from(container.querySelectorAll('button')).find(node => node.textContent === 'update.checkForUpdates');
+  expect(updateButton).toBeDefined();
+  await act(async () => { updateButton!.click(); });
+  expect(mocks.checkForUpdates).toHaveBeenCalledOnce();
+});
+
+it('offers a retry when the Relay is temporarily unavailable', async () => {
+  mocks.accountStatus.mockReset().mockRejectedValue(
+    Object.assign(new Error('List devices failed: HTTP 502'), { status: 502 }),
+  );
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  expect(container.textContent).toContain('accountLogin.relayFailureUnavailable');
+  expect(container.textContent).not.toContain('502');
+  expect(container.textContent).toContain('accountLogin.retryConnect');
 });
 
 async function retryConnection() {

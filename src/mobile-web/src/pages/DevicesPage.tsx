@@ -1,4 +1,6 @@
 import { InvalidationSync } from '../../../shared/relay-transport/InvalidationSync';
+import type { RelayFailureAction } from '../../../shared/relay-transport/RelayFailure';
+import { deviceFailurePresentation } from '../services/deviceFailureCopy';
 import {
   ChevronLeft as LucideChevronLeft,
   Monitor as LucideMonitor,
@@ -74,7 +76,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
   const [loading, setLoading] = useState(false);
   const [directoryLoaded, setDirectoryLoaded] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; action: RelayFailureAction | null } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState('');
   const [aliasSupported, setAliasSupported] = useState(false);
@@ -96,16 +98,15 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     return listedDevices;
   }, [client, client.controllerDeviceId, client.targetDeviceId, connectionHealth, devices]);
 
-  const friendlyError = useCallback((value: unknown, fallbackKey: string) => {
-    const message = String((value as { message?: string })?.message || value);
-    if (message.includes('HTTP 401') || message.includes('Sign in with GitHub')) {
-      return t(accountLanding ? 'pairing.accountSessionExpired' : 'devices.authorizationExpired');
-    }
-    if (message.includes('HTTP 404')) return t('devices.deviceUnavailable');
-    if (message.includes('HTTP 503') || message.includes('HTTP 504')) {
-      return t('devices.deviceUnavailable');
-    }
-    return t(fallbackKey);
+  const describeFailure = useCallback((value: unknown, fallbackKey: string) => {
+    const { key, action } = deviceFailurePresentation(
+      value,
+      fallbackKey,
+      accountLanding ? 'pairing.accountSessionExpired' : 'devices.authorizationExpired',
+    );
+    // The raw transport detail (status, exception text) stays in the log only.
+    console.warn('[DevicesPage] device request failed', value);
+    return { message: t(key), action };
   }, [accountLanding, t]);
 
   useEffect(() => {
@@ -145,10 +146,10 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
         setIdentityReady(false);
         setDevices([]);
       } else {
-        setError(friendlyError(e, 'devices.loadFailed'));
+        setError(describeFailure(e, 'devices.loadFailed'));
       }
     }
-  }, [client, friendlyError]);
+  }, [client, describeFailure]);
 
   const directorySyncRef = useRef<InvalidationSync | null>(null);
   const refreshDevices = useCallback(() => directorySyncRef.current?.invalidate() ?? Promise.resolve(), []);
@@ -187,9 +188,11 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
       await refreshDevices();
     } catch (e) {
       if (!mountedRef.current || client.accountEpoch !== epoch || isAccountIdentityChangedError(e)) return;
-      setError(String(e).includes('unsupported') ? t('devices.aliasUnsupported') : friendlyError(e, 'devices.loadFailed'));
+      setError(String(e).includes('unsupported')
+        ? { message: t('devices.aliasUnsupported'), action: null }
+        : describeFailure(e, 'devices.loadFailed'));
     }
-  }, [aliasDraft, client, friendlyError, refreshDevices, t]);
+  }, [aliasDraft, client, describeFailure, refreshDevices, t]);
   const selectDevice = useCallback(async (d: DeviceInfo, probe = true) => {
     // A confirmed-incompatible device is shown but never a control target.
     if (!d.online || !isDeviceControllable(d) || switchingId) return;
@@ -236,14 +239,14 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
         setIdentityReady(false);
         setDevices([]);
       } else {
-        setError(friendlyError(e, 'devices.switchFailed'));
+        setError(describeFailure(e, 'devices.switchFailed'));
       }
     } finally {
       if (mountedRef.current && switchRequestRef.current === requestId) {
         setSwitchingId(null);
       }
     }
-  }, [client, friendlyError, onDeviceSelected, resetForDeviceSwitch, setControlTarget, switchingId, t]);
+  }, [client, describeFailure, onDeviceSelected, resetForDeviceSwitch, setControlTarget, switchingId, t]);
 
   // Keep the online/scanned-device shortcut after account UI entry, without
   // making discovery failures undo authentication or retry in a render loop.
@@ -419,7 +422,28 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
       />
 
       {accountLanding && sortedDevices.length > 0 && <p className="devices-page__description">{t('devices.accountReady')}</p>}
-      {error && <MobileBanner className="devices-page__error" tone="danger">{error}</MobileBanner>}
+      {error && (
+        <MobileBanner
+          className="devices-page__error"
+          tone="danger"
+          action={(error.action === 'retry' || error.action === 'check-updates') ? (
+            // Mobile web cannot self-update: for an outdated build or a retired
+            // relay the sentence carries the instruction and this re-reads the
+            // directory instead of pretending the app was updated.
+            <MobileButton
+              className="devices-page__error-action"
+              appearance="plain"
+              size="sm"
+              loading={loading || !!switchingId}
+              onClick={handleManualRefresh}
+            >
+              {t(error.action === 'check-updates' ? 'devices.refresh' : 'devices.retry')}
+            </MobileButton>
+          ) : undefined}
+        >
+          {error.message}
+        </MobileBanner>
+      )}
 
       {!aliasSupported && <MobileBanner>{t('devices.aliasUnsupported')}</MobileBanner>}
       <div className="devices-page__body">
