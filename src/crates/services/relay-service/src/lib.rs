@@ -22,6 +22,7 @@ pub mod db;
 pub mod page_data;
 pub mod page_execution;
 pub mod relay;
+mod retired_version;
 pub mod routes;
 
 pub use routes::api::AppState;
