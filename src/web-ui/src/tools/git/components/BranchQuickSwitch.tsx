@@ -106,17 +106,32 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   const listRef = useRef<HTMLDivElement>(null);
   const switchInFlightRef = useRef(false);
 
+  // The "current" marker comes from the shared branch (passed in by the
+  // composer strip) rather than from the fetched list's own flag, so a switch
+  // that happened elsewhere — or the optimistic write a manual switch performs
+  // — moves the marker here at once. The fetched flag is only a fallback for
+  // the moment before the shared state has ever been populated.
+  const effectiveCurrentBranch = currentBranch || branches.find(b => b.current)?.name || null;
+  const displayBranches = useMemo(
+    () => branches.map(branch => (
+      branch.current === (branch.name === effectiveCurrentBranch)
+        ? branch
+        : { ...branch, current: branch.name === effectiveCurrentBranch }
+    )),
+    [branches, effectiveCurrentBranch],
+  );
+
   const filteredBranches = useMemo(() => {
     const lowerSearch = searchTerm.trim().toLowerCase();
     const filtered = lowerSearch
-      ? branches.filter(branch => branch.name.toLowerCase().includes(lowerSearch))
-      : branches;
+      ? displayBranches.filter(branch => branch.name.toLowerCase().includes(lowerSearch))
+      : displayBranches;
     return [...filtered].sort((left, right) => {
       if (left.current) return -1;
       if (right.current) return 1;
       return left.name.localeCompare(right.name);
     });
-  }, [branches, searchTerm]);
+  }, [displayBranches, searchTerm]);
 
   const popoverLayout = useAnchoredPopoverPosition({
     open: present,
@@ -296,7 +311,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
 
   const handleSwitchBranch = useCallback(async (branchName: string) => {
     if (
-      branchName === currentBranch
+      branchName === effectiveCurrentBranch
       || switchInFlightRef.current
     ) return;
 
@@ -318,7 +333,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
       setIsSwitching(false);
       setSwitchingBranch(null);
     }
-  }, [completeSwitch, currentBranch, repositoryPath, showSwitchFailure, t]);
+  }, [completeSwitch, effectiveCurrentBranch, repositoryPath, showSwitchFailure, t]);
 
   const handleListKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (

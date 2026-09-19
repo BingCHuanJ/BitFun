@@ -322,6 +322,47 @@ test('mobile transcript keeps one user bubble and projects file cards outside ma
   assert.match(markdownStyles, /\.file-card\s*\{[\s\S]*?inline-size:\s*100%;/);
 });
 
+test('mobile file card failures stay readable and repeatable', async () => {
+  const markdown = await readFile(path.join(sourceDirectory, 'components/ChatMarkdown.tsx'), 'utf8');
+  const markdownStyles = await readFile(path.join(sourceDirectory, 'styles/components/markdown.scss'), 'utf8');
+
+  // The host resolves metadata on demand, so the card must expose both the
+  // failure reason and a way to ask again instead of latching the first error.
+  assert.match(markdown, /const \[attempt, setAttempt\] = useState\(0\);/);
+  assert.match(markdown, /\}, \[path, attempt\]\);/);
+  assert.match(markdown, /const handleRetry = useCallback\(\(\) => \{[\s\S]*?setAttempt\(value => value \+ 1\);[\s\S]*?\}, \[\]\);/);
+  assert.match(markdown, /className="file-card__reason">\{state\.message\}/);
+  assert.match(markdown, /className="file-card__retry"[\s\S]*?t\('devices\.retry'\)/);
+  assert.doesNotMatch(markdown, /data-status="error" title=/);
+
+  const errorCardStyles = markdownStyles.slice(
+    markdownStyles.indexOf(".file-card[data-status='error'] {"),
+    markdownStyles.indexOf('.file-card__icon {'),
+  );
+  assert.match(errorCardStyles, /background:\s*var\(--openbitfun-color-status-danger-surface\);/);
+  assert.doesNotMatch(errorCardStyles, /opacity:/);
+  assert.match(markdownStyles, /\.file-card__reason\s*\{[\s\S]*?-webkit-line-clamp:\s*2;/);
+});
+
+test('chat notices stay readable above the transcript they float over', async () => {
+  const chatStyles = await readFile(path.join(sourceDirectory, 'styles/components/chat.scss'), 'utf8');
+  const feedback = await readFile(path.join(sourceDirectory, 'components/ChatFeedback.tsx'), 'utf8');
+
+  assert.match(feedback, /className="chat-page__toast"/);
+  const toastStyles = chatStyles.slice(
+    chatStyles.indexOf('.chat-page__toast {'),
+    chatStyles.indexOf('@keyframes toastSlideIn'),
+  );
+  // The shared status surface is a 10% tint; a floating notice needs an opaque
+  // base so the transcript behind it cannot bleed through the message text.
+  assert.match(toastStyles, /background-color:\s*var\(--openbitfun-color-surface-raised\);/);
+  assert.match(toastStyles, /background-image:\s*linear-gradient\(var\(--chat-toast-tint\), var\(--chat-toast-tint\)\);/);
+  for (const tone of ['info', 'warning', 'danger']) {
+    assert.match(toastStyles, new RegExp(`&\\[data-tone='${tone}'\\]`));
+  }
+  assert.doesNotMatch(toastStyles, /background:\s*var\(--openbitfun-color-status-(?:info|warning|danger)-surface\)/);
+});
+
 
 test('mobile viewport follows the keyboard, restores insets and leaves pinch zoom alone', async () => {
   const source = await readFile(path.join(sourceDirectory, 'hooks/useMobileViewport.ts'), 'utf8');

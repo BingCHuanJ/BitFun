@@ -143,7 +143,6 @@ import { statusBarPopoversAppearanceDescriptor } from '@/tools/editor/components
 import { mEditorAppearanceDescriptor } from '@/tools/editor/meditor/components/MEditor.appearance';
 import { globalSearchAppearanceDescriptor } from '@/app/global-search/GlobalSearchRoot.appearance';
 import { workspaceRelatedPathsDialogAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceRelatedPathsDialog.appearance';
-import { branchSelectModalAppearanceDescriptor } from '@/app/components/panels/BranchSelectModal.appearance';
 import { floatingMiniChatAppearanceDescriptor } from '@/app/layout/FloatingMiniChat.appearance';
 import { miniAppBubbleWelcomeAppearanceDescriptor } from '@/app/layout/MiniAppBubbleWelcome.appearance';
 import { branchesViewAppearanceDescriptor } from '@/app/scenes/git/views/BranchesView.appearance';
@@ -399,7 +398,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(mEditorAppearanceDescriptor)
     .registerComponent(globalSearchAppearanceDescriptor)
     .registerComponent(workspaceRelatedPathsDialogAppearanceDescriptor)
-    .registerComponent(branchSelectModalAppearanceDescriptor)
     .registerComponent(floatingMiniChatAppearanceDescriptor)
     .registerComponent(miniAppBubbleWelcomeAppearanceDescriptor)
     .registerComponent(branchesViewAppearanceDescriptor)
