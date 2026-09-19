@@ -63,7 +63,9 @@ pinned by `src/crates/services/relay-service/src/retired_version.rs`.
    project, delete its images and volumes, then replace the retired prefix's
    include with `nginx-retired-version.conf`, keep the live version's include
    untouched, validate with `nginx -t`, and gracefully reload. The old prefix
-   keeps answering `410` with `no-store`, so no client caches a stale success.
+   keeps answering `410` with `no-store`, so no client caches a stale success,
+   and the retirement body covers the websocket upgrade path too. The official
+   deployment retires `/v/1.0.0/` this way.
 2. **Relay enforced (optional, while a container still serves the prefix).**
    Point the retired prefix at the *current* relay and announce it:
 
