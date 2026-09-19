@@ -68,6 +68,7 @@ export class RelayHttpClient {
   private identityGeneration = 0;
   private accountEpochValue = 0;
   private directoryRequest = 0;
+  private appliedDirectoryRequest = 0;
   private directorySnapshot: RelayDeviceInfo[] = [];
   private directorySnapshotListeners = new Set<(devices: RelayDeviceInfo[]) => void>();
   onDeviceDirectorySnapshot(listener: (devices: RelayDeviceInfo[]) => void): () => void {
@@ -111,6 +112,8 @@ export class RelayHttpClient {
     this.accountEpochValue += 1;
     this.directorySnapshot = [];
     this.directoryRequest += 1;
+    // A read that started under the previous identity must not seed the cache.
+    this.appliedDirectoryRequest = this.directoryRequest;
     this.deviceMessageKeys.clear();
     this.setTargetDeviceId(null);
     for (const listener of this.ownerListeners) listener({ kind, epoch: this.accountEpochValue, userId: identity.userId });
@@ -125,6 +128,8 @@ export class RelayHttpClient {
     this.accountEpochValue += 1;
     this.directorySnapshot = [];
     this.directoryRequest += 1;
+    // A read from the closed identity must not seed the cache either.
+    this.appliedDirectoryRequest = this.directoryRequest;
     this.deviceMessageKeys.clear();
     this.setTargetDeviceId(null);
     for (const listener of this.ownerListeners) listener({ kind: 'unavailable', epoch: this.accountEpochValue, userId: null });
@@ -320,9 +325,14 @@ export class RelayHttpClient {
       }
       const devices = await resp.json() as RelayDeviceInfo[];
       if (identity.generation !== this.identityGeneration) throw new AccountIdentityChangedError();
-      if (request !== this.directoryRequest) throw new AccountIdentityChangedError();
-      this.directorySnapshot = devices;
-      for (const listener of this.directorySnapshotListeners) listener(devices);
+      // Several surfaces read the directory at once (this app's own mount effect,
+      // the device page, the compact session list). Every caller gets its answer;
+      // only a response that arrived out of order is kept out of the shared cache.
+      if (request >= this.appliedDirectoryRequest) {
+        this.appliedDirectoryRequest = request;
+        this.directorySnapshot = devices;
+        for (const listener of this.directorySnapshotListeners) listener(devices);
+      }
       return devices;
     });
   }
