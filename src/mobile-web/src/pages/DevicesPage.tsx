@@ -263,44 +263,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
           const clickable = d.online && !isCurrent && !switchingId;
           return (
             <div key={d.device_id}>
-            <MobileListRow
-              appearance="surface"
-              className={[
-                'devices-page__device',
-                d.online ? 'is-online' : 'is-offline',
-                isCurrent ? 'is-current' : '',
-                isSwitching ? 'is-switching' : '',
-              ].filter(Boolean).join(' ')}
-              disabled={!clickable}
-              onClick={() => clickable && selectDevice(d)}
-              leading={<span className="devices-page__device-icon"><DeviceIcon /></span>}
-              label={(
-                <span className="devices-page__device-name-row">
-                  <span className="devices-page__device-name">
-                    {deviceDisplayName(d) || t('devices.unknownDevice')}
-                  </span>
-                  {d.device_model || d.device_os ? <small>{[d.device_model, d.device_os, d.device_os_version].filter(Boolean).join(' · ')}</small> : null}
-                  {isCurrent && (
-                    <MobileBadge className="devices-page__badge devices-page__badge--current" tone="success">
-                      {t('devices.current')}
-                    </MobileBadge>
-                  )}
-
-                </span>
-              )}
-              supportingText={(
-                <span className="devices-page__device-meta">
-                  <span className={`devices-page__status-dot ${d.online ? 'is-online' : 'is-offline'}`} />
-                  {d.online
-                    ? t('devices.online')
-                    : d.last_seen_at
-                      ? t('devices.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
-                      : t('devices.offline')}
-                </span>
-              )}
-
-              selected={isCurrent}
-            />
+            {/* Renaming replaces the row in place: keeping the row and an editor
+                under it shows the same device name twice. */}
             {editingId === d.device_id ? (
               <div className="devices-page__alias-editor">
                 <MobileTextField
@@ -321,9 +285,49 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
                 </div>
               </div>
             ) : (
+              <>
+              <MobileListRow
+                appearance="surface"
+                className={[
+                  'devices-page__device',
+                  d.online ? 'is-online' : 'is-offline',
+                  isCurrent ? 'is-current' : '',
+                  isSwitching ? 'is-switching' : '',
+                ].filter(Boolean).join(' ')}
+                disabled={!clickable}
+                onClick={() => clickable && selectDevice(d)}
+                leading={<span className="devices-page__device-icon"><DeviceIcon /></span>}
+                label={(
+                  <span className="devices-page__device-name-row">
+                    <span className="devices-page__device-name">
+                      {deviceDisplayName(d) || t('devices.unknownDevice')}
+                    </span>
+                    {d.device_model || d.device_os ? <small>{[d.device_model, d.device_os, d.device_os_version].filter(Boolean).join(' · ')}</small> : null}
+                    {isCurrent && (
+                      <MobileBadge className="devices-page__badge devices-page__badge--current" tone="success">
+                        {t('devices.current')}
+                      </MobileBadge>
+                    )}
+
+                  </span>
+                )}
+                supportingText={(
+                  <span className="devices-page__device-meta">
+                    <span className={`devices-page__status-dot ${d.online ? 'is-online' : 'is-offline'}`} />
+                    {d.online
+                      ? t('devices.online')
+                      : d.last_seen_at
+                        ? t('devices.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
+                        : t('devices.offline')}
+                  </span>
+                )}
+
+                selected={isCurrent}
+              />
               <div className="devices-page__alias-actions">
                 <MobileButton size="sm" disabled={!aliasSupported} onClick={() => { setEditingId(d.device_id); setAliasDraft(d.device_alias ?? ''); }}>{t('devices.editAlias')}</MobileButton>
               </div>
+              </>
             )}
             </div>
           );

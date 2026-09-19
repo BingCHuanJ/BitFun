@@ -751,10 +751,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     >
                       <Monitor size={16} />
                       <span className="account-panel__device-info">
-                        <span className="account-panel__device-name">
-                          <OverflowText title={displayName}>{displayName}</OverflowText>
-                          {isLocal && <StatusPill tone="neutral" className="account-panel__device-badge">{t('accountLogin.thisDevice')}</StatusPill>}
-                        </span>
+                        {/* Renaming replaces the name in place: showing the old
+                            name next to an editor reads as two device names. */}
                         {editingDeviceId === d.device_id ? (
                           <span className="account-panel__device-alias-editor">
                             <Input
@@ -788,15 +786,19 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                             />
                           </span>
                         ) : (
-                          <span className="account-panel__device-meta">
-                            <span className="account-panel__device-status" data-openbitfun-state={d.online ? 'online' : 'offline'}>{d.online
-                              ? t('accountLogin.online')
-                              : d.last_seen_at
-                                ? t('accountLogin.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
-                                : t('accountLogin.offline')}</span>
-                            {metadata && <span className="account-panel__device-meta-detail">{` · ${metadata}`}</span>}
+                          <span className="account-panel__device-name">
+                            <OverflowText title={displayName}>{displayName}</OverflowText>
+                            {isLocal && <StatusPill tone="neutral" className="account-panel__device-badge">{t('accountLogin.thisDevice')}</StatusPill>}
                           </span>
                         )}
+                        <span className="account-panel__device-meta">
+                          <span className="account-panel__device-status" data-openbitfun-state={d.online ? 'online' : 'offline'}>{d.online
+                            ? t('accountLogin.online')
+                            : d.last_seen_at
+                              ? t('accountLogin.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
+                              : t('accountLogin.offline')}</span>
+                          {metadata && <span className="account-panel__device-meta-detail">{` · ${metadata}`}</span>}
+                        </span>
                       </span>
                       {isSelectable && <Icon name="chevron-right" size="sm" />}
                     </DeviceEntry>

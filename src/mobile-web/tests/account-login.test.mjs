@@ -138,6 +138,19 @@ test('account UI entry precedes discovery and mounts no remote workspace surface
   assert.ok(devices.indexOf('await client.sendDeviceRpc') < devices.indexOf('client.setTargetDeviceId(d.device_id)'));
 });
 
+test('alias editing replaces the device row instead of repeating its name', async () => {
+  const devices = await readFile(new URL('../src/pages/DevicesPage.tsx', import.meta.url), 'utf8');
+  const start = devices.indexOf('{editingId === d.device_id ? (');
+  assert.ok(start > 0, 'the alias editor must be a mutually exclusive branch');
+  const elseAt = devices.indexOf(') : (', start);
+  const rowAt = devices.indexOf('<MobileListRow', start);
+  assert.ok(elseAt > start, 'the editing branch needs an else branch for the row');
+  assert.ok(rowAt > elseAt, 'the device row must render only while the alias editor is closed');
+  const editingBranch = devices.slice(start, elseAt);
+  assert.match(editingBranch, /devices-page__alias-editor/);
+  assert.match(editingBranch, /devices\.saveAlias/);
+});
+
 test('authorization follows the central GitHub OAuth URL and rejects lookalike destinations', async () => {
   const encryption = await loadSource('../src/services/E2EEncryption.ts');
   const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url, './pairingLink': links.url });

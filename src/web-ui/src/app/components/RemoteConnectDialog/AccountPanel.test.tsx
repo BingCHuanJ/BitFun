@@ -240,6 +240,20 @@ async function openAliasEditor() {
   return input!;
 }
 
+it('replaces the device name in place instead of showing two names', async () => {
+  mocks.accountRelayCapabilities.mockResolvedValue(['device_alias_v1']);
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  expect(container.querySelector('.account-panel__device-name')).not.toBeNull();
+  const input = await openAliasEditor();
+  // The editor occupies the name's slot; the technical name is not repeated.
+  expect(input.value).toBe('');
+  expect(container.querySelector('.account-panel__device-name')).toBeNull();
+  expect(container.querySelector('.account-panel__device-badge')).toBeNull();
+  expect(container.textContent).not.toContain('My computer');
+  // Losing the row must not lose the device's status or hardware line.
+  expect(container.querySelector('.account-panel__device-meta')).not.toBeNull();
+});
+
 it('saves an edited alias from the device row with Enter', async () => {
   mocks.accountRelayCapabilities.mockResolvedValue(['device_alias_v1']);
   await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
