@@ -144,6 +144,13 @@ test('wire parsing rejects malformed pages and hints and keeps remote error text
   assert.throws(() => parseStreamPage({ resp: 'stream_page', stream_id: 's', epoch: 1, events: [{ seq: 'x' }], has_more: false, cursor: 0, oldest_seq: 1 }), /Invalid stream event/);
   const page = parseStreamPage({ resp: 'stream_page', stream_id: 's', epoch: 1, events: [], has_more: false, cursor: 0, oldest_seq: 1 });
   assert.equal(page.truncated, false);
+  assert.throws(() => parseStreamPage({
+    resp: 'stream_page', stream_id: 's', epoch: 1_758_260_000_000_000_000, events: [], has_more: false, cursor: 0, oldest_seq: 1,
+  }), /Invalid stream page/, 'nanosecond host epochs are not JavaScript-safe integers');
+  const nowMs = Date.now();
+  assert.equal(parseStreamPage({
+    resp: 'stream_page', stream_id: 's', epoch: nowMs, events: [], has_more: false, cursor: 0, oldest_seq: 1,
+  }).epoch, nowMs);
   assert.equal(parseStreamHint('d', 'other-event', { stream_id: 's', epoch: 1, cursor: 2 }), null);
   assert.equal(parseStreamHint('d', 'host-stream-changed', { stream_id: 's', epoch: '1', cursor: 2 }), null);
   assert.deepEqual(parseStreamHint('d', 'host-stream-changed', { stream_id: 's', epoch: 1, cursor: 2 }), { sourceDeviceId: 'd', stream_id: 's', epoch: 1, cursor: 2 });

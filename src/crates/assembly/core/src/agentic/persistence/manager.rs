@@ -3751,21 +3751,45 @@ impl PersistenceManager {
         Ok(turns)
     }
 
-    /// Load the product-visible Session history while retaining the current
-    /// process's persisted writer lease across the marker and Turn reads.
+    /// Load the product-visible Session history.
+    ///
+    /// When this process can take or reuse the persisted writer lease, the
+    /// revert marker and Turn files are read under that lease. When another
+    /// process already holds the exclusive writer, this still projects the
+    /// persisted visible history so observer surfaces (host streams, remote
+    /// chat, session views) can display a Session that is open elsewhere.
     ///
     /// Runtime owners that reconcile, redo, or permanently discard a staged
     /// suffix must use [`Self::load_session_turns`] instead. Passive product
     /// consumers must enter through Core's per-Session mutation owner before
-    /// using this projection; the persistence lease supplies cross-process,
-    /// not in-process, ordering.
+    /// using this projection; the persistence lease supplies cross-process
+    /// snapshot ordering when it is available, not a ban on observer reads.
     pub async fn load_visible_session_turns(
         &self,
         workspace_path: &Path,
         session_id: &str,
     ) -> OpenBitFunResult<Vec<DialogTurnData>> {
         Self::validate_session_id(session_id)?;
-        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
+        let _session_write = match self.lock_session_write_operation(workspace_path, session_id) {
+            Ok(lock) => Some(lock),
+            Err(OpenBitFunError::SessionInUse { .. }) => {
+                debug!(
+                    "Reading visible session history without the writer lease: session_id={}",
+                    session_id
+                );
+                None
+            }
+            Err(error) => return Err(error),
+        };
+        self.project_visible_session_turns(workspace_path, session_id)
+            .await
+    }
+
+    async fn project_visible_session_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> OpenBitFunResult<Vec<DialogTurnData>> {
         let boundary_turn = self
             .load_session_revert_state(workspace_path, session_id)
             .await?
@@ -4600,10 +4624,12 @@ mod tests {
     };
     use crate::OpenBitFunError;
     use openbitfun_runtime_ports::SessionTurnWindowRequest;
+    use openbitfun_services_core::session::SessionWriteLock;
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
+    use std::process::{Command, Stdio};
     use std::sync::Arc;
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
     use uuid::Uuid;
 
     struct TestWorkspace {
@@ -5436,6 +5462,166 @@ mod tests {
         assert_eq!(loaded_session.dialog_turn_ids, vec!["turn-1".to_string()]);
         assert_eq!(loaded_turns.len(), 1);
         assert_eq!(loaded_turns[0].turn_id, "turn-1");
+    }
+
+    const VISIBLE_HISTORY_WRITER_CHILD_ENV: &str = "OPENBITFUN_VISIBLE_HISTORY_WRITER_CHILD";
+    const VISIBLE_HISTORY_WRITER_CHILD_TEST: &str =
+        "agentic::persistence::manager::tests::visible_history_writer_child_holds_lock";
+
+    fn spawn_exclusive_session_writer_child(
+        sessions_dir: &Path,
+        session_id: &str,
+        ready_path: &Path,
+    ) -> std::process::Child {
+        let mut command = Command::new(std::env::current_exe().expect("current test executable"));
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
+        command
+            .arg("--exact")
+            .arg(VISIBLE_HISTORY_WRITER_CHILD_TEST)
+            .arg("--nocapture")
+            .env(VISIBLE_HISTORY_WRITER_CHILD_ENV, "1")
+            .env(
+                "OPENBITFUN_VISIBLE_HISTORY_SESSIONS_DIR",
+                sessions_dir.as_os_str(),
+            )
+            .env("OPENBITFUN_VISIBLE_HISTORY_SESSION_ID", session_id)
+            .env(
+                "OPENBITFUN_VISIBLE_HISTORY_READY_PATH",
+                ready_path.as_os_str(),
+            )
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn exclusive session writer child")
+    }
+
+    fn wait_for_writer_child_ready(child: &mut std::process::Child, ready_path: &Path) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !ready_path.exists() && Instant::now() < deadline {
+            if let Some(status) = child.try_wait().expect("poll writer child") {
+                panic!("writer child exited before acquiring the lock: {status}");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if !ready_path.exists() {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("writer child did not become ready");
+        }
+    }
+
+    #[test]
+    fn visible_history_writer_child_holds_lock() {
+        if std::env::var_os(VISIBLE_HISTORY_WRITER_CHILD_ENV).is_none() {
+            return;
+        }
+        let sessions_dir = PathBuf::from(
+            std::env::var_os("OPENBITFUN_VISIBLE_HISTORY_SESSIONS_DIR")
+                .expect("child sessions directory"),
+        );
+        let session_id =
+            std::env::var("OPENBITFUN_VISIBLE_HISTORY_SESSION_ID").expect("child session id");
+        let ready_path = PathBuf::from(
+            std::env::var_os("OPENBITFUN_VISIBLE_HISTORY_READY_PATH").expect("child ready path"),
+        );
+        let _writer =
+            SessionWriteLock::try_acquire(&sessions_dir, &session_id).expect("child writer");
+        std::fs::write(ready_path, b"ready").expect("publish child readiness");
+        loop {
+            std::thread::park();
+        }
+    }
+
+    #[tokio::test]
+    async fn visible_session_history_is_readable_while_another_process_holds_the_writer() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Observer history".to_string(),
+            "Standard".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+        for index in 0..=1 {
+            let mut turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session_id.clone(),
+                UserMessageData {
+                    id: format!("user-{index}"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            turn.mark_completed();
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("fixture turn should persist");
+        }
+        manager
+            .save_session_revert_state(
+                workspace.path(),
+                &session_id,
+                &SessionRevertState {
+                    schema_version: SESSION_REVERT_SCHEMA_VERSION,
+                    boundary_turn: 1,
+                    original_turn_end: 2,
+                    phase: SessionRevertPhase::Staged,
+                    workspace_checkpoint: Vec::new(),
+                },
+            )
+            .await
+            .expect("staged revert should persist");
+
+        let sessions_dir = manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let ready_path = workspace.path().join("writer-child-ready");
+        let mut child =
+            spawn_exclusive_session_writer_child(&sessions_dir, &session_id, &ready_path);
+        wait_for_writer_child_ready(&mut child, &ready_path);
+
+        let error = manager
+            .lock_session_writes(workspace.path(), &session_id)
+            .expect_err("another process must own the exclusive writer");
+        assert!(
+            matches!(
+                error,
+                OpenBitFunError::SessionInUse { session_id: ref locked }
+                    if locked == &session_id
+            ),
+            "expected SessionInUse, got {error:?}"
+        );
+
+        let visible = manager
+            .load_visible_session_turns(workspace.path(), &session_id)
+            .await
+            .expect("host-stream observers must read persisted history while another client holds the writer");
+        assert_eq!(
+            visible
+                .iter()
+                .map(|turn| turn.turn_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["turn-0"]
+        );
+
+        child.kill().expect("terminate writer child");
+        child.wait().expect("reap writer child");
     }
 
     fn user_message(content: &str) -> UserMessageData {

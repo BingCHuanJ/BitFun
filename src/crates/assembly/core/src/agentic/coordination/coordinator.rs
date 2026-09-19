@@ -8552,9 +8552,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     /// Read the product-visible persisted Turn history through Core's
-    /// per-Session mutation owner. Persistence supplies cross-process
-    /// exclusion; this keyed guard supplies the missing in-process ordering
-    /// against undo, redo, commit, and external history imports.
+    /// per-Session mutation owner. Persistence supplies a writer lease when
+    /// this process can take it; observer reads still succeed when another
+    /// process already holds that lease. This keyed guard supplies the
+    /// missing in-process ordering against undo, redo, commit, and external
+    /// history imports.
     pub async fn load_visible_persisted_session_turns(
         &self,
         session_storage_path: &Path,
@@ -8575,6 +8577,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// Read stable persisted identities plus already-completed runtime message
     /// blocks under the same history mutation boundary. Streaming token buffers
     /// are not copied; semantic messages enter context at block boundaries.
+    ///
+    /// This is an observer read for host streams. It must return persisted
+    /// visible history even when another client process already holds the
+    /// exclusive Session writer. In-progress overlay is applied only when
+    /// this process already has the Session loaded.
     pub async fn load_relay_session_turns(
         &self,
         storage: &Path,
@@ -8587,26 +8594,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
         self.prepare_persisted_session_read_locked(storage, session_id)
             .await?;
-        let mut turns = if let Some(turn_id) = turn_id {
-            let index = self
-                .session_manager
-                .get_session(session_id)
-                .and_then(|session| session.dialog_turn_ids.iter().position(|id| id == turn_id))
-                .ok_or_else(|| {
-                    OpenBitFunError::NotFound(format!("Session turn unavailable: {turn_id}"))
-                })?;
-            self.session_manager
-                .persistence_manager()
-                .load_dialog_turn(storage, session_id, index)
-                .await?
-                .into_iter()
-                .collect::<Vec<_>>()
-        } else {
-            self.session_manager
-                .persistence_manager()
-                .load_visible_session_turns(storage, session_id)
-                .await?
-        };
+        let mut turns = self
+            .session_manager
+            .persistence_manager()
+            .load_visible_session_turns(storage, session_id)
+            .await?;
+        if let Some(turn_id) = turn_id {
+            turns.retain(|turn| turn.turn_id == turn_id);
+            if turns.is_empty() {
+                return Err(OpenBitFunError::NotFound(format!(
+                    "Session turn unavailable: {turn_id}"
+                )));
+            }
+        }
         let context = self
             .session_manager
             .get_context_messages(session_id)
@@ -16993,6 +16993,96 @@ mod tests {
                 settled_turn_id: Some(settled_turn_id),
             } if session_id == &session.session_id && settled_turn_id == &turn_id
         )));
+        session_manager
+            .delete_session_by_id(&session.session_id)
+            .await
+            .expect("clean up persisted test session");
+    }
+
+    #[tokio::test]
+    async fn load_relay_session_turns_reads_history_after_the_session_is_unloaded() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let session = session_manager
+            .create_session(
+                "Host stream observer".to_string(),
+                "Standard".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let storage = session_manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("session storage path");
+        let turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "Standard".to_string(),
+                "observe".to_string(),
+                Some("turn-host-stream-observer".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start turn");
+        let message = Message::assistant("observer history".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-observer".to_string());
+        ConversationCoordinator::persist_completed_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &turn_id,
+            &ExecutionResult {
+                final_message: message.clone(),
+                total_rounds: 1,
+                success: true,
+                new_messages: vec![message],
+                finish_reason: FinishReason::Complete,
+                total_tools: 0,
+                duration_ms: 1,
+                partial_recovery_reason: None,
+                effective_finish_reason: "complete".to_string(),
+                has_final_response: true,
+            },
+            None,
+        )
+        .await;
+
+        session_manager
+            .unload_session_from_memory(&session.session_id)
+            .await
+            .expect("unload writer");
+        assert!(session_manager.get_session(&session.session_id).is_none());
+
+        let turns = coordinator
+            .load_relay_session_turns(&storage, &session.session_id, None)
+            .await
+            .expect("host streams must read persisted history without a loaded writer");
+        assert_eq!(
+            turns
+                .iter()
+                .map(|turn| turn.turn_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["turn-host-stream-observer"]
+        );
+        let one = coordinator
+            .load_relay_session_turns(&storage, &session.session_id, Some(&turn_id))
+            .await
+            .expect("single-turn host-stream sync must not require an in-memory session");
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].turn_id, turn_id);
+
+        session_manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("restore for cleanup");
         session_manager
             .delete_session_by_id(&session.session_id)
             .await
