@@ -3,13 +3,13 @@
  */
 
 import { OverflowText, Button, Icon, IconButton, SearchField, Tooltip, ScrollArea } from '@openbitfun/ui';
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RotateCcw, FileText } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitService } from '@/tools/git/services';
-import { useGitOperations } from '@/tools/git/hooks';
+import { useGitOperations, useGitState } from '@/tools/git/hooks';
 import { useNotification } from '@/shared/notification-system';
 import { CreateBranchDialog } from '@/tools/git/components/CreateBranchDialog';
 import type { GitBranch as GitBranchType, GitCommit as GitCommitType, GitFileChange } from '@/tools/git/types/repository';
@@ -42,6 +42,35 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath, workspaceId 
     repositoryPath: { workspaceId: workspaceId ?? '', repositoryPath: workspacePath },
     autoRefresh: false,
   });
+
+  // Subscribe to the shared current branch. The list's "current" badge and
+  // highlight are derived from this single value rather than from the per-item
+  // flag returned by `git branch`, so a switch performed anywhere — including a
+  // manual switch that writes the shared state directly — moves the marker here
+  // without waiting for this view to re-read the repository.
+  const scope = { workspaceId: workspaceId ?? '', repositoryPath: workspacePath };
+  const { currentBranch: managerCurrentBranch } = useGitState({
+    repositoryPath: scope,
+    layers: ['basic'],
+    isActive: !!workspacePath,
+    refreshOnMount: true,
+    refreshOnActive: true,
+    participateInWindowFocusRefresh: true,
+    debugSource: 'branches_view',
+  });
+
+  // Fall back to the fetched list's own flag until the shared state carries a
+  // value, so the badge is not blank on first paint.
+  const effectiveCurrentBranch =
+    managerCurrentBranch ?? branches.find(b => b.current)?.name ?? null;
+  const displayBranches = useMemo(
+    () => branches.map(branch => (
+      branch.current === (branch.name === effectiveCurrentBranch)
+        ? branch
+        : { ...branch, current: branch.name === effectiveCurrentBranch }
+    )),
+    [branches, effectiveCurrentBranch],
+  );
 
   const loadBranches = useCallback(async () => {
     if (!workspacePath) return;
@@ -90,8 +119,8 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath, workspaceId 
   }, [selectedBranchName, loadCommits]);
 
   const filteredBranches = branchSearchQuery.trim()
-    ? branches.filter(b => (b.name ?? '').toLowerCase().includes(branchSearchQuery.toLowerCase()))
-    : branches;
+    ? displayBranches.filter(b => (b.name ?? '').toLowerCase().includes(branchSearchQuery.toLowerCase()))
+    : displayBranches;
 
   const filteredCommits = commitSearchQuery.trim()
     ? commits.filter(
@@ -227,7 +256,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath, workspaceId 
               size="sm"
               variant="primary"
               leadingIcon={<Icon name="plus" size="sm" />}
-              onClick={() => handleCreateFrom(branches.find(b => b.current)?.name ?? selectedBranchName ?? '')}
+              onClick={() => handleCreateFrom(effectiveCurrentBranch ?? selectedBranchName ?? '')}
               title={t('dialog.createNewBranch.title')}
             >
               {t('dialog.createNewBranch.confirm')}

@@ -217,7 +217,11 @@ export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
   );
 
   const refreshBasic = useCallback(async (): Promise<void> => {
-    return refresh({ layers: ['basic'] });
+    // Force because the basic layer uses an infinite TTL by default, so a
+    // non-forced refresh would be a silent no-op when the caller explicitly
+    // asked to re-read the current branch (e.g. after a worktree-path
+    // change). The status/detailed caches are left untouched.
+    return refresh({ layers: ['basic'], force: true });
   }, [refresh]);
 
   const refreshStatus = useCallback(async (): Promise<void> => {

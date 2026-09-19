@@ -19,6 +19,7 @@ import { useAppearance } from '@/infrastructure/appearance';
 import { createLogger } from '@/shared/utils/logger';
 import { describeGitTrustFailure } from '../../services/GitService';
 import { useStableGitWorkspaceScope } from '../../hooks/useStableGitWorkspaceScope';
+import { useGitState } from '../../hooks/useGitState';
 import './GitGraphView.scss';
 
 const log = createLogger('GitGraphView');
@@ -49,6 +50,19 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
   const { current: appearance } = useAppearance();
   const viewConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
+  // Subscribe to Git state so external branch changes (detected by the
+  // GitStateManager poll) trigger a graph reload instead of leaving a stale
+  // current-branch label and graph visible. We only need `basic` because
+  // that is the layer that reports `currentBranch`.
+  const { currentBranch } = useGitState({
+    repositoryPath,
+    layers: ['basic'],
+    isActive: true,
+    refreshOnMount: true,
+    refreshOnActive: true,
+    participateInWindowFocusRefresh: true,
+    debugSource: 'git_graph_view',
+  });
 
   const [graphData, setGraphData] = useState<GitGraph | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +101,23 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
   useEffect(() => {
     loadGraphData();
   }, [loadGraphData]);
+
+  // Reload the graph only when the shared current branch actually moves to a
+  // new value — an optimistic write from a manual switch, or the poll noticing
+  // an external `git checkout`. Comparing against the last value we acted on
+  // (rather than against `graphData.currentBranch`) keeps this from looping if
+  // the two sources ever disagree persistently.
+  const lastSeenBranchRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentBranch === null) return;
+    if (lastSeenBranchRef.current === null) {
+      lastSeenBranchRef.current = currentBranch;
+      return;
+    }
+    if (lastSeenBranchRef.current === currentBranch) return;
+    lastSeenBranchRef.current = currentBranch;
+    loadGraphData();
+  }, [currentBranch, loadGraphData]);
 
 
   useEffect(() => {
@@ -285,16 +316,20 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
 
   const graphWidth = Math.max(800, (graphData.maxLane + 2) * viewConfig.laneWidth! + 600);
   const totalHeight = graphData.nodes.length * viewConfig.rowHeight!;
+  // The header label reads the shared branch so a manual switch shows here the
+  // instant it happens; the graph payload is only a fallback for the brief
+  // window before the shared state has ever been populated.
+  const displayedBranch = currentBranch ?? graphData.currentBranch;
 
   return (
     <div className={`git-graph-view ${className}`} data-openbitfun-component="git-tool" data-openbitfun-part="graphRoot">
       <div className="git-graph-view__header" data-openbitfun-component="git-tool" data-openbitfun-part="graphHeader">
         <div className="git-graph-view__header-left">
           <h3>{t('graph.title')}</h3>
-          {graphData.currentBranch && (
+          {displayedBranch && (
             <span className="git-graph-view__current-branch">
               <Icon name="git" size="sm" />
-              {graphData.currentBranch}
+              {displayedBranch}
             </span>
           )}
         </div>
