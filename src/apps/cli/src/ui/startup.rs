@@ -1313,7 +1313,15 @@ impl StartupPage {
                 })
             }) {
                 Ok(_) => "Logged out.".to_string(),
-                Err(error) => format!("Logout failed: {error}"),
+                Err(error) => {
+                    tracing::warn!(
+                        "Logout failed: {}",
+                        crate::account::bounded_account_error(&error.to_string())
+                    );
+                    let (guidance, _) =
+                        crate::account_guidance::account_failure_guidance(&error.to_string());
+                    format!("Logout failed: {guidance}")
+                }
             },
         );
     }
@@ -1389,9 +1397,15 @@ impl StartupPage {
             Ok(snapshot) if snapshot.logged_in => self.open_account_panel(snapshot),
             Ok(_) => self.login_form.show(),
             Err(error) => {
+                tracing::warn!(
+                    "Failed to load account: {}",
+                    crate::account::bounded_account_error(&error.to_string())
+                );
                 self.login_form.show();
-                self.login_form
-                    .set_error(format!("Failed to load account: {error}"));
+                self.login_form.set_error(format!(
+                    "Failed to load account: {}",
+                    crate::account_guidance::account_failure_line(&error.to_string())
+                ));
             }
         }
     }
@@ -1430,7 +1444,16 @@ impl StartupPage {
                         self.status = Some(account_login_status_message(&login));
                         self.show_login_form();
                     }
-                    Err(error) => self.login_form.set_error(format!("Login failed: {error}")),
+                    Err(error) => {
+                        tracing::warn!(
+                            "Login failed: {}",
+                            crate::account::bounded_account_error(&error.to_string())
+                        );
+                        self.login_form.set_error(format!(
+                            "Login failed: {}",
+                            crate::account_guidance::account_failure_line(&error.to_string())
+                        ))
+                    }
                 }
             }
             LoginFormAction::Logout => {
@@ -1450,7 +1473,14 @@ impl StartupPage {
                         self.status = Some("Logged out.".to_string());
                     }
                     Err(e) => {
-                        self.login_form.set_error(format!("Logout failed: {e}"));
+                        tracing::warn!(
+                            "Logout failed: {}",
+                            crate::account::bounded_account_error(&e.to_string())
+                        );
+                        self.login_form.set_error(format!(
+                            "Logout failed: {}",
+                            crate::account_guidance::account_failure_line(&e.to_string())
+                        ));
                     }
                 }
             }

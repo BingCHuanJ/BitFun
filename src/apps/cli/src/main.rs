@@ -9,6 +9,7 @@
 /// - Single command execution
 /// - Batch task processing
 mod account;
+mod account_guidance;
 mod acp_cli;
 mod actions;
 mod agent;

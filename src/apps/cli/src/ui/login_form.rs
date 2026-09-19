@@ -380,25 +380,19 @@ impl LoginFormState {
     }
 
     fn render_message(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        if let Some(ref err) = self.error {
-            frame.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    err.as_str(),
-                    theme.style(StyleKind::Error),
-                )))
-                .alignment(Alignment::Center),
-                area,
-            );
+        // The error may carry a second guidance line; keep it on its own row.
+        let (message, style) = if let Some(ref err) = self.error {
+            (err.as_str(), theme.style(StyleKind::Error))
         } else if let Some(ref status) = self.status {
-            frame.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    status.as_str(),
-                    theme.style(StyleKind::Info),
-                )))
-                .alignment(Alignment::Center),
-                area,
-            );
-        }
+            (status.as_str(), theme.style(StyleKind::Info))
+        } else {
+            return;
+        };
+        let lines: Vec<Line> = message
+            .lines()
+            .map(|line| Line::from(Span::styled(line.to_string(), style)))
+            .collect();
+        frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), area);
     }
 
     fn render_hints(&self, frame: &mut Frame, area: Rect, hints: &str, theme: &Theme) {
