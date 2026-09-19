@@ -23,6 +23,7 @@ pub mod qr_generator;
 pub mod realtime_client;
 mod realtime_payload;
 pub mod relay_client;
+pub mod relay_failure;
 mod relay_http;
 pub mod session_records;
 pub mod session_store;

@@ -35,6 +35,10 @@ pub mod relay_client {
     pub use openbitfun_services_integrations::remote_connect::relay_client::*;
 }
 
+pub mod relay_failure {
+    pub use openbitfun_services_integrations::remote_connect::relay_failure::*;
+}
+
 pub mod account {
     pub use openbitfun_services_integrations::remote_connect::account::*;
 }
