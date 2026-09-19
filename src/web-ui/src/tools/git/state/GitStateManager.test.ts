@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GitStateManager } from './GitStateManager';
 import type { GitStateLayer } from './types';
@@ -95,6 +96,51 @@ describe('GitStateManager refresh performance guards', () => {
     GitStateManager.resetInstance();
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it('keeps polling paused when another repository subscribes while hidden', async () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    const addListener = vi.spyOn(document, 'addEventListener');
+    const removeListener = vi.spyOn(document, 'removeEventListener');
+    try {
+      const unsubscribe = manager.subscribe(repositoryPath, () => {});
+      hidden.mockReturnValue(true);
+      document.dispatchEvent(new Event('visibilitychange'));
+      const unsubscribeOther = manager.subscribe({ workspaceId: 'workspace-2' }, () => {});
+      await vi.advanceTimersByTimeAsync(4100);
+      expect(gitApiMocks.isGitRepository).not.toHaveBeenCalled();
+      const listeners = addListener.mock.calls.filter(([type]) => type === 'visibilitychange');
+      expect(listeners).toHaveLength(1);
+
+      hidden.mockReturnValue(false);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(100);
+      expect(gitApiMocks.getRepositoryBasic).toHaveBeenCalledTimes(2);
+      unsubscribe();
+      unsubscribeOther();
+      expect(removeListener).toHaveBeenCalledWith('visibilitychange', listeners[0][1]);
+      await vi.advanceTimersByTimeAsync(4100);
+      expect(gitApiMocks.getRepositoryBasic).toHaveBeenCalledTimes(2);
+    } finally {
+      hidden.mockRestore();
+      addListener.mockRestore();
+      removeListener.mockRestore();
+    }
+  });
+
+  it('does not start polling for an initially hidden document', async () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    try {
+      manager.subscribe(repositoryPath, () => {});
+      await vi.advanceTimersByTimeAsync(4100);
+      expect(gitApiMocks.isGitRepository).not.toHaveBeenCalled();
+      hidden.mockReturnValue(false);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(100);
+      expect(gitApiMocks.getRepositoryBasic).toHaveBeenCalledTimes(1);
+    } finally {
+      hidden.mockRestore();
+    }
   });
 
   it('refreshes the basic layer without fetching full status', async () => {

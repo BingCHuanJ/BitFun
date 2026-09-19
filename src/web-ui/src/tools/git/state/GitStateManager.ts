@@ -1006,33 +1006,37 @@ export class GitStateManager {
    */
   private ensurePollingStarted(): void {
     if (typeof window === 'undefined') return;
-    if (this.pollTimer !== null) return;
 
-    this.pollTimer = setInterval(() => {
-      this.pollTick();
-    }, POLL_INTERVAL_MS);
-
-    // Pause polling while the tab is hidden — the user isn't looking at the
-    // stale branch label, and `window focus` already does a catch-up refresh
-    // when they come back. This mirrors the visibility-gating used elsewhere.
-    const handleVisibility = (): void => {
-      if (document.hidden) {
-        this.stopPollingTimerOnly();
-      } else {
-        if (this.subscribers.size > 0 && this.pollTimer === null) {
+    if (this.pollVisibilityCleanup === null) {
+      const handleVisibility = (): void => {
+        if (document.hidden) {
+          this.stopPollingTimerOnly();
+        } else if (this.subscribers.size > 0) {
           // Kick off an immediate refresh so we don't lag by up to one
           // interval after becoming visible, then resume the timer.
           this.pollTick();
-          this.pollTimer = setInterval(() => {
-            this.pollTick();
-          }, POLL_INTERVAL_MS);
+          this.startPollingTimer();
         }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    this.pollVisibilityCleanup = () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+      this.pollVisibilityCleanup = () => {
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
+    }
+
+    // A subscription can be added while the document is hidden. Keep the
+    // timer paused in that case; the visibility listener above will start it
+    // when the document becomes visible again.
+    if (!document.hidden) {
+      this.startPollingTimer();
+    }
+  }
+
+  private startPollingTimer(): void {
+    if (this.pollTimer !== null || this.subscribers.size === 0) return;
+    this.pollTimer = setInterval(() => {
+      this.pollTick();
+    }, POLL_INTERVAL_MS);
   }
 
   private stopPolling(): void {
