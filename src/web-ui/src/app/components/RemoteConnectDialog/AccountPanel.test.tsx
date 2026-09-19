@@ -7,11 +7,12 @@ const mocks = vi.hoisted(() => ({
   identity: { resolved: true, status: 'signed-in', me: { user: { githubId: 42, login: 'alice' } } } as { resolved: boolean; status: string; me: { user: { githubId: number; login: string } } | null },
   reopenSignIn: vi.fn(),
   getDeviceInfo: vi.fn(), accountStatus: vi.fn(), accountLogin: vi.fn(),
+  accountRelayCapabilities: vi.fn(), accountUpdateDevice: vi.fn(),
   accountConnectDevices: vi.fn(), accountListDevices: vi.fn(),
   t: (key: string) => key,
 }));
 vi.mock('@/infrastructure/account-identity', () => ({ useAccountIdentity: () => mocks.identity, accountIdentityService: { reopenSignIn: mocks.reopenSignIn } }));
-vi.mock('@/infrastructure/api/service-api/RemoteConnectAPI', () => ({ remoteConnectAPI: mocks }));
+vi.mock('@/infrastructure/api/service-api/RemoteConnectAPI', async importOriginal => ({ ...await importOriginal<typeof import('@/infrastructure/api/service-api/RemoteConnectAPI')>(), remoteConnectAPI: mocks }));
 vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({ api: { listen: () => () => {} } }));
 vi.mock('@/infrastructure/i18n', () => ({ useI18n: () => ({ t: mocks.t, formatRelativeTime: () => '' }) }));
 vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({ usePeerDeviceMode: () => ({ peerMode: { active: false } }) }));
@@ -20,7 +21,7 @@ vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({ succe
 vi.mock('@openbitfun/ui', () => {
   const Box = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   const Button = ({ children, onClick, disabled }: { children?: React.ReactNode; onClick?: React.MouseEventHandler<HTMLButtonElement>; disabled?: boolean }) => <button onClick={onClick} disabled={disabled}>{children}</button>;
-  return { Avatar: ({ src, alt }: { src?: string; alt?: string }) => <img src={src} alt={alt} />, OverflowText: Box, Alert: Box, Button, Icon: () => null, IconButton: () => null, ScrollArea: Box, StatusPill: Box };
+  return { Avatar: ({ src, alt }: { src?: string; alt?: string }) => <img src={src} alt={alt} />, OverflowText: Box, Alert: ({ message }: { message: string }) => <div>{message}</div>, Button, Icon: () => null, IconButton: () => null, ScrollArea: Box, StatusPill: Box };
 });
 let container: HTMLDivElement;
 let root: Root;
@@ -34,6 +35,7 @@ beforeEach(() => {
   // deterministically instead of creating an unbounded render loop.
   mocks.accountStatus.mockResolvedValueOnce({ logged_in: true, user_id: '42' })
     .mockImplementation(() => new Promise(() => {}));
+  mocks.accountRelayCapabilities.mockResolvedValue([]);
   mocks.accountConnectDevices.mockResolvedValue([{ device_id: 'local', device_name: 'My computer' }]);
   mocks.accountListDevices.mockResolvedValue([{ device_id: 'local', device_name: 'My computer', online: true }]);
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -186,4 +188,20 @@ it('lets a pending login reopen its external sign-in page', async () => {
   expect(reopen!.disabled).toBe(false);
   await act(async () => { reopen!.click(); });
   expect(mocks.reopenSignIn).toHaveBeenCalledOnce();
+});
+
+it('shows explicit old Relay capability state before any mutation', async () => {
+  mocks.accountRelayCapabilities.mockResolvedValue([]);
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  expect(container.textContent).toContain('accountLogin.deviceAliasUnsupported');
+  expect(mocks.accountUpdateDevice).not.toHaveBeenCalled();
+});
+it('accepts the negotiated alias capability and displays only alias plus metadata', async () => {
+  mocks.accountRelayCapabilities.mockResolvedValue(['device_alias_v1']);
+  mocks.accountListDevices.mockResolvedValue([{ device_id: 'local', device_name: 'technical', device_alias: 'Studio', device_model: 'Model', device_os: 'Linux', online: true }]);
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  expect(container.textContent).not.toContain('accountLogin.deviceAliasUnsupported');
+  expect(container.textContent).not.toContain('technical');
+  expect(container.textContent).toContain('Studio');
+  expect(container.textContent).toContain('Model');
 });

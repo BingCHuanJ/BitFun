@@ -790,6 +790,12 @@
     "returnedToThisDevice": "Returned to local device"
   },
   "accountLogin": {
+    "deviceAlias": "Device alias",
+    "deviceAliasPlaceholder": "Optional display name (empty restores technical name)",
+    "editDeviceAlias": "Edit name",
+    "saveDeviceAlias": "Save name",
+    "deviceAliasUpdated": "Device name updated",
+    "deviceAliasUnsupported": "Device aliases are unsupported by this host or Relay. Update it and retry.",
     "signedInAccount": "Signed-in account",
     "username": "Username",
     "password": "Password",

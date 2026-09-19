@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "5473331e06ecd4bfafbf9b547d48b4fe1561ccf69d86fdfde51ea10dc919531c",
-  "commandCount": 660,
+  "catalogDigest": "6587344a6b5e75a80457ea4ba2670bf37cf3038bdb436089ae402eb7b5a5a025",
+  "commandCount": 662,
   "coverage": {
-    "commandCount": 660,
-    "documentedCommandCount": 613,
+    "commandCount": 662,
+    "documentedCommandCount": 615,
     "implementationCommandCount": 47,
     "implementationDigest": "401fd0a5f64377e65573d1b0883fbfa844570096adfafd4c11a999d749ba5859"
   },
@@ -269,6 +269,22 @@
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
+      "id": "account_relay_capabilities",
+      "moduleId": "remote_connect",
+      "capabilityId": "feature.remote-connect",
+      "capabilityIds": [
+        "feature.remote-connect"
+      ],
+      "documentedItemIds": [
+        "feature.remote-connect:devices"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::remote_connect_api::account_relay_capabilities",
+      "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
+      "signature": "fn account_relay_capabilities() -> Result<Vec<String>, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
       "id": "account_status",
       "moduleId": "remote_connect",
       "capabilityId": "feature.remote-connect",
@@ -324,6 +340,22 @@
       "rustPath": "api::remote_connect_api::account_unsubscribe_session",
       "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
       "signature": "fn account_unsubscribe_session(request: UnsubscribeSessionRequest) -> Result<(), String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "account_update_device_alias",
+      "moduleId": "remote_connect",
+      "capabilityId": "feature.remote-connect",
+      "capabilityIds": [
+        "feature.remote-connect"
+      ],
+      "documentedItemIds": [
+        "feature.remote-connect:devices"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::remote_connect_api::account_update_device_alias",
+      "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
+      "signature": "fn account_update_device_alias( request: AccountUpdateDeviceAliasRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {

@@ -71,6 +71,8 @@ import logoMarkLight from '../assets/openbitfun-mark-light.png';
 import {
   isAccountIdentityChangedError,
   type RelayHttpClient,
+  type RelayDeviceInfo,
+  deviceDisplayName,
 } from '../services/RelayHttpClient';
 
 const PAGE_SIZE = 30;
@@ -95,11 +97,7 @@ interface SessionListPageProps {
   onControlTargetChanged?: () => void;
 }
 
-type CompactDevice = {
-  device_id: string;
-  device_name: string;
-  online: boolean;
-};
+type CompactDevice = RelayDeviceInfo;
 
 
 function compactSelectedDeviceIdForClient(client?: RelayHttpClient): string | null {
@@ -805,7 +803,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   useEffect(() => {
     if (!compact) return;
     void loadCompactDirectory();
-  }, [compact, loadCompactDirectory]);
+    return client?.onDeviceDirectoryChanged(() => { void loadCompactDirectory(); });
+  }, [client, compact, loadCompactDirectory]);
 
   const handleSelectCompactDevice = useCallback(async (device: CompactDevice) => {
     if (!client || !device.online || compactSwitchingDeviceId) return;
@@ -841,7 +840,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
       resetForDeviceSwitch();
       setControlTarget({
         deviceId: device.device_id,
-        deviceName: device.device_name || null,
+        deviceName: client.resolveDeviceName(device.device_id, deviceDisplayName(device)),
       });
       onControlTargetChanged?.();
       await loadCompactWorkspaceCatalog(switchedTargetEpoch);
@@ -1614,9 +1613,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                     onClick={() => void handleSelectCompactDevice(device)}
                   >
                     <span className="harmony-sidebar__device-icon" aria-hidden="true">
-                      <CompactDeviceIcon name={device.device_name || device.device_id}/>
+                      <CompactDeviceIcon name={deviceDisplayName(device)}/>
                     </span>
-                    <span className="harmony-sidebar__row-label">{device.device_name || device.device_id}</span>
+                    <span className="harmony-sidebar__row-label">{deviceDisplayName(device)}</span>
                     {isSwitching
                       ? <span className="spinner harmony-sidebar__row-spinner"/>
                       : <span className={`harmony-sidebar__status${device.online ? ' is-online' : ''}`}/>}

@@ -1,7 +1,6 @@
 import { InvalidationSync } from '../../../shared/relay-transport/InvalidationSync';
 import {
   ChevronLeft as LucideChevronLeft,
-  ChevronRight as LucideChevronRight,
   Monitor as LucideMonitor,
   RefreshCw as LucideRefreshCw,
   UserRoundSearch as LucideUserRoundSearch,
@@ -25,21 +24,19 @@ import {
   MobileListRow,
   MobilePageHeader,
   MobileStatus,
+  MobileTextField,
 } from '@openbitfun/ui/mobile';
 import {
   RelayHttpClient,
+  deviceDisplayName,
   isAccountIdentityChangedError,
+  type RelayDeviceInfo,
 } from '../services/RelayHttpClient';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
 import { selectAccountDevice } from '../services/accountDeviceSelection';
 
-interface DeviceInfo {
-  device_id: string;
-  device_name: string;
-  online: boolean;
-  last_seen_at?: number | null;
-}
+type DeviceInfo = RelayDeviceInfo;
 
 
 interface Props {
@@ -78,6 +75,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
   const [directoryLoaded, setDirectoryLoaded] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [aliasDraft, setAliasDraft] = useState('');
+  const [aliasSupported, setAliasSupported] = useState(false);
   const mountedRef = useRef(true);
   const identityRequestRef = useRef(0);
   const devicesRequestRef = useRef(0);
@@ -91,7 +91,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     const rightCurrent = right.device_id === client.targetDeviceId;
     if (leftCurrent !== rightCurrent) return leftCurrent ? -1 : 1;
     if (left.online !== right.online) return left.online ? -1 : 1;
-    return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
+    return deviceDisplayName(left).localeCompare(deviceDisplayName(right));
     });
     return listedDevices;
   }, [client, client.controllerDeviceId, client.targetDeviceId, connectionHealth, devices]);
@@ -126,6 +126,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
       && devicesRequestRef.current === requestId
     );
     try {
+      const epoch = client.accountEpoch;
+      void client.supportsDeviceAlias().then(supported => { if (isCurrent() && client.accountEpoch === epoch) setAliasSupported(supported); }).catch(() => { if (isCurrent()) setAliasSupported(false); });
       const list = await client.listDevices();
       if (!isCurrent()) return;
       setDevices(list);
@@ -176,6 +178,18 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     if (mountedRef.current) setLoading(false);
   }, [loading, refreshDevices, switchingId]);
 
+  const updateAlias = useCallback(async (device: DeviceInfo) => {
+    const epoch = client.accountEpoch;
+    try {
+      await client.updateDeviceAlias(device.device_id, aliasDraft.trim() || null);
+      if (!mountedRef.current || client.accountEpoch !== epoch) return;
+      setEditingId(null);
+      await refreshDevices();
+    } catch (e) {
+      if (!mountedRef.current || client.accountEpoch !== epoch || isAccountIdentityChangedError(e)) return;
+      setError(String(e).includes('unsupported') ? t('devices.aliasUnsupported') : friendlyError(e, 'devices.loadFailed'));
+    }
+  }, [aliasDraft, client, friendlyError, refreshDevices, t]);
   const selectDevice = useCallback(async (d: DeviceInfo, probe = true) => {
     if (!d.online || switchingId) return;
     if (client.targetDeviceId === d.device_id) return;
@@ -210,7 +224,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
       resetForDeviceSwitch();
       setControlTarget({
         deviceId: d.device_id,
-        deviceName: d.device_name,
+        deviceName: client.resolveDeviceName(d.device_id, deviceDisplayName(d)),
       });
       onDeviceSelected();
     } catch (e: unknown) {
@@ -248,8 +262,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
           const isSwitching = switchingId === d.device_id;
           const clickable = d.online && !isCurrent && !switchingId;
           return (
+            <div key={d.device_id}>
             <MobileListRow
-              key={d.device_id}
               appearance="surface"
               className={[
                 'devices-page__device',
@@ -263,8 +277,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
               label={(
                 <span className="devices-page__device-name-row">
                   <span className="devices-page__device-name">
-                    {d.device_name || t('devices.unknownDevice')}
+                    {deviceDisplayName(d) || t('devices.unknownDevice')}
                   </span>
+                  {d.device_model || d.device_os ? <small>{[d.device_model, d.device_os, d.device_os_version].filter(Boolean).join(' · ')}</small> : null}
                   {isCurrent && (
                     <MobileBadge className="devices-page__badge devices-page__badge--current" tone="success">
                       {t('devices.current')}
@@ -283,15 +298,15 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
                       : t('devices.offline')}
                 </span>
               )}
-              trailing={isSwitching ? (
-                <span className="devices-page__device-spinner spinner" />
-              ) : (
-                clickable && (
-                  <LucideChevronRight width="16" height="16" stroke="currentColor" aria-hidden="true" />
-                )
-              )}
+
               selected={isCurrent}
             />
+            {editingId === d.device_id ? <>
+              <MobileTextField value={aliasDraft} onChange={e => setAliasDraft(e.target.value)} placeholder={t('devices.aliasPlaceholder')} aria-label={t('devices.alias')} />
+              <MobileButton size="sm" onClick={() => void updateAlias(d)}>{t('devices.saveAlias')}</MobileButton>
+              <MobileButton size="sm" onClick={() => setEditingId(null)}>{t('common.cancel')}</MobileButton>
+            </> : <MobileButton size="sm" disabled={!aliasSupported} onClick={() => { setEditingId(d.device_id); setAliasDraft(d.device_alias ?? ''); }}>{t('devices.editAlias')}</MobileButton>}
+            </div>
           );
         })}
       </div>
@@ -376,6 +391,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
       {accountLanding && sortedDevices.length > 0 && <p className="devices-page__description">{t('devices.accountReady')}</p>}
       {error && <MobileBanner className="devices-page__error" tone="danger">{error}</MobileBanner>}
 
+      {!aliasSupported && <MobileBanner>{t('devices.aliasUnsupported')}</MobileBanner>}
       <div className="devices-page__body">
         {renderBody()}
       </div>

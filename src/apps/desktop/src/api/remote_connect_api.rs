@@ -265,16 +265,8 @@ fn tag_peer_event_source(payload: serde_json::Value, source_device_id: &str) -> 
     }
 }
 
-fn emit_device_presence(devices: &[(String, String)]) {
-    let payload = serde_json::json!({
-        "devices": devices
-            .iter()
-            .map(|(id, name)| serde_json::json!({
-                "device_id": id,
-                "device_name": name,
-            }))
-            .collect::<Vec<_>>(),
-    });
+fn emit_device_presence(devices: &[OnlineDeviceInfo]) {
+    let payload = serde_json::json!({ "devices": devices });
     emit_account_event("account://device-presence", payload);
 }
 
@@ -2367,11 +2359,7 @@ pub async fn account_logout(app: tauri::AppHandle) -> Result<(), String> {
 
 // ── P2: Device routing commands ──────────────────────────────────────────
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-pub struct OnlineDeviceInfo {
-    pub device_id: String,
-    pub device_name: String,
-}
+pub use openbitfun_core::service::remote_connect::relay_client::DevicePresenceEntry as OnlineDeviceInfo;
 
 const STARTUP_DEVICE_CONNECT_MAX_ATTEMPTS: usize = 5;
 
@@ -2499,6 +2487,13 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
         log::warn!("Failed to persist AuthOk device_id into session: {e}");
     }
 
+    if let Err(error) = AccountClient::new()
+        .report_local_metadata(&relay_url, &session, &auth_device_id)
+        .await
+    {
+        log::warn!("Failed to report device metadata on connection: {error}");
+    }
+
     // Background task: consume events (presence / device messages / auth errors)
     // Note: AuthOk is consumed inside start_device_connection (adopt happens there).
     let event_relay_url = relay_url.clone();
@@ -2536,14 +2531,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                     else {
                         break 'routing_events;
                     };
-                    let presence = devices
-                        .iter()
-                        .map(|device| OnlineDeviceInfo {
-                            device_id: device.device_id.clone(),
-                            device_name: device.device_name.clone(),
-                        })
-                        .collect();
-                    if !replace_device_presence_if_owner(&event_owner, presence) {
+                    if !replace_device_presence_if_owner(&event_owner, devices.clone()) {
                         break 'routing_events;
                     }
                     log::info!("Device presence updated: {} online", devices.len());
@@ -2559,11 +2547,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                     if !device_routing_owner_is_current(&event_owner).await {
                         break 'routing_events;
                     }
-                    let pairs: Vec<(String, String)> = devices
-                        .iter()
-                        .map(|d| (d.device_id.clone(), d.device_name.clone()))
-                        .collect();
-                    emit_device_presence(&pairs);
+                    emit_device_presence(&devices);
                 }
                 RelayEvent::DeviceMessageReceived {
                     source_device_id,
@@ -2849,6 +2833,18 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                     else {
                         break 'routing_events;
                     };
+                    if let Ok(identity) = current_device_identity() {
+                        if let Err(error) = AccountClient::new()
+                            .report_local_metadata(
+                                &event_relay_url,
+                                &event_session,
+                                &identity.device_id,
+                            )
+                            .await
+                        {
+                            log::warn!("Failed to report device metadata after reconnect: {error}");
+                        }
+                    }
                     log::info!("Device routing reconnected — AuthConnect re-sent by transport");
                 }
                 _ => {}
@@ -2930,6 +2926,10 @@ pub async fn account_execute_on_device(
 pub struct AccountDeviceInfo {
     pub device_id: String,
     pub device_name: String,
+    pub device_alias: Option<String>,
+    pub device_model: Option<String>,
+    pub device_os: Option<String>,
+    pub device_os_version: Option<String>,
     pub online: bool,
     pub last_seen_at: Option<i64>,
 }
@@ -2957,10 +2957,52 @@ pub async fn account_list_devices() -> Result<Vec<AccountDeviceInfo>, String> {
         .map(|d| AccountDeviceInfo {
             device_id: d.device_id,
             device_name: d.device_name,
+            device_alias: d.device_alias,
+            device_model: d.device_model,
+            device_os: d.device_os,
+            device_os_version: d.device_os_version,
             online: d.online,
             last_seen_at: d.last_seen_at,
         })
         .collect())
+}
+
+#[derive(Deserialize)]
+pub struct AccountUpdateDeviceAliasRequest {
+    pub device_id: String,
+    pub device_alias: Option<String>,
+}
+
+#[tauri::command]
+pub async fn account_update_device_alias(
+    request: AccountUpdateDeviceAliasRequest,
+) -> Result<(), String> {
+    let generation = account_context_generation();
+    let _operation = lock_account_operation(generation).await?;
+    let (session, relay_url) = read_account_context_for_generation(generation).await?;
+    AccountClient::new()
+        .update_device_alias(
+            &relay_url,
+            &session,
+            &request.device_id,
+            request.device_alias.as_deref(),
+        )
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn account_relay_capabilities() -> Result<Vec<String>, String> {
+    let generation = account_context_generation();
+    let (_, relay_url) = read_account_context_for_generation(generation).await?;
+    let capabilities = AccountClient::new()
+        .relay_capabilities(&relay_url)
+        .await
+        .map_err(|error| error.to_string())?;
+    if !account_context_is_current(generation) {
+        return Err("account context changed".into());
+    }
+    Ok(capabilities)
 }
 
 /// Remove a device from the account.
@@ -3464,6 +3506,7 @@ mod sync_state_tests {
             vec![OnlineDeviceInfo {
                 device_id: "a-device".to_string(),
                 device_name: "A".to_string(),
+                ..Default::default()
             }],
         ));
 
@@ -3473,6 +3516,7 @@ mod sync_state_tests {
             vec![OnlineDeviceInfo {
                 device_id: "late-a-device".to_string(),
                 device_name: "Late A".to_string(),
+                ..Default::default()
             }],
         ));
         assert!(!clear_device_routing_if_owner(&owner_a));
@@ -3499,10 +3543,20 @@ mod sync_state_tests {
             vec![OnlineDeviceInfo {
                 device_id: "current-device".to_string(),
                 device_name: "Current".to_string(),
+                device_alias: Some("My laptop".into()),
+                device_model: Some("Mac14,7".into()),
+                device_os: Some("macos".into()),
+                device_os_version: Some("15".into()),
             }],
         ));
 
-        assert!(device_presence_for_account(20, "token-current").is_some());
+        let presence = device_presence_for_account(20, "token-current").unwrap();
+        let payload = serde_json::json!({ "devices": presence });
+        assert_eq!(payload["devices"][0]["device_alias"], "My laptop");
+        assert_eq!(payload["devices"][0]["device_name"], "Current");
+        assert_eq!(payload["devices"][0]["device_model"], "Mac14,7");
+        assert_eq!(payload["devices"][0]["device_os"], "macos");
+        assert_eq!(payload["devices"][0]["device_os_version"], "15");
         assert!(device_presence_for_account(21, "token-current").is_none());
         assert!(device_presence_for_account(20, "token-replaced").is_none());
         clear_device_routing_state();

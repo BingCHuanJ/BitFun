@@ -1,3 +1,4 @@
+import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
 import React, {
   lazy,
   Suspense,
@@ -55,6 +56,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   onSelectLocal,
   onSelectTarget,
 }) => {
+  useDeviceDirectory();
   const { t } = useI18n('flow-chat');
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -80,7 +82,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
     : t('chatInput.dispatch.local');
   const displayLabel = target.kind === 'local'
     ? localDisplayLabel
-    : target.displayName;
+    : target.kind === 'device' ? resolveDeviceName(target.deviceId, target.displayName) : target.displayName;
   const tooltip = locked
     ? t('chatInput.dispatch.locked', { target: displayLabel })
     : t('chatInput.dispatch.current', { target: displayLabel });

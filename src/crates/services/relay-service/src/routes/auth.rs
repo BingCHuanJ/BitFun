@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 
-use crate::db::{AuthToken, DeviceRow, UserRow};
+use crate::db::{AuthToken, DeviceMetadata, DeviceRow, UserRow};
 use crate::routes::api::AppState;
 
 /// Max login attempts per IP per minute (across all accounts — stops
@@ -155,6 +155,12 @@ pub struct LoginRequest {
     pub device_kind: String,
     pub public_key: String,
     pub request_id: String,
+    #[serde(default)]
+    pub device_model: Option<String>,
+    #[serde(default)]
+    pub device_os: Option<String>,
+    #[serde(default)]
+    pub device_os_version: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -165,6 +171,12 @@ pub struct ProvisionDeviceRequest {
     #[serde(default)]
     pub device_kind: Option<String>,
     pub request_id: String,
+    #[serde(default)]
+    pub device_model: Option<String>,
+    #[serde(default)]
+    pub device_os: Option<String>,
+    #[serde(default)]
+    pub device_os_version: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -327,6 +339,14 @@ pub(crate) async fn login(
     verifier: Option<Extension<crate::identity::IdentityVerifier>>,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let metadata = DeviceMetadata {
+        device_model: body.device_model.clone(),
+        device_os: body.device_os.clone(),
+        device_os_version: body.device_os_version.clone(),
+    };
+    if !metadata.is_valid() {
+        return Err(err("invalid device metadata", StatusCode::BAD_REQUEST));
+    }
     let public_key = BASE64.decode(&body.public_key).ok();
     if !valid_device_id(&body.device_id)
         || !valid_bounded_text(&body.device_name, MAX_DEVICE_NAME_BYTES)
@@ -347,13 +367,14 @@ pub(crate) async fn login(
     )
     .await?;
     let db = state.db.as_ref();
-    DeviceRow::upsert(
+    DeviceRow::upsert_with_metadata(
         db,
         &body.device_id,
         &user.user_id,
         &body.device_name,
         Some(&body.device_kind),
         Some(&body.public_key),
+        &metadata,
     )
     .await
     .map_err(|error| {
@@ -513,6 +534,14 @@ pub async fn provision_device(
     headers: HeaderMap,
     Json(body): Json<ProvisionDeviceRequest>,
 ) -> Result<Json<ProvisionDeviceResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let metadata = DeviceMetadata {
+        device_model: body.device_model.clone(),
+        device_os: body.device_os.clone(),
+        device_os_version: body.device_os_version.clone(),
+    };
+    if !metadata.is_valid() {
+        return Err(err("invalid device metadata", StatusCode::BAD_REQUEST));
+    }
     let public_key = BASE64.decode(&body.public_key).ok();
     if !public_key
         .as_ref()
@@ -565,6 +594,7 @@ pub async fn provision_device(
         ),
         &body.request_id,
         &body.public_key,
+        &metadata,
     )
     .await
     .map_err(|error| {
@@ -757,6 +787,31 @@ mod tests {
         let second: serde_json::Value =
             serde_json::from_slice(&to_bytes(second.into_body(), 16384).await.unwrap()).unwrap();
         assert_eq!(second["token"], first["token"]);
+        let mut metadata_request = request.clone();
+        metadata_request["device_model"] = serde_json::json!("Model");
+        metadata_request["device_os"] = serde_json::json!("Linux");
+        metadata_request["device_os_version"] = serde_json::json!("6");
+        assert_eq!(
+            post_json(&app, "/api/auth/login", "", metadata_request)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        sqlx::query("UPDATE devices SET device_alias='Independent' WHERE user_id='123'")
+            .execute(&*db)
+            .await
+            .unwrap();
+        assert_eq!(
+            post_json(&app, "/api/auth/login", "", request.clone())
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        let rows = DeviceRow::list_by_user(&db, "123").await.unwrap();
+        assert_eq!(rows[0].device_alias.as_deref(), Some("Independent"));
+        assert_eq!(rows[0].device_model.as_deref(), Some("Model"));
+        assert_eq!(rows[0].device_os.as_deref(), Some("Linux"));
+        assert_eq!(rows[0].device_os_version.as_deref(), Some("6"));
         DeviceRow::upsert(&db, "new-device", "123", "Laptop", None, None)
             .await
             .unwrap();
@@ -798,11 +853,15 @@ mod tests {
             "request_id": request_id,
         });
 
+        let mut with_metadata = request.clone();
+        with_metadata["device_model"] = serde_json::json!("Build server");
+        with_metadata["device_os"] = serde_json::json!("Linux");
+        with_metadata["device_os_version"] = serde_json::json!("6");
         let first = post_json(
             &app,
             "/api/auth/provision-device",
             &device_token,
-            request.clone(),
+            with_metadata,
         )
         .await;
         assert_eq!(first.status(), StatusCode::OK);
@@ -819,6 +878,15 @@ mod tests {
         let replay_body = to_bytes(replay.into_body(), 16 * 1024).await.unwrap();
         let replay: ProvisionDeviceResponse = serde_json::from_slice(&replay_body).unwrap();
         assert_eq!(replay.token, first.token);
+        let row = DeviceRow::list_by_user(&db, "owner")
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|row| row.device_id == device_id)
+            .unwrap();
+        assert_eq!(row.device_model.as_deref(), Some("Build server"));
+        assert_eq!(row.device_os.as_deref(), Some("Linux"));
+        assert_eq!(row.device_os_version.as_deref(), Some("6"));
 
         let conflict = post_json(
             &app,

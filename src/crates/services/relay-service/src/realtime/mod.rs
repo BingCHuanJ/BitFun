@@ -10,7 +10,7 @@
 mod device_lifecycle;
 mod origin;
 mod payloads;
-mod presence;
+pub(crate) mod presence;
 pub(crate) mod retired_session_history;
 
 use crate::{db::AuthToken, routes::api::AppState};
@@ -411,7 +411,7 @@ async fn install(socket: SocketRef, state: AppState, io: SocketIo) {
         "auth-ok",
         &json!({"userId":identity.account,"deviceId":identity.device}),
     );
-    presence::broadcast(&io, &state, &identity.account);
+    presence::broadcast(&io, &state, &identity.account).await;
 }
 
 #[cfg(test)]

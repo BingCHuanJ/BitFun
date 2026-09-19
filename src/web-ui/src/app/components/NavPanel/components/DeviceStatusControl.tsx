@@ -1,3 +1,4 @@
+import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OverflowText, Button, Card, CardBody, CardFooter, CardHeader, Icon, IconButton, ScrollArea } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
@@ -70,6 +71,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
   onOpenChange,
   onManageDevices,
 }) => {
+  useDeviceDirectory();
   const { t } = useI18n('common');
   const { success, warning } = useNotification();
   const peerContext = usePeerDeviceModeOptional();
@@ -97,7 +99,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
         ]);
         if (disposed || request !== generation) return;
         setSwitchTargets({ accountId, localId: local.device_id, devices: [
-          { ...local, online: true, last_seen_at: null },
+          { ...local, ...devices.find(device => device.device_id === local.device_id), online: true, last_seen_at: null },
           ...devices.filter(device => device.online && device.device_id !== local.device_id)
             .sort((a, b) => a.device_id.localeCompare(b.device_id)),
         ] });
@@ -131,7 +133,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
     setSwitchingDevice(true);
     try {
       if (target.device_id === availableTargets.localId) await peerContext.switchToLocal('manual');
-      else await peerContext.switchToDevice(target.device_id, target.device_name);
+      else await peerContext.switchToDevice(target.device_id, resolveDeviceName(target.device_id, target.device_alias ?? target.device_name ?? target.device_id));
     } catch (error) {
       warning(error instanceof Error ? error.message : String(error));
     } finally {
@@ -156,7 +158,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
   const previewDevices: DeviceOverviewDevice[] = availableTargets?.devices.map(target =>
     target.device_id === currentId ? overview.primaryDevice
       : overview.devices.find(device => device.id === target.device_id) ?? {
-        id: target.device_id, name: target.device_name, kind: 'desktop',
+        id: target.device_id, name: resolveDeviceName(target.device_id, target.device_alias ?? target.device_name ?? target.device_id), kind: 'desktop',
         local: target.device_id === availableTargets.localId, activities: [], backgroundTaskCount: 0,
       }) ?? [overview.primaryDevice];
   const previewIndex = Math.max(0, availableTargets?.devices.findIndex(

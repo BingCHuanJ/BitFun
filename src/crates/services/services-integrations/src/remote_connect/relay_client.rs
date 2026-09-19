@@ -18,10 +18,18 @@ pub const RELAY_INBOUND_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 pub fn ensure_rustls_crypto_provider() {
     openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DevicePresenceEntry {
     pub device_id: String,
     pub device_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_alias: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_os: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_os_version: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub enum RelayEvent {
@@ -435,6 +443,24 @@ fn reply_deadline(payload: &serde_json::Value) -> Instant {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn presence_metadata_and_legacy_round_trip() {
+        let legacy = serde_json::json!({"device_id":"id", "device_name":"technical"});
+        let entry: super::DevicePresenceEntry = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(serde_json::to_value(entry).unwrap(), legacy);
+        let extended = serde_json::json!({"device_id":"id", "device_name":"technical",
+            "device_alias":"Laptop", "device_model":"Mac14,7", "device_os":"macos", "device_os_version":"15"});
+        let entry: super::DevicePresenceEntry = serde_json::from_value(extended.clone()).unwrap();
+        assert_eq!(entry.device_name, "technical");
+        assert_eq!(serde_json::to_value(entry).unwrap(), extended);
+        let cleared: super::DevicePresenceEntry = serde_json::from_value(serde_json::json!({
+            "device_id":"id", "device_name":"technical", "device_alias":null,
+            "device_model":null, "device_os":null, "device_os_version":null, "future":true
+        }))
+        .unwrap();
+        assert!(cleared.device_alias.is_none());
+    }
+
     #[tokio::test]
     async fn base_endpoint_preserves_proxy_prefix_without_legacy_ws_conversion() {
         let (client, _events) = super::RelayClient::new();

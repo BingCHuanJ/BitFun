@@ -1,3 +1,4 @@
+import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
 import { ChatInputAttachments } from './ChatInputAttachments';
 import { useExcerptComposerActions } from '../selection/useExcerptComposerActions';
 import { isConversationExcerpt, formatConversationExcerpt } from '@/shared/utils/conversationExcerpt';
@@ -510,6 +511,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   presentation = 'standard',
 }) => {
   const deviceSurfaceScope = getActiveSurfaceScope();
+  const deviceDirectory = useDeviceDirectory();
   const { t } = useTranslation('flow-chat');
   const { t: tWorktrees } = useI18n('worktrees');
   const canLaunchReview = isTauriRuntime();
@@ -2844,7 +2846,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const target = effectiveTargetSession.config.dispatchTarget;
     const providerLabel =
       target && target.kind !== 'local'
-        ? target.displayName
+        ? (target.kind === 'device' ? resolveDeviceName(target.deviceId, target.displayName) : target.displayName)
         : t('chatInput.dispatch.remoteTarget');
     const sessionId = effectiveTargetSession.sessionId;
     const jobId = effectiveTargetSession.config.dispatchJobId;
@@ -2879,7 +2881,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
       },
     };
-  }, [caps.submissionOptionsLocked, caps.targetModelSelection, effectiveTargetSession, t]);
+  }, [caps.submissionOptionsLocked, caps.targetModelSelection, effectiveTargetSession, t, deviceDirectory]);
 
   React.useEffect(() => {
     if (!slashCommandState.isActive || slashCommandState.kind !== 'all' || derivedState?.isProcessing) {

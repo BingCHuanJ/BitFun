@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS devices (
   user_id      TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   device_name  TEXT,
   device_kind  TEXT,
+  device_alias TEXT,
+  device_model TEXT,
+  device_os TEXT,
+  device_os_version TEXT,
   public_key   TEXT,
   last_seen_at INTEGER,
   online       INTEGER NOT NULL DEFAULT 0,
@@ -138,6 +142,13 @@ const MIGRATE_DEVICE_KIND: &str = r#"
 ALTER TABLE devices ADD COLUMN device_kind TEXT;
 "#;
 
+const MIGRATE_DEVICE_DIRECTORY_METADATA: [&str; 4] = [
+    "ALTER TABLE devices ADD COLUMN device_alias TEXT",
+    "ALTER TABLE devices ADD COLUMN device_model TEXT",
+    "ALTER TABLE devices ADD COLUMN device_os TEXT",
+    "ALTER TABLE devices ADD COLUMN device_os_version TEXT",
+];
+
 /// Open (or create) the SQLite database and ensure the schema exists.
 pub async fn connect(db_path: &str) -> Result<DbPool> {
     connect_with_presence_reset(db_path, true).await
@@ -221,6 +232,13 @@ async fn connect_with_presence_reset(db_path: &str, reset_presence: bool) -> Res
     if let Err(error) = sqlx::query(MIGRATE_DEVICE_KIND).execute(&pool).await {
         if !error.to_string().contains("duplicate column name") {
             return Err(anyhow!("migrate device kinds: {error}"));
+        }
+    }
+    for migration in MIGRATE_DEVICE_DIRECTORY_METADATA {
+        if let Err(error) = sqlx::query(migration).execute(&pool).await {
+            if !error.to_string().contains("duplicate column name") {
+                return Err(anyhow!("migrate device directory metadata: {error}"));
+            }
         }
     }
     sqlx::query(
@@ -535,12 +553,40 @@ pub fn device_kind_is_desktop(kind: Option<&str>) -> bool {
     matches!(kind, None | Some(DEVICE_KIND_DESKTOP))
 }
 
+/// Self-reported technical metadata. Missing values never erase stored facts.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct DeviceMetadata {
+    pub device_model: Option<String>,
+    pub device_os: Option<String>,
+    pub device_os_version: Option<String>,
+}
+
+pub const MAX_DEVICE_DIRECTORY_TEXT_BYTES: usize = 256;
+
+pub fn valid_device_directory_text(value: &str) -> bool {
+    !value.trim().is_empty()
+        && value.len() <= MAX_DEVICE_DIRECTORY_TEXT_BYTES
+        && !value.chars().any(char::is_control)
+}
+
+impl DeviceMetadata {
+    pub fn is_valid(&self) -> bool {
+        [&self.device_model, &self.device_os, &self.device_os_version]
+            .into_iter()
+            .all(|value| value.as_deref().is_none_or(valid_device_directory_text))
+    }
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct DeviceRow {
     pub device_id: String,
     pub user_id: String,
     pub device_name: Option<String>,
     pub device_kind: Option<String>,
+    pub device_alias: Option<String>,
+    pub device_model: Option<String>,
+    pub device_os: Option<String>,
+    pub device_os_version: Option<String>,
     pub public_key: Option<String>,
     pub last_seen_at: Option<i64>,
     pub online: i64,
@@ -555,17 +601,41 @@ impl DeviceRow {
         device_kind: Option<&str>,
         public_key: Option<&str>,
     ) -> Result<()> {
+        Self::upsert_with_metadata(
+            pool,
+            device_id,
+            user_id,
+            device_name,
+            device_kind,
+            public_key,
+            &DeviceMetadata::default(),
+        )
+        .await
+    }
+
+    pub async fn upsert_with_metadata(
+        pool: &DbPool,
+        device_id: &str,
+        user_id: &str,
+        device_name: &str,
+        device_kind: Option<&str>,
+        public_key: Option<&str>,
+        metadata: &DeviceMetadata,
+    ) -> Result<()> {
         let now = Utc::now().timestamp();
         // `device_kind` is only overwritten when the caller actually reported
         // one. A client build that predates the field would otherwise erase a
         // known kind on every login and put the device back in the list.
         sqlx::query(
             "INSERT INTO devices \
-               (device_id, user_id, device_name, device_kind, public_key, last_seen_at, online) \
-             VALUES (?, ?, ?, ?, ?, ?, 0) \
+               (device_id, user_id, device_name, device_kind, public_key, last_seen_at, device_model, device_os, device_os_version, online) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0) \
              ON CONFLICT(user_id, device_id) DO UPDATE SET \
                device_name = excluded.device_name, \
                device_kind = COALESCE(excluded.device_kind, devices.device_kind), \
+               device_model = COALESCE(excluded.device_model, devices.device_model), \
+               device_os = COALESCE(excluded.device_os, devices.device_os), \
+               device_os_version = COALESCE(excluded.device_os_version, devices.device_os_version), \
                public_key = COALESCE(excluded.public_key, devices.public_key), \
                last_seen_at = excluded.last_seen_at",
         )
@@ -575,6 +645,9 @@ impl DeviceRow {
         .bind(device_kind)
         .bind(public_key)
         .bind(now)
+        .bind(&metadata.device_model)
+        .bind(&metadata.device_os)
+        .bind(&metadata.device_os_version)
         .execute(pool)
         .await
         .map_err(|e| anyhow!("upsert device: {e}"))?;
@@ -603,7 +676,7 @@ impl DeviceRow {
 
     pub async fn list_by_user(pool: &DbPool, user_id: &str) -> Result<Vec<DeviceRow>> {
         let rows = sqlx::query_as::<_, DeviceRow>(
-            "SELECT device_id, user_id, device_name, device_kind, public_key, last_seen_at, online \
+            "SELECT device_id, user_id, device_name, device_kind, device_alias, device_model, device_os, device_os_version, public_key, last_seen_at, online \
              FROM devices WHERE user_id = ?",
         )
         .bind(user_id)
@@ -687,6 +760,7 @@ impl AuthToken {
         device_kind: Option<&str>,
         request_id: &str,
         public_key: &str,
+        metadata: &DeviceMetadata,
     ) -> Result<Option<AuthToken>> {
         let mut tx = pool
             .begin()
@@ -744,8 +818,8 @@ impl AuthToken {
 
         let inserted = sqlx::query(
             "INSERT OR IGNORE INTO devices \
-             (device_id, user_id, device_name, device_kind, public_key, last_seen_at, online) \
-             VALUES (?, ?, ?, ?, ?, ?, 0)",
+             (device_id, user_id, device_name, device_kind, public_key, last_seen_at, device_model, device_os, device_os_version, online) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
         )
         .bind(device_id)
         .bind(user_id)
@@ -753,6 +827,9 @@ impl AuthToken {
         .bind(device_kind)
         .bind(public_key)
         .bind(now)
+        .bind(&metadata.device_model)
+        .bind(&metadata.device_os)
+        .bind(&metadata.device_os_version)
         .execute(&mut *tx)
         .await
         .map_err(|error| anyhow!("register provisioned device: {error}"))?;
@@ -2508,6 +2585,54 @@ mod tests {
         );
         migrated.close().await;
         let _ = std::fs::remove_file(db_path);
+    }
+
+    #[tokio::test]
+    async fn directory_metadata_migration_is_additive_and_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.db");
+        let path = path.to_str().unwrap();
+        let pool = connect(path).await.unwrap();
+        UserRow::create(&pool, "owner", "owner").await.unwrap();
+        DeviceRow::upsert(&pool, "device", "owner", "Technical", None, None)
+            .await
+            .unwrap();
+        let token = AuthToken::create(&pool, "owner", "device").await.unwrap();
+        for column in [
+            "device_alias",
+            "device_model",
+            "device_os",
+            "device_os_version",
+        ] {
+            sqlx::query(&format!("ALTER TABLE devices DROP COLUMN {column}"))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        pool.close().await;
+        let pool = connect(path).await.unwrap();
+        let rows = DeviceRow::list_by_user(&pool, "owner").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].device_alias.is_none());
+        assert!(rows[0].device_model.is_none());
+        assert!(rows[0].device_os.is_none());
+        assert!(rows[0].device_os_version.is_none());
+        assert!(AuthToken::find(&pool, &token.token)
+            .await
+            .unwrap()
+            .is_some());
+        sqlx::query("UPDATE devices SET device_alias='Alias', device_model='Model', device_os='Linux', device_os_version='6'").execute(&pool).await.unwrap();
+        pool.close().await;
+        let pool = connect(path).await.unwrap();
+        DeviceRow::upsert(&pool, "device", "owner", "New technical", None, None)
+            .await
+            .unwrap();
+        let rows = DeviceRow::list_by_user(&pool, "owner").await.unwrap();
+        assert_eq!(rows[0].device_alias.as_deref(), Some("Alias"));
+        assert_eq!(rows[0].device_model.as_deref(), Some("Model"));
+        assert_eq!(rows[0].device_os.as_deref(), Some("Linux"));
+        assert_eq!(rows[0].device_os_version.as_deref(), Some("6"));
+        pool.close().await;
     }
 
     #[tokio::test]

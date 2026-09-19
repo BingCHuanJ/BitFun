@@ -228,6 +228,52 @@ async fn official_and_local_layouts_share_authenticated_directory_and_rpc() {
             assert_eq!(acknowledgement(&mut socket, 1).await["ok"], true);
             let mut controller = connect_scope(address, prefix, &tokens[1], "user-scoped").await;
             let mut outsider = connect_scope(address, prefix, &tokens[2], "user-scoped").await;
+            assert_eq!(
+                request(
+                    &app,
+                    "PATCH",
+                    &route("/api/devices/desktop"),
+                    &tokens[0],
+                    json!({"device_alias":"Build host"})
+                )
+                .await
+                .status(),
+                StatusCode::NO_CONTENT
+            );
+            assert_eq!(
+                request(
+                    &app,
+                    "PATCH",
+                    &route("/api/devices/desktop"),
+                    &tokens[0],
+                    json!({"device_model":"Model", "device_os":"Linux", "device_os_version":"6"})
+                )
+                .await
+                .status(),
+                StatusCode::NO_CONTENT
+            );
+            loop {
+                let frame = packet(&mut controller).await;
+                if let Some(payload) = frame.strip_prefix("42") {
+                    let event: Value = serde_json::from_str(payload).unwrap();
+                    if event[0] == "ephemeral" && event[1]["type"] == "device-presence" {
+                        if event[1]["devices"].as_array().unwrap().iter().any(|row| {
+                            row["device_alias"] == "Build host"
+                                && row["device_model"] == "Model"
+                                && row["device_os_version"] == "6"
+                        }) {
+                            break;
+                        }
+                    }
+                }
+            }
+            let info =
+                json_body(request(&app, "GET", &route("/api/info"), "", json!(null)).await).await;
+            assert_eq!(info["protocol_version"], 3);
+            assert_eq!(
+                info["capabilities"],
+                json!(["device_alias_v1", "device_metadata_v1"])
+            );
             let devices = json_body(
                 request(&app, "GET", &route("/api/devices"), &tokens[1], json!(null)).await,
             )

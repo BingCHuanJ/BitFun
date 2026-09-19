@@ -299,11 +299,20 @@ impl LoginFormState {
                 let badge = if is_local { " [this device]" } else { "" };
                 device_lines.push(Line::from(Span::styled(
                     format!(
-                        "  {}{}  {}  · {}",
-                        d.device_name,
+                        "  {}{}  {}  · {}  {}",
+                        d.display_name(),
                         badge,
                         truncate_id(&d.device_id),
-                        status
+                        status,
+                        [
+                            d.device_model.as_deref(),
+                            d.device_os.as_deref(),
+                            d.device_os_version.as_deref()
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join(" ")
                     ),
                     if d.online {
                         Style::default().fg(Color::White)

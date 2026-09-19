@@ -1,13 +1,14 @@
+import { refreshDeviceDirectory } from '@/infrastructure/account/deviceDirectory';
 /** Account login and authenticated device connections. */
 
-import { OverflowText, Alert, Avatar, Button, Icon, IconButton, ScrollArea, StatusPill } from '@openbitfun/ui';
+import { OverflowText, Alert, Avatar, Button, Icon, IconButton, Input, ScrollArea, StatusPill } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import {
   confirmDanger,
 } from '@/infrastructure/confirm-dialog';
-import { LogIn, Monitor } from 'lucide-react';
-import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { LogIn, Monitor, Pencil, Check, X } from 'lucide-react';
+import { remoteConnectAPI, deviceDisplayName, deviceMetadataLabel } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type {
   AccountDeviceInfo,
   OnlineDeviceInfo,
@@ -80,6 +81,10 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const [view, setView] = useState<View>('login');
 
   const [devices, setDevices] = useState<AccountDeviceInfo[]>([]);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [aliasDraft, setAliasDraft] = useState('');
+  const [aliasSupported, setAliasSupported] = useState(false);
+  const refreshDirtyRef = useRef(false);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   // Device discovery updates presentation, not the account lifecycle. Keep
   // refresh callbacks stable so adopting an ID cannot restart initialization.
@@ -131,12 +136,16 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     const rightLocal = right.device_id === localDeviceId;
     if (leftLocal !== rightLocal) return leftLocal ? -1 : 1;
     if (left.online !== right.online) return left.online ? -1 : 1;
-    return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
+    return deviceDisplayName(left).localeCompare(deviceDisplayName(right));
   }), [devices, localDeviceId]);
 
   const resetState = useCallback(() => {
     setActiveAccountEpoch(null);
     setDevices([]);
+    setAliasSupported(false);
+    refreshDirtyRef.current = false;
+    setEditingDeviceId(null);
+    setAliasDraft('');
     setLocalDeviceId(null);
     setDevicesReady(false);
     setRelayError(null);
@@ -171,7 +180,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const refreshDevices = useCallback(async () => {
     const epoch = accountEpochRef.current;
     if (refreshInFlightRef.current?.epoch === epoch) {
-      log.debug('Device list refresh already in flight; coalescing duplicate request');
+      refreshDirtyRef.current = true;
+      log.debug('Device list refresh already in flight; scheduling successor');
       return;
     }
     const requestId = ++refreshRequestRef.current;
@@ -180,6 +190,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       isAccountEpochCurrent(epoch) && refreshRequestRef.current === requestId
     );
     try {
+      void remoteConnectAPI.accountRelayCapabilities().then(capabilities => {
+        if (isCurrent()) setAliasSupported(capabilities.includes('device_alias_v1'));
+      }).catch(() => { if (isCurrent()) setAliasSupported(false); });
       let list = await remoteConnectAPI.accountListDevices();
       if (!isCurrent()) return;
       const currentLocalDeviceId = localDeviceIdRef.current;
@@ -213,6 +226,10 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       if (refreshInFlightRef.current?.epoch === epoch
         && refreshInFlightRef.current.requestId === requestId) {
         refreshInFlightRef.current = null;
+        if (refreshDirtyRef.current && isAccountEpochCurrent(epoch)) {
+          refreshDirtyRef.current = false;
+          void refreshDevicesRef.current();
+        }
       }
     }
   }, [handleSessionExpired, isAccountEpochCurrent, markRelayUnreachable]);
@@ -436,6 +453,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             deviceListFailureCountRef.current = 0;
           }
           applyPresenceOnline(payload.devices);
+          void refreshDevicesRef.current();
         }
       },
     );
@@ -533,6 +551,32 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     t,
   ]);
 
+  const handleUpdateAlias = useCallback(async (device: AccountDeviceInfo) => {
+    const epoch = accountEpochRef.current;
+    if (!aliasSupported) { setError(t('accountLogin.deviceAliasUnsupported')); return; }
+    const alias = aliasDraft.trim() || null;
+    setLoading(true);
+    setError(null);
+    try {
+      await remoteConnectAPI.accountUpdateDevice(device.device_id, alias);
+      if (!isAccountEpochCurrent(epoch)) return;
+      setEditingDeviceId(null);
+      void refreshDeviceDirectory();
+      await refreshDevices();
+      if (isAccountEpochCurrent(epoch)) success(t('accountLogin.deviceAliasUpdated'));
+    } catch (e: unknown) {
+      if (!isAccountEpochCurrent(epoch)) return;
+      const message = e instanceof Error ? e.message : String(e);
+      setError(/unsupported|not found|unknown command|404|405/i.test(message) ? t('accountLogin.deviceAliasUnsupported') : message);
+    } finally {
+      if (isAccountEpochCurrent(epoch)) setLoading(false);
+    }
+  }, [aliasDraft, aliasSupported, refreshDevices, isAccountEpochCurrent, success, t]);
+
+  const handleStartAliasEdit = useCallback((device: AccountDeviceInfo) => {
+    setEditingDeviceId(device.device_id);
+    setAliasDraft(device.device_alias ?? '');
+  }, []);
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
     if (!device.online) return;
     // Picking this machine is a normal surface switch back, not a no-op: the
@@ -548,9 +592,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           success(t('accountLogin.deviceSwitcher.switchedLocal'));
         }
       } else {
-        outcome = await switchToDevice(device.device_id, device.device_name);
+        outcome = await switchToDevice(device.device_id, deviceDisplayName(device));
         if (outcome === 'activated') {
-          success(t('accountLogin.enteredPeerMode', { name: device.device_name }));
+          success(t('accountLogin.enteredPeerMode', { name: deviceDisplayName(device) }));
         }
       }
       if (outcome === 'activated') {
@@ -623,6 +667,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </Button>
             </div>
             <div className="account-panel__devices-card">
+              {!aliasSupported && <Alert tone="info" message={t('accountLogin.deviceAliasUnsupported')} />}
               {relayError && (
                 <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
                   <Alert
@@ -651,8 +696,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   const removeLabel = isLocal
                     ? t('accountLogin.removeCurrentDevice')
                     : t('accountLogin.removeDevice');
-                  const displayName = d.device_name || t('accountLogin.unknownDevice');
-                  const DeviceEntry = isSelectable ? 'button' : 'div';
+                  const displayName = deviceDisplayName(d);
+                  const metadata = deviceMetadataLabel(d);
+                  const DeviceEntry = isSelectable && editingDeviceId !== d.device_id ? 'button' : 'div';
                   return (
                   <div data-openbitfun-component="remote-account-panel" data-openbitfun-part="deviceCard" key={d.device_id}
                     data-openbitfun-state={[
@@ -662,7 +708,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     className={`account-panel__device-card ${isSelectable ? 'selectable' : ''} ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''}`}>
                     <DeviceEntry
                       className="account-panel__device-select"
-                      {...(isSelectable ? {
+                      {...(isSelectable && editingDeviceId !== d.device_id ? {
                         type: 'button' as const,
                         onClick: () => void selectDevice(d),
                         disabled: loading,
@@ -676,19 +722,32 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                           {isLocal && <StatusPill tone="neutral" className="account-panel__device-badge">{t('accountLogin.thisDevice')}</StatusPill>}
                         </span>
                         <span className="account-panel__device-meta">
-                          <span className="account-panel__device-status">
-                            {d.online
-                              ? t('accountLogin.online')
-                              : d.last_seen_at
-                                ? t('accountLogin.lastSeen', {
-                                  time: formatRelativeTime(d.last_seen_at * 1000),
-                                })
-                                : t('accountLogin.offline')}
-                          </span>
+                          <span className="account-panel__device-status">{d.online
+                            ? t('accountLogin.online')
+                            : d.last_seen_at
+                              ? t('accountLogin.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
+                              : t('accountLogin.offline')}</span>
+                          {metadata && <span>{metadata}</span>}
                         </span>
+                        {editingDeviceId === d.device_id && (
+                          <span className="account-panel__device-alias-editor">
+                            <Input value={aliasDraft} onChange={e => setAliasDraft(e.target.value)} placeholder={t('accountLogin.deviceAliasPlaceholder')} aria-label={t('accountLogin.deviceAlias')} />
+                            <IconButton aria-label={t('accountLogin.saveDeviceAlias')} icon={<Check size={14} />} onClick={() => void handleUpdateAlias(d)} size="sm" variant="quiet" />
+                            <IconButton aria-label={t('accountLogin.cancel')} icon={<X size={14} />} onClick={() => setEditingDeviceId(null)} size="sm" variant="quiet" />
+                          </span>
+                        )}
                       </span>
                       {isSelectable && <Icon name="chevron-right" size="sm" />}
                     </DeviceEntry>
+                    <IconButton
+                      aria-label={t('accountLogin.editDeviceAlias')}
+                      disabled={loading || editingDeviceId !== null || !aliasSupported}
+                      icon={<Pencil size={14} />}
+                      onClick={(e) => { e.stopPropagation(); handleStartAliasEdit(d); }}
+                      size="sm"
+                      title={t('accountLogin.editDeviceAlias')}
+                      variant="quiet"
+                    />
                     <IconButton
                       aria-label={`${removeLabel}: ${displayName}`}
                       disabled={loading}

@@ -1220,7 +1220,13 @@ pub fn build_relay_router_with_page_data_origins_and_page_auth(
     router.layer(
         CorsLayer::new()
             .allow_origin(allow_origin)
-            .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PATCH,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
             .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]),
     )
 }

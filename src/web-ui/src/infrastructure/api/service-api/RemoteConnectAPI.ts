@@ -8,7 +8,22 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('RemoteConnectAPI');
 
-export interface DeviceInfo {
+export interface DeviceDirectoryMetadata {
+  device_alias?: string | null;
+  device_model?: string | null;
+  device_os?: string | null;
+  device_os_version?: string | null;
+}
+
+export function deviceDisplayName(device: DeviceDirectoryMetadata & { device_id: string; device_name?: string | null }): string {
+  return device.device_alias ?? device.device_name ?? device.device_id;
+}
+
+export function deviceMetadataLabel(device: DeviceDirectoryMetadata): string {
+  return [device.device_model, [device.device_os, device.device_os_version].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+}
+
+export interface DeviceInfo extends DeviceDirectoryMetadata {
   device_id: string;
   device_name: string;
   mac_address: string;
@@ -126,12 +141,12 @@ export interface AccountStatus {
   user_id: string | null;
 }
 
-export interface OnlineDeviceInfo {
+export interface OnlineDeviceInfo extends DeviceDirectoryMetadata {
   device_id: string;
   device_name: string;
 }
 
-export interface AccountDeviceInfo {
+export interface AccountDeviceInfo extends DeviceDirectoryMetadata {
   device_id: string;
   device_name: string;
   online: boolean;
@@ -405,6 +420,21 @@ class RemoteConnectAPIService {
       return await this.adapter.request<AccountDeviceInfo[]>('account_list_devices');
     } catch (e) {
       log.error('accountListDevices failed', e);
+      throw e;
+    }
+  }
+
+  async accountRelayCapabilities(): Promise<string[]> {
+    return this.adapter.request<string[]>('account_relay_capabilities');
+  }
+
+  async accountUpdateDevice(deviceId: string, deviceAlias: string | null): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_update_device_alias', {
+        request: { device_id: deviceId, device_alias: deviceAlias },
+      });
+    } catch (e) {
+      log.error('accountUpdateDevice failed', e);
       throw e;
     }
   }

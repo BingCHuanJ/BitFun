@@ -1,3 +1,4 @@
+import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
 import { requireSessionWorkspaceId } from '@/flow_chat/utils/sessionWorkspace';
 /**
  * SessionsSection — inline accordion content for the "Sessions" nav item.
@@ -218,6 +219,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   workspaceScopes,
   layout = 'nested',
 }) => {
+  useDeviceDirectory();
   const { t } = useI18n('common');
   const storedSessionOrdering = useWorkspaceSessionViewStore(state => state.ordering);
   const storedSessionShow = useWorkspaceSessionViewStore(state => state.show);
@@ -1512,7 +1514,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const isDispatched = isNonLocalDispatchTarget(dispatchTarget);
           const dispatchTargetLabel =
             dispatchTarget?.kind === 'ssh' || dispatchTarget?.kind === 'device'
-              ? dispatchTarget.displayName
+              ? (dispatchTarget.kind === 'device' ? resolveDeviceName(dispatchTarget.deviceId, dispatchTarget.displayName) : dispatchTarget.displayName)
               : '';
           const dispatchState = session.config.dispatchJobState ?? 'submitting';
           const dispatchStateLabel = {

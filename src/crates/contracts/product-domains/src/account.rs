@@ -19,7 +19,27 @@ pub struct AccountInfo {
 pub struct AccountDevice {
     pub device_id: String,
     pub device_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_alias: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_os: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_os_version: Option<String>,
     pub online: bool,
+}
+
+impl AccountDevice {
+    pub fn display_name(&self) -> &str {
+        self.device_alias.as_deref().unwrap_or_else(|| {
+            if self.device_name.is_empty() {
+                &self.device_id
+            } else {
+                &self.device_name
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +112,26 @@ impl GitHubUser {
 #[cfg(test)]
 mod identity_tests {
     use super::*;
+    #[test]
+    fn device_directory_legacy_round_trip_preserves_technical_name() {
+        let legacy = serde_json::json!({"deviceId":"id", "deviceName":"technical", "online":true});
+        let mut device: AccountDevice = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&device).unwrap(), legacy);
+        device.device_alias = Some("My laptop".into());
+        device.device_model = Some("Mac14,7".into());
+        device.device_os = Some("macos".into());
+        device.device_os_version = Some("15.0".into());
+        let round_trip: AccountDevice =
+            serde_json::from_value(serde_json::to_value(&device).unwrap()).unwrap();
+        assert_eq!(device, round_trip);
+        assert_eq!(round_trip.display_name(), "My laptop");
+        assert_eq!(round_trip.device_name, "technical");
+        device.device_alias = None;
+        assert_eq!(device.display_name(), "technical");
+        device.device_name.clear();
+        assert_eq!(device.display_name(), "id");
+    }
+
     #[test]
     fn legacy_profile_round_trip_and_independent_email_identity() {
         let legacy = r#"{"githubId":42,"login":"alice","avatarUrl":""}"#;

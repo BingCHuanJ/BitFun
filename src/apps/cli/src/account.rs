@@ -55,6 +55,10 @@ pub(crate) fn account_snapshot_projection(
             .map(|device| AccountDevice {
                 device_id: device.device_id,
                 device_name: device.device_name,
+                device_alias: device.device_alias,
+                device_model: device.device_model,
+                device_os: device.device_os,
+                device_os_version: device.device_os_version,
                 online: device.online,
             })
             .collect(),
@@ -355,6 +359,17 @@ impl CliAccountRoutingHost {
                     .read_account_context_for_generation(account_generation)
                     .await
                 {
+                    // AuthOk is emitted on initial connection and every reconnect.
+                    // Use its authenticated id, never a controller's target id.
+                    if session.token != expected_token {
+                        return;
+                    }
+                    if let Err(error) = runtime
+                        .report_local_device_metadata(account_generation, &device_id)
+                        .await
+                    {
+                        tracing::warn!("Failed to report device metadata on connection: {error}");
+                    }
                     if session.token == expected_token
                         && self
                             .routing_loop_is_current(account_generation, relay_client)
@@ -519,7 +534,11 @@ impl CliAccountRoutingHost {
                 tracing::info!("Device routing disconnected");
                 crate::peer_host::update_controller_presence(Vec::new()).await;
             }
-            RelayEvent::Reconnected => tracing::info!("Device routing reconnected"),
+            RelayEvent::Reconnected => {
+                tracing::info!("Device routing reconnected");
+                // The following AuthOk reports metadata with the server-confirmed
+                // device id. Do not race it with a second PATCH using cached identity.
+            }
             RelayEvent::Error { message } => {
                 tracing::warn!("Device routing error: {message}")
             }

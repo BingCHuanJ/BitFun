@@ -5,6 +5,7 @@ import {
   Sun as LucideSun,
   X as LucideX,
 } from 'lucide-react';
+import { deviceDisplayName, type RelayDeviceInfo } from '../services/RelayHttpClient';
 import AccountAvatar from './AccountAvatar';
 import React from 'react';
 import {
@@ -18,11 +19,7 @@ import {
 import { useI18n } from '../i18n';
 import { MOBILE_LOCALES } from '../i18n/localeRegistry';
 
-interface SettingsDevice {
-  device_id: string;
-  device_name: string;
-  online: boolean;
-}
+type SettingsDevice = RelayDeviceInfo;
 
 interface CompactSettingsSheetProps {
   accountLabel: string | null;
@@ -139,8 +136,8 @@ export default function CompactSettingsSheet({
                 className={`harmony-sidebar__settings-device${current ? ' is-current' : ''}`}
                 disabled={!device.online}
                 key={device.device_id}
-                label={device.device_name || device.device_id}
-                leading={<span className="harmony-sidebar__settings-device-icon">{renderDeviceIcon(device.device_name || device.device_id)}</span>}
+                label={deviceDisplayName(device)}
+                leading={<span className="harmony-sidebar__settings-device-icon">{renderDeviceIcon(deviceDisplayName(device))}</span>}
                 onClick={() => onSelectDevice(device)}
                 selected={current}
                 supportingText={current ? t('settings.currentDevice') : device.online ? t('devices.online') : t('devices.offline')}

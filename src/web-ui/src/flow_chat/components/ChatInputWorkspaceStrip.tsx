@@ -1,3 +1,4 @@
+import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
 /**
  * Two fixed rails in the composer's upper context band.
  *
@@ -145,6 +146,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   worktreeControl,
   dispatchControl,
 }) => {
+  useDeviceDirectory();
   const { t } = useTranslation('flow-chat');
   const { t: tWorktrees } = useI18n('worktrees');
   const { t: tCommon } = useI18n('common');
@@ -831,7 +833,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               baselineWorktreePath={dispatchControl.baselineWorktreePath}
               baselineMissing={dispatchControl.baselineMissing}
               targetLabel={dispatchControl.target.kind !== 'local'
-                ? dispatchControl.target.displayName
+                ? (dispatchControl.target.kind === 'device' ? resolveDeviceName(dispatchControl.target.deviceId, dispatchControl.target.displayName) : dispatchControl.target.displayName)
                 : undefined}
               onClose={() => setResultDialogOpen(false)}
             />

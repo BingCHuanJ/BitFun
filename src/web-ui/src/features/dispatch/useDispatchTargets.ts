@@ -1,3 +1,4 @@
+import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
 import { useCallback, useEffect, useState } from 'react';
 import { createLogger } from '@/shared/utils/logger';
 import { dispatchApi } from './dispatchApi';
@@ -11,6 +12,7 @@ export function useDispatchTargets(enabled = true): {
   error: boolean;
   refresh: () => Promise<void>;
 } {
+  useDeviceDirectory();
   const [targets, setTargets] = useState<DispatchTargetOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -42,5 +44,5 @@ export function useDispatchTargets(enabled = true): {
   // Opening the picker enables this hook one render before the effect starts
   // the request. Treat that first render as loading so users never see a
   // misleading empty-target message flash before saved SSH targets arrive.
-  return { targets, loading: loading || (enabled && !loaded), error, refresh };
+  return { targets: targets.map(target => target.kind === 'device' && target.deviceId ? { ...target, displayName: resolveDeviceName(target.deviceId, target.displayName) } : target), loading: loading || (enabled && !loaded), error, refresh };
 }
