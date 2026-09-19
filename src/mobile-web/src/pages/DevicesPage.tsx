@@ -301,11 +301,30 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
 
               selected={isCurrent}
             />
-            {editingId === d.device_id ? <>
-              <MobileTextField value={aliasDraft} onChange={e => setAliasDraft(e.target.value)} placeholder={t('devices.aliasPlaceholder')} aria-label={t('devices.alias')} />
-              <MobileButton size="sm" onClick={() => void updateAlias(d)}>{t('devices.saveAlias')}</MobileButton>
-              <MobileButton size="sm" onClick={() => setEditingId(null)}>{t('common.cancel')}</MobileButton>
-            </> : <MobileButton size="sm" disabled={!aliasSupported} onClick={() => { setEditingId(d.device_id); setAliasDraft(d.device_alias ?? ''); }}>{t('devices.editAlias')}</MobileButton>}
+            {editingId === d.device_id ? (
+              <div className="devices-page__alias-editor">
+                <MobileTextField
+                  autoFocus
+                  appearance="surface"
+                  value={aliasDraft}
+                  onChange={e => setAliasDraft(e.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') { event.preventDefault(); void updateAlias(d); }
+                    if (event.key === 'Escape') { event.preventDefault(); setEditingId(null); }
+                  }}
+                  placeholder={t('devices.aliasPlaceholder')}
+                  aria-label={t('devices.alias')}
+                />
+                <div className="devices-page__alias-actions">
+                  <MobileButton size="sm" appearance="primary" onClick={() => void updateAlias(d)}>{t('devices.saveAlias')}</MobileButton>
+                  <MobileButton size="sm" onClick={() => setEditingId(null)}>{t('common.cancel')}</MobileButton>
+                </div>
+              </div>
+            ) : (
+              <div className="devices-page__alias-actions">
+                <MobileButton size="sm" disabled={!aliasSupported} onClick={() => { setEditingId(d.device_id); setAliasDraft(d.device_alias ?? ''); }}>{t('devices.editAlias')}</MobileButton>
+              </div>
+            )}
             </div>
           );
         })}
