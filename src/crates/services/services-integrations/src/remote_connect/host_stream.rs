@@ -47,6 +47,8 @@ pub struct StreamEvent {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StreamPage {
     pub stream_id: String,
+    /// Must stay inside JavaScript `Number.MAX_SAFE_INTEGER` after JSON
+    /// number decoding; controllers reject unsafe epochs as an invalid page.
     pub epoch: u64,
     pub events: Vec<StreamEvent>,
     pub has_more: bool,
@@ -232,13 +234,18 @@ impl StreamLog {
     }
 }
 
+/// Controllers decode `epoch` as a JSON number in JavaScript. Values above
+/// `Number.MAX_SAFE_INTEGER` (2^53-1) fail `parseStreamPage` as
+/// "Invalid stream page" and also lose identity after JSON.parse.
+const JS_MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
 fn fresh_epoch() -> u64 {
-    let nanos = std::time::SystemTime::now()
+    let millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
+        .map(|d| d.as_millis() as u64)
         .unwrap_or(1);
-    let random = u64::from(rand::random::<u32>());
-    (nanos ^ (random << 20)).max(1)
+    let random = u64::from(rand::random::<u16>());
+    (millis ^ random).clamp(1, JS_MAX_SAFE_INTEGER)
 }
 
 fn estimate_bytes(value: &Value) -> usize {
@@ -861,5 +868,26 @@ mod tests {
             1,
             "an oversized event still travels alone"
         );
+    }
+
+    #[tokio::test]
+    async fn stream_epochs_survive_javascript_json_number_decoding() {
+        for _ in 0..64 {
+            let epoch = fresh_epoch();
+            assert!(
+                (1..=JS_MAX_SAFE_INTEGER).contains(&epoch),
+                "epoch {epoch} is outside the JavaScript safe-integer range"
+            );
+            let as_f64 = epoch as f64;
+            assert_eq!(
+                as_f64 as u64, epoch,
+                "epoch {epoch} is not exactly representable as a JSON number"
+            );
+        }
+        let hub = HostStreamHub::start(Arc::new(Recorder(Default::default())));
+        let page = hub.read("phone", &request("s")).expect("empty stream page");
+        assert!((1..=JS_MAX_SAFE_INTEGER).contains(&page.epoch));
+        assert_eq!(page.epoch as f64 as u64, page.epoch);
+        hub.close();
     }
 }
