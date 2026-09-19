@@ -122,20 +122,25 @@ pub(crate) fn gone_response() -> Response {
         .into_response()
 }
 
+/// Resolve the policy once and state it in the log, so an operator can confirm
+/// retirement took effect before any traffic arrives instead of discovering it
+/// in the first refusal.
+pub(crate) fn announce_policy() {
+    let policy = policy();
+    if policy.retired || !policy.prefixes.is_empty() {
+        tracing::warn!(
+            retired_deployment = policy.retired,
+            retired_prefixes = ?policy.prefixes,
+            "Relay answers retired versions with {ERROR_CODE:?}"
+        );
+    } else {
+        tracing::info!("No Relay version is retired on this deployment");
+    }
+}
+
 fn policy() -> &'static RetirementPolicy {
     static POLICY: OnceLock<RetirementPolicy> = OnceLock::new();
-    POLICY.get_or_init(|| {
-        let policy = RetirementPolicy::from_env();
-        if policy.retired || !policy.prefixes.is_empty() {
-            tracing::warn!(
-                retired_deployment = policy.retired,
-                retired_prefixes = ?policy.prefixes,
-                "Relay answers retired versions with {:?}",
-                ERROR_CODE
-            );
-        }
-        policy
-    })
+    POLICY.get_or_init(RetirementPolicy::from_env)
 }
 
 /// Admission entry point used by the request middleware.
