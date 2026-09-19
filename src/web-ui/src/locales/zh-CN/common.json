@@ -871,7 +871,6 @@
     "noCurrentWorkspace": "该设备当前没有打开的工作区，请选择最近工作区或新建",
     "noSessions": "当前工作区暂无会话",
     "sessionExpired": "登录已失效，请重新登录",
-    "relayUnreachable": "无法连接中继服务。请检查服务地址与网络，或退出登录后重试。",
     "retryConnect": "重试连接",
     "relayFailureNetwork": "无法连接中继服务，请检查网络后重试。",
     "relayFailureUnavailable": "中继服务暂时不可用，请稍后重试。",
