@@ -15,8 +15,16 @@
   }
 
   &__error-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--openbitfun-space-2);
     flex-shrink: 0;
     padding: var(--openbitfun-space-3) var(--openbitfun-space-8) 0;
+  }
+
+  &__error-action {
+    align-self: flex-start;
   }
 
   &__login-card {

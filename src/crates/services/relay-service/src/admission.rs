@@ -23,6 +23,12 @@ pub(crate) async fn admit(
     next: Next,
 ) -> Response {
     let path = request.uri().path();
+    // A retired version answers before anything else, including authentication:
+    // the client must learn that it has to update, not that its token expired.
+    // Static content stays served, so the page that explains the update loads.
+    if crate::retired_version::is_retired_request(path, request.headers()) {
+        return crate::retired_version::gone_response();
+    }
     // Relay-stored session history is retired. Answer before authentication or
     // body buffering: an older host retrying a multi-megabyte upload costs the
     // relay nothing, and the reason is explicit rather than a quota error.

@@ -22,10 +22,41 @@ import {
 } from '@/infrastructure/account/accountErrorUtils';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import { canCheckForAppUpdates } from '@/infrastructure/update/tauriEnv';
+import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
+import {
+  classifyRelayFailure,
+  relayFailureAction,
+  type RelayFailureAction,
+  type RelayFailureKind,
+} from '../../../../../shared/relay-transport/RelayFailure';
 import { ensureAccountSession } from './ensureAccountSession';
 import './AccountPanel.scss';
 
 const log = createLogger('AccountPanel');
+
+/** Banner sentence for each classified relay/account failure. HTTP status and
+ * exception text never reach the surface; the raw detail stays in the log. */
+const RELAY_FAILURE_MESSAGE_KEY: Record<RelayFailureKind, string> = {
+  network: 'accountLogin.relayFailureNetwork',
+  'relay-unavailable': 'accountLogin.relayFailureUnavailable',
+  'relay-version-retired': 'accountLogin.relayFailureVersionRetired',
+  'client-outdated': 'accountLogin.relayFailureClientOutdated',
+  auth: 'accountLogin.sessionExpired',
+  unknown: 'accountLogin.relayFailureUnknown',
+};
+
+/** A failure reduced to the banner sentence and the next step the user can take. */
+interface PanelFailure {
+  message: string;
+  action: RelayFailureAction | null;
+}
+
+/** Reduce an account/relay failure to user-facing copy via the shared classifier. */
+function describeAccountFailure(error: unknown, t: (key: string) => string): PanelFailure {
+  const kind = classifyRelayFailure(error);
+  return { message: t(RELAY_FAILURE_MESSAGE_KEY[kind]), action: relayFailureAction(kind) };
+}
 
 const DEVICE_POLL_FALLBACK_MS = 30_000;
 const DEVICE_CONNECT_MAX_ATTEMPTS = 5;
@@ -89,6 +120,47 @@ function mergePresenceDevice(device: AccountDeviceInfo, presence: OnlineDeviceIn
 
 type View = 'login' | 'devices';
 
+interface FailureBannerProps {
+  failure: PanelFailure;
+  t: (key: string) => string;
+  busy: boolean;
+  /** Present only where the banner can be dismissed. */
+  onClose?: () => void;
+  onAction: (action: RelayFailureAction) => void;
+}
+
+/**
+ * Red banner plus the single next step for a classified failure. A failure whose
+ * action is the existing sign-in flow renders no extra button.
+ */
+const FailureBanner: React.FC<FailureBannerProps> = ({ failure, t, busy, onClose, onAction }) => {
+  // An update check only exists where updates can be installed; elsewhere the
+  // banner stays a statement instead of offering an action that cannot run.
+  const actionable = failure.action === 'retry' || (failure.action === 'check-updates' && canCheckForAppUpdates())
+    ? failure.action
+    : null;
+  return (
+    <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
+      <Alert
+        tone="error"
+        message={failure.message}
+        {...(onClose ? { closable: true, onClose } : {})}
+      />
+      {actionable && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="account-panel__error-action"
+          onClick={() => onAction(actionable)}
+          disabled={busy}
+        >
+          {actionable === 'check-updates' ? t('update.checkForUpdates') : t('accountLogin.retryConnect')}
+        </Button>
+      )}
+    </div>
+  );
+};
+
 export const AccountPanel: React.FC<AccountPanelProps> = ({
   onCloseDialog,
 }) => {
@@ -98,7 +170,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const identity = useAccountIdentity();
   const githubId = (identity.me?.user.accountId ?? identity.me?.user.githubId);
   const username = identity.me?.email ?? identity.me?.user.login ?? '';
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<PanelFailure | null>(null);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<View>('login');
 
@@ -116,7 +188,10 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   localDeviceIdRef.current = localDeviceId;
   /** True after either device presence or a list_devices response is available. */
   const [devicesReady, setDevicesReady] = useState(false);
-  const [relayError, setRelayError] = useState<string | null>(null);
+  const [relayFailure, setRelayFailure] = useState<PanelFailure | null>(null);
+  /** Update result the banner has to report itself; the update surface is shell-owned. */
+  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
   /** Account epoch whose presence events may update the device list. */
   const [activeAccountEpoch, setActiveAccountEpoch] = useState<number | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -178,7 +253,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     setSavingAliasId(null);
     setLocalDeviceId(null);
     setDevicesReady(false);
-    setRelayError(null);
+    setRelayFailure(null);
+    setUpdateNotice(null);
     refreshInFlightRef.current = null;
     deviceRoutingReadyRef.current = false;
     deviceListFailureCountRef.current = 0;
@@ -195,16 +271,24 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     setView(githubId !== undefined ? 'devices' : 'login');
     if (githubId !== undefined) {
       setActiveAccountEpoch(nextEpoch);
-      setRelayError(t('accountLogin.sessionExpired'));
+      // Session expiry keeps its dedicated wording and flow; it is never
+      // re-routed through the generic relay banners.
+      setRelayFailure({ message: t('accountLogin.sessionExpired'), action: 'sign-in' });
       void accountIdentityService.refresh().catch(() => undefined);
     } else {
-      setError(t('accountLogin.sessionExpired'));
+      setError({ message: t('accountLogin.sessionExpired'), action: 'sign-in' });
     }
   }, [githubId, invalidateAccountRequests, isAccountEpochCurrent, resetState, t]);
 
-  const markRelayUnreachable = useCallback(() => {
+  /** Log the raw transport detail and expose only the classified banner copy. */
+  const reportAccountFailure = useCallback((context: string, error: unknown): PanelFailure => {
+    log.warn(context, error);
+    return describeAccountFailure(error, t);
+  }, [t]);
+
+  const markRelayUnreachable = useCallback((error: unknown) => {
     setDevicesReady(false);
-    setRelayError(t('accountLogin.relayUnreachable'));
+    setRelayFailure(describeAccountFailure(error, t));
   }, [t]);
 
   const refreshDevices = useCallback(async () => {
@@ -243,7 +327,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           ))
         : list);
       setDevicesReady(true);
-      setRelayError(null);
+      setRelayFailure(null);
       deviceListFailureCountRef.current = 0;
     } catch (e) {
       if (!isCurrent()) return;
@@ -257,7 +341,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         // one failed snapshot must not be reported as a total Relay outage.
         if (!deviceRoutingReadyRef.current
           && deviceListFailureCountRef.current >= DEVICE_LIST_FAILURE_THRESHOLD) {
-          markRelayUnreachable();
+          markRelayUnreachable(e);
         }
       }
     } finally {
@@ -333,7 +417,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     deviceReconnectInFlightRef.current = epoch;
     if (showLoading) {
       setLoading(true);
-      setRelayError(null);
+      setRelayFailure(null);
     }
     try {
       if (githubId === undefined) return;
@@ -346,7 +430,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       deviceListFailureCountRef.current = 0;
       applyPresenceOnline(onlineDevices);
       setDevicesReady(true);
-      setRelayError(null);
+      setRelayFailure(null);
       refreshLocalDeviceId(epoch);
       if (!isAccountEpochCurrent(epoch)) return;
       await refreshDevices();
@@ -362,7 +446,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         await handleSessionExpired(err, epoch);
         return;
       }
-      markRelayUnreachable();
+      markRelayUnreachable(err);
     } finally {
       if (deviceReconnectInFlightRef.current === epoch) deviceReconnectInFlightRef.current = null;
       if (showLoading && isAccountEpochCurrent(epoch)) setLoading(false);
@@ -382,17 +466,40 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     void attemptDeviceReconnect(true);
   }, [attemptDeviceReconnect]);
 
+  /**
+   * The banner's "check updates" step. Discovery and the update surface stay in
+   * the shared update store, so the shell opens its single details dialog; the
+   * panel only reports a check that found nothing or failed.
+   */
+  const handleCheckForUpdates = useCallback(async () => {
+    if (checkingUpdates) return;
+    setCheckingUpdates(true);
+    setUpdateNotice(null);
+    try {
+      await useUpdateInstallStore.getState().checkForUpdates('manual');
+      const update = useUpdateInstallStore.getState();
+      if (update.checkStatus === 'available' && update.availableUpdate) update.openDetails();
+      else if (update.checkStatus === 'latest') setUpdateNotice(t('update.noUpdate'));
+      else setUpdateNotice(t('update.checkFailed'));
+    } catch (e: unknown) {
+      log.warn('check_for_updates failed', e);
+      setUpdateNotice(t('update.checkFailed'));
+    } finally {
+      setCheckingUpdates(false);
+    }
+  }, [checkingUpdates, t]);
+
   // Initial dial failures have no RelayClient instance to run its built-in
   // reconnect loop. Keep recovering in the background while this account view
   // is active; once a socket succeeds, RelayClient owns subsequent reconnects.
   useEffect(() => {
-    if (activeAccountEpoch === null || !relayError) return undefined;
+    if (activeAccountEpoch === null || !relayFailure) return undefined;
     const timer = setInterval(
       () => { void attemptDeviceReconnect(false); },
       DEVICE_CONNECT_RECOVERY_INTERVAL_MS,
     );
     return () => clearInterval(timer);
-  }, [activeAccountEpoch, attemptDeviceReconnect, relayError]);
+  }, [activeAccountEpoch, attemptDeviceReconnect, relayFailure]);
 
   /** Connect presence + load the device list for an active account session. */
   const initializeDevices = useCallback(async () => {
@@ -406,7 +513,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       deviceListFailureCountRef.current = 0;
       applyPresenceOnline(onlineDevices);
       setDevicesReady(true);
-      setRelayError(null);
+      setRelayFailure(null);
       // Re-read after AuthOk may have adopted the account-bound device_id.
       refreshLocalDeviceId(epoch);
     } catch (err) {
@@ -416,7 +523,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         await handleSessionExpired(err, epoch);
         return;
       }
-      markRelayUnreachable();
+      markRelayUnreachable(err);
       return;
     }
     if (!isAccountEpochCurrent(epoch)) return;
@@ -461,7 +568,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     }).catch((e) => {
       if (!isAccountEpochCurrent(epoch)) return;
       log.warn('account connection initialization failed', e);
-      markRelayUnreachable();
+      markRelayUnreachable(e);
     });
 
     return () => {
@@ -494,7 +601,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           if (deviceRoutingReadyRef.current) {
             deviceListFailureCountRef.current = 0;
             setDevicesReady(true);
-            setRelayError(null);
+            setRelayFailure(null);
           } else {
             // Start a fresh debounce window after routing loss; HTTP failures
             // observed while WS was healthy must not count against it.
@@ -511,7 +618,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const handleLogin = useCallback(async () => {
     if (identity.status === 'authorizing') {
       try { await accountIdentityService.reopenSignIn(); }
-      catch (e: unknown) { if (mountedRef.current) setError(e instanceof Error ? e.message : String(e)); }
+      catch (e: unknown) { if (mountedRef.current) setError(reportAccountFailure('reopenSignIn failed', e)); }
       return;
     }
     setLoading(true); setError(null);
@@ -519,11 +626,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       const me = await accountIdentityService.signIn();
       if (mountedRef.current) success(t('accountLogin.loginSuccess', { user_id: me.email ?? me.user.login }));
     } catch (e: unknown) {
-      if (mountedRef.current) setError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setError(reportAccountFailure('signIn failed', e));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [identity.status, success, t]);
+  }, [identity.status, reportAccountFailure, success, t]);
 
   const handleLogout = useCallback(async () => {
     const epoch = invalidateAccountRequests();
@@ -538,11 +645,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       // Logout failed before the backend changed the account; resume presence
       // delivery for the still-current frontend epoch.
       setActiveAccountEpoch(epoch);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(reportAccountFailure('logout failed', e));
     } finally {
       if (isAccountEpochCurrent(epoch)) setLoading(false);
     }
-  }, [invalidateAccountRequests, isAccountEpochCurrent, resetState]);
+  }, [invalidateAccountRequests, isAccountEpochCurrent, reportAccountFailure, resetState]);
 
   const handleDeleteDevice = useCallback(async (deviceId: string, deviceName: string) => {
     const isLocal = localDeviceId === deviceId;
@@ -581,9 +688,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       if (isAccountAuthFailure(e)) {
         await handleSessionExpired(e, epoch);
       } else {
-        const message = e instanceof Error ? e.message : String(e);
         if (isLocal) setActiveAccountEpoch(epoch);
-        setError(message);
+        setError(reportAccountFailure('device removal failed', e));
       }
     } finally {
       if (isAccountEpochCurrent(epoch)) setLoading(false);
@@ -594,6 +700,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     isAccountEpochCurrent,
     localDeviceId,
     refreshDevices,
+    reportAccountFailure,
     resetState,
     success,
     t,
@@ -601,7 +708,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   const handleUpdateAlias = useCallback(async (device: AccountDeviceInfo) => {
     const epoch = accountEpochRef.current;
-    if (!aliasSupported) { setError(t('accountLogin.deviceAliasUnsupported')); return; }
+    if (!aliasSupported) { setError({ message: t('accountLogin.deviceAliasUnsupported'), action: null }); return; }
     const alias = aliasDraft.trim() || null;
     // Renaming one device must not cover the directory with the panel-wide
     // blocking overlay; the editor row shows its own progress instead.
@@ -616,8 +723,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       if (isAccountEpochCurrent(epoch)) success(t('accountLogin.deviceAliasUpdated'));
     } catch (e: unknown) {
       if (!isAccountEpochCurrent(epoch)) return;
-      const message = e instanceof Error ? e.message : String(e);
-      setError(/unsupported|not found|unknown command|404|405/i.test(message) ? t('accountLogin.deviceAliasUnsupported') : message);
+      const raw = e instanceof Error ? e.message : String(e);
+      log.warn('device alias update failed', e);
+      setError(/unsupported|not found|unknown command|404|405/i.test(raw)
+        ? { message: t('accountLogin.deviceAliasUnsupported'), action: null }
+        : describeAccountFailure(e, t));
     } finally {
       if (isAccountEpochCurrent(epoch)) setSavingAliasId(null);
     }
@@ -654,25 +764,44 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         onCloseDialog();
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(reportAccountFailure('switch device failed', e));
     } finally {
       setLoading(false);
     }
   }, [
     localDeviceId,
     onCloseDialog,
+    reportAccountFailure,
     success,
     switchToDevice,
     switchToLocal,
     t,
   ]);
 
+  /** Run the next step a banner offers; sign-in keeps its existing flow. */
+  const runFailureAction = useCallback((action: RelayFailureAction) => {
+    if (action === 'check-updates') { void handleCheckForUpdates(); return; }
+    if (action === 'retry') {
+      if (view === 'login') { void handleLogin(); } else { void handleRetryConnect(); }
+    }
+  }, [handleCheckForUpdates, handleLogin, handleRetryConnect, view]);
+
   return (
     <>
       <div data-openbitfun-component="remote-account-panel" data-openbitfun-part="root" data-openbitfun-view={view} className="account-panel">
         {error && (
+          <FailureBanner
+            failure={error}
+            t={t}
+            busy={loading}
+            onClose={() => setError(null)}
+            onAction={runFailureAction}
+          />
+        )}
+
+        {updateNotice && (
           <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
-            <Alert tone="error" message={error} closable onClose={() => setError(null)} />
+            <Alert tone="info" message={updateNotice} closable onClose={() => setUpdateNotice(null)} />
           </div>
         )}
 
@@ -715,31 +844,26 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             <div className="account-panel__section-heading">
               <h3>{t('accountLogin.linkedDevices')}</h3>
               <Button variant="text" size="sm" leadingIcon={<Icon name="refresh" size="sm" />}
-                onClick={relayError ? handleRetryConnect : refreshDevices} disabled={loading}>
-                {t(relayError ? 'accountLogin.retryConnect' : 'accountLogin.refreshDevices')}
+                onClick={relayFailure ? handleRetryConnect : refreshDevices} disabled={loading}>
+                {t(relayFailure ? 'accountLogin.retryConnect' : 'accountLogin.refreshDevices')}
               </Button>
             </div>
             <div className="account-panel__devices-card">
               {!aliasSupported && <Alert tone="info" message={t('accountLogin.deviceAliasUnsupported')} />}
-              {relayError && (
-                <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
-                  <Alert
-                    tone="error"
-                    message={relayError}
-                  />
-                </div>
+              {relayFailure && (
+                <FailureBanner failure={relayFailure} t={t} busy={loading} onAction={runFailureAction} />
               )}
               <div className="account-panel__device-list" data-openbitfun-component="remote-account-panel" data-openbitfun-part="deviceList">
-                {!relayError && devicesReady && devices.length === 0 && (
+                {!relayFailure && devicesReady && devices.length === 0 && (
                   <div className="account-panel__empty">{t('accountLogin.noDevices')}</div>
                 )}
-                {!relayError && !devicesReady && (
+                {!relayFailure && !devicesReady && (
                   <div className="account-panel__empty account-panel__empty--loading" role="status">
                     <Icon name="refresh" size="sm" className="spinning" />
                     {t('accountLogin.loadingDevices')}
                   </div>
                 )}
-                {!relayError && sortedDevices.map((d) => {
+                {!relayFailure && sortedDevices.map((d) => {
                   const isLocal = localDeviceId === d.device_id;
                   // This machine is selectable while the window renders a peer,
                   // so the dialog can bring the UI back without disconnecting.
@@ -867,8 +991,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           </ScrollArea>
         )}
       </div>
-
-
     </>
   );
 };

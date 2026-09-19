@@ -59,6 +59,8 @@ import {
 import { useMobileStore } from '../services/store';
 import { createRemoteCacheScope, remoteCache } from '../services/RemoteCache';
 import { describeRemoteError } from '../services/remoteErrorPresentation';
+// Device-directory read failures share the device pages' relay-failure copy.
+import { deviceFailurePresentation } from '../services/deviceFailureCopy';
 import {
   sameWorkspace,
   sessionMatchesWorkspace,
@@ -769,7 +771,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
       }
       await Promise.all(tasks);
     } catch (e: any) {
-      setError(e?.message || t('devices.loadFailed'));
+      // The device-directory read shares the device pages' classified copy; the
+      // raw transport detail never reaches the banner.
+      setError(t(deviceFailurePresentation(e, 'devices.loadFailed', 'devices.authorizationExpired').key));
     } finally {
       setCompactDirectoryLoading(false);
     }
@@ -792,7 +796,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
         && requestSeq === workspaceCatalogRequestSeqRef.current
         && !isRemoteControlTargetChangedError(error)
       ) {
-        setError(String((error as { message?: string })?.message || error));
+        // The compact catalog is a relay read: classify it like every other
+        // relay failure so the banner never shows transport text.
+        setError(t(deviceFailurePresentation(error, 'devices.loadFailed', 'devices.authorizationExpired').key));
       }
     } finally {
       if (client.controlTargetEpoch === expectedTargetEpoch) {
@@ -848,8 +854,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
       await loadCompactWorkspaceCatalog(switchedTargetEpoch);
     } catch (error: unknown) {
       if (isAccountIdentityChangedError(error)) return;
-      const message = String((error as { message?: string })?.message || error);
-      setError(message || t('devices.switchFailed'));
+      setError(t(deviceFailurePresentation(error, 'devices.switchFailed', 'devices.authorizationExpired').key));
     } finally {
       setCompactSwitchingDeviceId((current) => (
         current === device.device_id ? null : current

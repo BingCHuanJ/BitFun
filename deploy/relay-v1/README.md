@@ -45,3 +45,62 @@ to the auth origin and its client script loads.
 Before replacement, back up this version's database and assets and retain the
 previous image tag. Roll back only this Compose project and its versioned
 location. Never use the legacy relay Compose file to operate this deployment.
+
+## Retiring an older version
+
+Retiring `/v/1.0.1/` (or any earlier prefix) must tell its clients to update
+instead of leaving them with a bare `404`/`502`, because those clients cannot
+be patched after the fact. Both forms answer the same body:
+
+```json
+{"error":"relay_version_retired","message":"…Update OpenBitFun on this device, then sign in again to continue.","update_required":true}
+```
+
+The code string, the `update_required` flag and the message are one contract,
+pinned by `src/crates/services/relay-service/src/retired_version.rs`.
+
+1. **Relay enforced (while a container still serves the prefix).** Point the
+   retired prefix at the *current* relay and announce it:
+
+   ```nginx
+   location ^~ /v/1.0.0/ {
+       proxy_set_header X-OpenBitFun-Relay-Served-Prefix /v/1.0.0;
+       # …the same proxy_pass, real-IP and admission settings as the live prefix
+   }
+   ```
+
+   Start that relay with `RELAY_RETIRED_VERSION_PREFIXES=/v/1.0.0` so account,
+   realtime and Page routes of the announced prefix answer `410` before
+   authentication or body buffering. `RELAY_RETIRED=1` retires the whole
+   deployment instead, which is what a full shutdown uses. The startup log
+   states the resolved switch (`relay answers retired versions …` or `no Relay
+   version is retired`), so enabling and rolling back are verifiable before
+   traffic arrives. The development deployment retires `/v/1.0.0/` this way,
+   through a deployment-local `compose.override.yml`:
+
+   ```yaml
+   services:
+     relay-v1:
+       environment:
+         RELAY_RETIRED_VERSION_PREFIXES: /v/1.0.0
+   ```
+
+   **Both halves are required.** Proxying a retired prefix without listing it
+   serves the live relay under that retired prefix, which silently un-retires
+   the version; announcing a prefix that the edge never sends retires nothing.
+   A working example of this location is installed as
+   `/etc/nginx/relay-retired-v1.0.0-location.conf`.
+2. **Edge only (recommended once the container is gone).** Stop the retired
+   Compose project, delete its images and volumes, then replace the retired
+   prefix's include with `nginx-retired-version.conf`, keep the live version's
+   include untouched, validate with `nginx -t`, and gracefully reload. The old
+   prefix keeps answering `410` with `no-store`, so no client caches a stale
+   success, and the retirement body covers the websocket upgrade path too.
+
+Either form keeps `/health` and static content served: the page that explains
+the update still loads, and the health probe keeps working.
+
+Never retire a prefix that current clients still use: an unconfigured relay is
+never retired, so an omitted or mistyped variable fails safe. An operator
+turnover hazard is the reverse: a prefix listed but no longer proxied stays
+retired only for as long as the edge announces it.

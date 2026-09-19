@@ -214,7 +214,14 @@ impl ChatMode {
                 return;
             }
             Err(error) => {
-                chat_state.add_system_message(format!("Logout failed: {error}"));
+                tracing::warn!(
+                    "Logout failed: {}",
+                    crate::account::bounded_account_error(&error.to_string())
+                );
+                chat_state.add_system_message(format!(
+                    "Logout failed: {}",
+                    crate::account_guidance::account_failure_line(&error.to_string())
+                ));
                 return;
             }
             Ok(_) => {}
@@ -231,7 +238,16 @@ impl ChatMode {
             })
         }) {
             Ok(_) => chat_state.add_system_message("Logged out.".to_string()),
-            Err(error) => chat_state.add_system_message(format!("Logout failed: {error}")),
+            Err(error) => {
+                tracing::warn!(
+                    "Logout failed: {}",
+                    crate::account::bounded_account_error(&error.to_string())
+                );
+                chat_state.add_system_message(format!(
+                    "Logout failed: {}",
+                    crate::account_guidance::account_failure_line(&error.to_string())
+                ));
+            }
         }
     }
 

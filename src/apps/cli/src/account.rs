@@ -77,11 +77,20 @@ pub(crate) fn account_login_status_message(
             result.user_id, result.relay_url
         )
     } else if let Some(error) = &result.routing_error {
-        format!(
-            "Logged in as user {} on {}. Device routing failed: {}",
-            result.user_id,
+        tracing::warn!(
+            "Device routing failed for relay {}: {}",
             result.relay_url,
             bounded_account_error(error)
+        );
+        // The endpoint that was used is known here, so a retired official
+        // release is reported as the sunset case even when the text is generic.
+        let (guidance, _) = crate::account_guidance::account_failure_guidance_for_endpoint(
+            error,
+            &result.relay_url,
+        );
+        format!(
+            "Logged in as user {} on {}. Device routing failed: {}",
+            result.user_id, result.relay_url, guidance
         )
     } else {
         format!(
@@ -101,7 +110,8 @@ pub(crate) fn redact_login_error(error: anyhow::Error, secrets: [&str; 3]) -> an
     anyhow!(bounded_account_error(&message))
 }
 
-fn bounded_account_error(message: &str) -> String {
+/// Redacted/bounded transport detail for logs only; never rendered in the UI.
+pub(crate) fn bounded_account_error(message: &str) -> String {
     message
         .chars()
         .filter(|character| !character.is_control())

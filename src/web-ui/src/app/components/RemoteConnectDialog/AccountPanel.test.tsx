@@ -3,12 +3,14 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AccountPanel } from './AccountPanel';
+import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 const mocks = vi.hoisted(() => ({
   identity: { resolved: true, status: 'signed-in', me: { user: { githubId: 42, login: 'alice' } } } as { resolved: boolean; status: string; me: { user: { githubId: number; login: string } } | null },
   reopenSignIn: vi.fn(),
   getDeviceInfo: vi.fn(), accountStatus: vi.fn(), accountLogin: vi.fn(),
   accountRelayCapabilities: vi.fn(), accountUpdateDevice: vi.fn(),
   accountConnectDevices: vi.fn(), accountListDevices: vi.fn(),
+  checkForUpdates: vi.fn(), installUpdate: vi.fn(),
   peerMode: { active: false } as { active: boolean },
   switchToDevice: vi.fn(), switchToLocal: vi.fn(),
   t: (key: string) => key,
@@ -31,6 +33,9 @@ vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({
     switchToDevice: mocks.switchToDevice,
     switchToLocal: mocks.switchToLocal,
   }),
+}));
+vi.mock('@/infrastructure/api/service-api/SystemAPI', () => ({
+  systemAPI: { checkForUpdates: mocks.checkForUpdates, installUpdate: mocks.installUpdate },
 }));
 vi.mock('@/infrastructure/confirm-dialog', () => ({ confirmDanger: vi.fn() }));
 vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({ success: vi.fn() }) }));
@@ -59,10 +64,15 @@ beforeEach(() => {
   mocks.accountRelayCapabilities.mockResolvedValue([]);
   mocks.accountConnectDevices.mockResolvedValue([{ device_id: 'local', device_name: 'My computer' }]);
   mocks.accountListDevices.mockResolvedValue([{ device_id: 'local', device_name: 'My computer', online: true }]);
+  // Discovery is initialized up front so an explicit check never starts a version read.
+  useUpdateInstallStore.setState({
+    initialized: true, currentVersion: '1.0.0', availableUpdate: null, checkStatus: 'idle',
+    checkError: null, detailsOpen: false, notice: null, error: null, version: null,
+  });
   presenceListeners.length = 0;
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
-afterEach(() => { act(() => root.unmount()); container.remove(); });
+afterEach(() => { act(() => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 it('keeps initialization alive when the local device ID arrives', async () => {
   await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
   expect(mocks.accountStatus).toHaveBeenCalledTimes(1);
@@ -113,6 +123,45 @@ it('shows a connection failure while retaining the signed-in account', async () 
   expect(container.textContent).toContain('alice');
   expect(container.textContent).toContain('accountLogin.retryConnect');
   expect(container.textContent).not.toContain('accountLogin.loadingDevices');
+});
+
+it('explains a retired Relay version and offers an update instead of the raw error', async () => {
+  vi.stubGlobal('__TAURI__', {});
+  mocks.accountStatus.mockReset().mockRejectedValue(
+    Object.assign(new Error('List devices failed: HTTP 410'), { status: 410 }),
+  );
+  mocks.checkForUpdates.mockResolvedValue({ updateAvailable: true, currentVersion: '1.0.0', latestVersion: '2.0.0', releaseNotes: null, releaseDate: null });
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  // The actionable sentence replaces the raw transport detail and HTTP status.
+  expect(container.textContent).toContain('accountLogin.relayFailureVersionRetired');
+  expect(container.textContent).not.toContain('List devices failed');
+  expect(container.textContent).not.toContain('410');
+  // The retired version can only be fixed by updating, never by retrying here.
+  const updateButton = Array.from(container.querySelectorAll('button')).find(node => node.textContent === 'update.checkForUpdates');
+  expect(updateButton).toBeDefined();
+  await act(async () => { updateButton!.click(); });
+  // Discovery and the dialog stay in the shared update store, which the shell renders.
+  expect(mocks.checkForUpdates).toHaveBeenCalledOnce();
+  expect(useUpdateInstallStore.getState()).toMatchObject({ checkStatus: 'available', detailsOpen: true });
+});
+
+it('does not offer an update check in a runtime that cannot install updates', async () => {
+  mocks.accountStatus.mockReset().mockRejectedValue(
+    Object.assign(new Error('List devices failed: HTTP 410'), { status: 410 }),
+  );
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  expect(container.textContent).toContain('accountLogin.relayFailureVersionRetired');
+  expect(container.textContent).not.toContain('update.checkForUpdates');
+});
+
+it('offers a retry when the Relay is temporarily unavailable', async () => {
+  mocks.accountStatus.mockReset().mockRejectedValue(
+    Object.assign(new Error('List devices failed: HTTP 502'), { status: 502 }),
+  );
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  expect(container.textContent).toContain('accountLogin.relayFailureUnavailable');
+  expect(container.textContent).not.toContain('502');
+  expect(container.textContent).toContain('accountLogin.retryConnect');
 });
 
 async function retryConnection() {
