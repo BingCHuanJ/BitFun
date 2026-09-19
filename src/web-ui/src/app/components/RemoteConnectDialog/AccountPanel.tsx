@@ -131,6 +131,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const deviceListFailureCountRef = useRef(0);
   /** Coalesce manual and background recovery so they never replace each other's WS. */
   const deviceReconnectInFlightRef = useRef<number | null>(null);
+  /**
+   * Latest refresh for callers that must not depend on its identity: the
+   * successor refresh scheduled below, the polling interval, and the presence
+   * listener. Assigned right after `refreshDevices` is created.
+   */
+  const refreshDevicesRef = useRef<(() => Promise<void>) | null>(null);
   const invalidateAccountRequests = useCallback(() => {
     accountEpochRef.current += 1;
     refreshRequestRef.current += 1;
@@ -260,7 +266,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         refreshInFlightRef.current = null;
         if (refreshDirtyRef.current && isAccountEpochCurrent(epoch)) {
           refreshDirtyRef.current = false;
-          void refreshDevicesRef.current();
+          void refreshDevicesRef.current?.();
         }
       }
     }
@@ -304,8 +310,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     });
   }, []);
 
-  /** Latest refreshDevices for the polling interval (avoids stale closures). */
-  const refreshDevicesRef = useRef(refreshDevices);
+  /** Latest refreshDevices for the successor refresh, the polling interval and
+   * the presence listener (avoids stale closures). */
   refreshDevicesRef.current = refreshDevices;
 
   const startDevicePolling = useCallback(() => {
@@ -313,7 +319,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       clearInterval(refreshTimer.current);
     }
     refreshTimer.current = setInterval(
-      () => { void refreshDevicesRef.current(); },
+      () => { void refreshDevicesRef.current?.(); },
       DEVICE_POLL_FALLBACK_MS,
     );
   }, []);
@@ -495,7 +501,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             deviceListFailureCountRef.current = 0;
           }
           applyPresenceOnline(payload.devices);
-          void refreshDevicesRef.current();
+          void refreshDevicesRef.current?.();
         }
       },
     );

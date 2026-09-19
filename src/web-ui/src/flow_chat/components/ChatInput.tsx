@@ -1,4 +1,4 @@
-import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
+import { useDeviceDirectory, resolveDeviceNameFrom } from '@/infrastructure/account/deviceDirectory';
 import { ChatInputAttachments } from './ChatInputAttachments';
 import { useExcerptComposerActions } from '../selection/useExcerptComposerActions';
 import { isConversationExcerpt, formatConversationExcerpt } from '@/shared/utils/conversationExcerpt';
@@ -2846,7 +2846,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const target = effectiveTargetSession.config.dispatchTarget;
     const providerLabel =
       target && target.kind !== 'local'
-        ? (target.kind === 'device' ? resolveDeviceName(target.deviceId, target.displayName) : target.displayName)
+        ? (target.kind === 'device' ? resolveDeviceNameFrom(deviceDirectory.devices, target.deviceId, target.displayName) : target.displayName)
         : t('chatInput.dispatch.remoteTarget');
     const sessionId = effectiveTargetSession.sessionId;
     const jobId = effectiveTargetSession.config.dispatchJobId;

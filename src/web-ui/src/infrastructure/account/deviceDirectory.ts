@@ -8,9 +8,21 @@ export const useDeviceDirectory = create<{ devices: AccountDeviceInfo[]; localId
 let invalidate: (() => Promise<void>) | undefined;
 let generation = 0;
 
-export function resolveDeviceName(deviceId: string, fallback = deviceId): string {
-  const device = useDeviceDirectory.getState().devices.find(item => item.device_id === deviceId);
+/**
+ * Alias resolution from a snapshot the caller already subscribed to.
+ *
+ * A memo body must use this form and list `useDeviceDirectory()` in its
+ * dependencies: an imperative store read is invisible to the dependency rules,
+ * so a memo that only calls `resolveDeviceName` keeps rendering a stale alias.
+ */
+export function resolveDeviceNameFrom(devices: AccountDeviceInfo[], deviceId: string, fallback = deviceId): string {
+  const device = devices.find(item => item.device_id === deviceId);
   return device ? deviceDisplayName(device) : fallback;
+}
+
+/** Resolve from the live store, for code outside React's render data flow. */
+export function resolveDeviceName(deviceId: string, fallback = deviceId): string {
+  return resolveDeviceNameFrom(useDeviceDirectory.getState().devices, deviceId, fallback);
 }
 
 /**

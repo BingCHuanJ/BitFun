@@ -1,5 +1,5 @@
 import { useAccountIdentity } from '@/infrastructure/account-identity';
-import { startDeviceDirectory, useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
+import { startDeviceDirectory, useDeviceDirectory, resolveDeviceNameFrom } from '@/infrastructure/account/deviceDirectory';
 /** Thin React binding for the window-wide device-surface controller. */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -63,8 +63,8 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           )?.capabilities ?? null
         : null;
       return {
-        peerMode: snapshot.peerMode.active ? { ...snapshot.peerMode, deviceName: resolveDeviceName(snapshot.peerMode.deviceId, snapshot.peerMode.deviceName) } : snapshot.peerMode,
-        attachments: snapshot.attachments.map(item => ({ ...item, deviceName: resolveDeviceName(item.deviceId, item.deviceName) })),
+        peerMode: snapshot.peerMode.active ? { ...snapshot.peerMode, deviceName: resolveDeviceNameFrom(directory.devices, snapshot.peerMode.deviceId, snapshot.peerMode.deviceName) } : snapshot.peerMode,
+        attachments: snapshot.attachments.map(item => ({ ...item, deviceName: resolveDeviceNameFrom(directory.devices, item.deviceId, item.deviceName) })),
         currentPeerCapabilities,
         switchToDevice,
         switchToLocal,

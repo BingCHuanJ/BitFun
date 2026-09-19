@@ -1,4 +1,4 @@
-import { useDeviceDirectory, resolveDeviceName, isDeviceControllable } from '@/infrastructure/account/deviceDirectory';
+import { useDeviceDirectory, resolveDeviceNameFrom, isDeviceControllable } from '@/infrastructure/account/deviceDirectory';
 import { useAccountIdentity } from '@/infrastructure/account-identity';
 /**
  * Account device roster for the sidebar device switcher.
@@ -78,7 +78,7 @@ export function useAccountDeviceRoster(): AccountDeviceRoster {
         log.warn('Failed to refresh account device roster', error);
       }
     })();
-  }, [loggedIn, accountId]);
+  }, [loggedIn]);
 
   useEffect(() => {
     if (!loggedIn) {
@@ -92,7 +92,10 @@ export function useAccountDeviceRoster(): AccountDeviceRoster {
     refresh();
     const poll = setInterval(refresh, ROSTER_POLL_MS);
     return () => { generationRef.current += 1; clearInterval(poll); };
-  }, [loggedIn, refresh]);
+    // `accountId` belongs to the reset condition, not to the request itself:
+    // switching accounts must drop the previous account's roster instead of
+    // showing it until the next poll corrects it.
+  }, [accountId, loggedIn, refresh]);
 
   useEffect(() => {
     if (!loggedIn) {
@@ -102,7 +105,7 @@ export function useAccountDeviceRoster(): AccountDeviceRoster {
   }, [loggedIn, refresh]);
 
   const devices = useMemo<DeviceRosterEntry[]>(() => {
-    const sortedPeers = peers.map(peer => ({ ...peer, deviceName: resolveDeviceName(peer.deviceId, peer.deviceName) })).sort((a, b) => {
+    const sortedPeers = peers.map(peer => ({ ...peer, deviceName: resolveDeviceNameFrom(directory.devices, peer.deviceId, peer.deviceName) })).sort((a, b) => {
       if (a.online !== b.online) {
         return a.online ? -1 : 1;
       }

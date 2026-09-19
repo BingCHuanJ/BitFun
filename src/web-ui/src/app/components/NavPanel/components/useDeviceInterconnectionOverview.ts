@@ -1,4 +1,4 @@
-import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
+import { useDeviceDirectory, resolveDeviceName, resolveDeviceNameFrom } from '@/infrastructure/account/deviceDirectory';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -110,7 +110,7 @@ export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string
         target: {
           kind: 'device' as const,
           id: job.target.deviceId,
-          name: resolveDeviceName(job.target.deviceId, job.target.displayName),
+          name: resolveDeviceNameFrom(directory.devices, job.target.deviceId, job.target.displayName),
         },
       };
     })
