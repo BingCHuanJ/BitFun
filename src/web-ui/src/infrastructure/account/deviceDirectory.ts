@@ -13,6 +13,29 @@ export function resolveDeviceName(deviceId: string, fallback = deviceId): string
   return device ? deviceDisplayName(device) : fallback;
 }
 
+/**
+ * The single gate every mutual-control entry point must reuse.
+ *
+ * The Relay computes `compatible` from *both* clients' reported build/protocol.
+ * It returns `false` for a version mismatch and also for a peer that reported
+ * no version information at all (an older client), so a `false` flag always
+ * means "this peer is not mutually controllable" regardless of the reason.
+ *
+ * `compatible` is absent only on an older Relay that does not gate at all; that
+ * is "unknown but usable" and must never block control.
+ */
+export function isDeviceControllable(device: Pick<AccountDeviceInfo, 'compatible'>): boolean {
+  return device.compatible !== false;
+}
+
+/** Peer client build string for an incompatible device, when the Relay supplied one. */
+export function deviceClientVersion(
+  device: Pick<AccountDeviceInfo, 'device_client_version' | 'client_version'>,
+): string | null {
+  const version = (device.device_client_version ?? device.client_version)?.trim();
+  return version ? version : null;
+}
+
 export function refreshDeviceDirectory(): Promise<void> {
   return invalidate?.() ?? Promise.resolve();
 }

@@ -221,16 +221,20 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         {deviceTargets.map(option => {
           const selected = target.kind === 'device' && target.deviceId === option.deviceId;
           const online = option.online !== false;
+          // A confirmed-incompatible device stays listed so the reason is legible,
+          // but it is never offered as a selectable dispatch target.
+          const incompatible = option.incompatible === true;
           return (
             <MenuItem data-overflow-trigger
               key={option.deviceId}
               role="menuitemradio"
               checked={selected}
               className="dispatch-target-picker__option-row"
-              disabled={!online}
+              disabled={!online || incompatible}
               leading={<MonitorSmartphone size={15} aria-hidden />}
               metadata={selected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
               onClick={() => {
+                if (incompatible) return;
                 setOpen(false);
                 setConfigureTarget(option);
               }}
@@ -238,9 +242,11 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
               <span className="dispatch-target-picker__option-copy">
                 <strong><OverflowText>{option.displayName}</OverflowText></strong>
                 <small><OverflowText>
-                  {online
-                    ? t('chatInput.dispatch.deviceDescription')
-                    : t('chatInput.dispatch.deviceOffline')}
+                  {incompatible
+                    ? t('chatInput.dispatch.deviceIncompatible')
+                    : online
+                      ? t('chatInput.dispatch.deviceDescription')
+                      : t('chatInput.dispatch.deviceOffline')}
                 </OverflowText></small>
               </span>
             </MenuItem>

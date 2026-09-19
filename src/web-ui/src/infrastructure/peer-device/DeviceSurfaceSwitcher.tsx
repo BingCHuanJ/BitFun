@@ -80,7 +80,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
     : currentDevice?.deviceName ?? t('accountLogin.thisDevice');
 
   const handleSelect = useCallback(async (device: DeviceRosterEntry) => {
-    if (!peerDevice) {
+    if (!peerDevice || !device.controllable) {
       return;
     }
     setOpen(false);
@@ -223,7 +223,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                 const isCurrent = device.deviceId === activeDeviceId;
                 const busy = isDeviceBusy(activityKeyFor(device));
                 const attached = attachedIds.has(device.deviceId);
-                const selectable = device.online && (!isCurrent || switching);
+                const selectable = device.online && device.controllable && (!isCurrent || switching);
                 return (
                   <MenuItem
                     key={device.deviceId}
@@ -263,6 +263,11 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                         {!device.online && (
                           <span className="openbitfun-device-switcher__tag">
                             {t('accountLogin.offline')}
+                          </span>
+                        )}
+                        {!device.controllable && (
+                          <span className="openbitfun-device-switcher__tag is-incompatible">
+                            {t('accountLogin.deviceClientIncompatibleTag')}
                           </span>
                         )}
                         {isCurrent && <Icon name="check-line" size="xs" aria-hidden="true" />}

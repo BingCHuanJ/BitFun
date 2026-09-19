@@ -13,6 +13,30 @@ export interface DeviceDirectoryMetadata {
   device_model?: string | null;
   device_os?: string | null;
   device_os_version?: string | null;
+  /**
+   * Client build the device reported to the Relay. The host projection emits
+   * `device_client_version`; the Relay's own snake_case spelling is
+   * `client_version`. Both are read, exactly like the Relay/backend tolerance,
+   * so an older or newer host projection is never misjudged. Absent on older
+   * Relays.
+   */
+  device_client_version?: string | null;
+  client_version?: string | null;
+  /**
+   * Client wire protocol the device reported, using the same two spellings as
+   * the build string. Absent on older Relays.
+   */
+  device_client_protocol?: number | null;
+  client_protocol?: number | null;
+  /**
+   * Relay-computed mutual-control compatibility of this device with this one.
+   *
+   * `false` means confirmed incompatible: either a client build/protocol
+   * mismatch or a peer that reported no version information (an older client).
+   * Absent only on an older Relay that does not gate at all, which must be
+   * treated as "unknown but usable", never as incompatible.
+   */
+  compatible?: boolean;
 }
 
 export function deviceDisplayName(device: DeviceDirectoryMetadata & { device_id: string; device_name?: string | null }): string {

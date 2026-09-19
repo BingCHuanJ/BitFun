@@ -34,7 +34,7 @@ import {
 } from '../services/RelayHttpClient';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
-import { selectAccountDevice } from '../services/accountDeviceSelection';
+import { selectAccountDevice, isDeviceControllable } from '../services/accountDeviceSelection';
 
 type DeviceInfo = RelayDeviceInfo;
 
@@ -191,7 +191,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     }
   }, [aliasDraft, client, friendlyError, refreshDevices, t]);
   const selectDevice = useCallback(async (d: DeviceInfo, probe = true) => {
-    if (!d.online || switchingId) return;
+    // A confirmed-incompatible device is shown but never a control target.
+    if (!d.online || !isDeviceControllable(d) || switchingId) return;
     if (client.targetDeviceId === d.device_id) return;
     const requestId = ++switchRequestRef.current;
     const accountEpoch = client.accountEpoch;
@@ -260,7 +261,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
         {sortedDevices.map((d) => {
           const isCurrent = client.targetDeviceId === d.device_id;
           const isSwitching = switchingId === d.device_id;
-          const clickable = d.online && !isCurrent && !switchingId;
+          const controllable = isDeviceControllable(d);
+          const clickable = d.online && controllable && !isCurrent && !switchingId;
           return (
             <div key={d.device_id}>
             {/* Renaming replaces the row in place: keeping the row and an editor
@@ -306,6 +308,11 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
                     {isCurrent && (
                       <MobileBadge className="devices-page__badge devices-page__badge--current" tone="success">
                         {t('devices.current')}
+                      </MobileBadge>
+                    )}
+                    {!controllable && (
+                      <MobileBadge className="devices-page__badge" tone="warning">
+                        {t('devices.clientIncompatible')}
                       </MobileBadge>
                     )}
 

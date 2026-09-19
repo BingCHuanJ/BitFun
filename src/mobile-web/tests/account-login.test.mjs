@@ -17,6 +17,15 @@ async function loadSource(relativePath, imports = {}) {
 const links = await loadSource('../src/services/pairingLink.ts');
 const selection = await loadSource('../src/services/accountDeviceSelection.ts');
 const { selectAccountDevice } = await import(selection.url);
+// The shared build module reads the workspace version from package.json; the
+// transpile loader cannot import JSON, so hand it an equivalent JS module.
+const workspacePackage = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8'));
+const packageJsonStub = `data:text/javascript;base64,${Buffer.from(
+  `export const version = ${JSON.stringify(workspacePackage.version)};`,
+).toString('base64')}`;
+const clientBuild = await loadSource('../../shared/relay-transport/ClientBuild.ts', { '../../../package.json': packageJsonStub });
+const { CLIENT_PROTOCOL_VERSION, CLIENT_VERSION } = await import(clientBuild.url);
+const clientBuildImports = { '../../../shared/relay-transport/ClientBuild': clientBuild.url };
 const offline = { device_id: 'desktop-a', device_name: 'Offline desktop', online: false };
 const online = { device_id: 'desktop-b', device_name: 'Online desktop', online: true };
 const controller = { device_id: 'browser', device_name: 'Browser', online: true };
@@ -84,7 +93,7 @@ test('GitHub login registers the browser store key without generating another id
   const encryption = await loadSource('../src/services/E2EEncryption.ts');
   const { deriveDeviceMessageKey } = await import(encryption.url);
   const { x25519 } = await import('@noble/curves/ed25519.js');
-  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url, './pairingLink': links.url });
+  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url, './pairingLink': links.url, ...clientBuildImports });
   const { CloudAccountClient } = await import(authModule.url);
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
@@ -98,6 +107,10 @@ test('GitHub login registers the browser store key without generating another id
     assert.equal(body.access_token, 'verified-github-token');
     assert.equal(body.device_id, 'browser');
     assert.equal(body.password_hash, undefined);
+    // The login body reports this client's build so the Relay can gate control
+    // compatibility instead of treating the browser as a legacy client.
+    assert.equal(body.clientProtocol, CLIENT_PROTOCOL_VERSION);
+    assert.equal(body.clientVersion, CLIENT_VERSION);
     assert.equal(Buffer.from(body.public_key, 'base64').length, 32);
     return Response.json({ token: 'test-account-token', user_id: '101' });
   };
@@ -132,7 +145,7 @@ test('account UI entry precedes discovery and mounts no remote workspace surface
   assert.match(app, /!accountDirectoryOpen && page !== 'pairing' && sessionMgrRef\.current/);
   assert.equal((app.match(/\{renderDetailPage\(\)\}/g) || []).length, 1, 'one gated detail tree must preserve chat state across layout changes');
   const devices = await readFile(new URL('../src/pages/DevicesPage.tsx', import.meta.url), 'utf8');
-  assert.match(devices, /if \(!d.online \|\| switchingId\) return/);
+  assert.match(devices, /if \(!d\.online \|\| !isDeviceControllable\(d\) \|\| switchingId\) return/);
   assert.match(devices, /automaticSelectionAttemptedRef\.current = true/);
   assert.match(devices, /selectDevice\(target, false\)/, 'initial account selection must not require a new peer command');
   assert.ok(devices.indexOf('await client.sendDeviceRpc') < devices.indexOf('client.setTargetDeviceId(d.device_id)'));
@@ -153,7 +166,7 @@ test('alias editing replaces the device row instead of repeating its name', asyn
 
 test('authorization follows the central GitHub OAuth URL and rejects lookalike destinations', async () => {
   const encryption = await loadSource('../src/services/E2EEncryption.ts');
-  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url, './pairingLink': links.url });
+  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url, './pairingLink': links.url, ...clientBuildImports });
   const { CloudAccountClient } = await import(authModule.url);
   const previous = { fetch: globalThis.fetch, window: globalThis.window, setTimeout: globalThis.setTimeout };
   globalThis.window = { setTimeout: previous.setTimeout, clearTimeout };
@@ -337,6 +350,7 @@ const encryptionStub = `data:text/javascript;base64,${Buffer.from(
 const accountClient = await loadSource('../src/services/CloudAccountClient.ts', {
   './E2EEncryption': encryptionStub,
   './pairingLink': links.url,
+  ...clientBuildImports,
 });
 const {
   CloudAccountClient, CloudAccountRequestError, CloudAccountTransportError,

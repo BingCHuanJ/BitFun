@@ -161,6 +161,13 @@ pub struct LoginRequest {
     pub device_os: Option<String>,
     #[serde(default)]
     pub device_os_version: Option<String>,
+    // The client build is reported camelCase, matching the realtime handshake
+    // and the client's login body, while the rest of this request stays
+    // snake_case for historical compatibility.
+    #[serde(default, rename = "clientVersion")]
+    pub client_version: Option<String>,
+    #[serde(default, rename = "clientProtocol")]
+    pub client_protocol: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -375,6 +382,23 @@ pub(crate) async fn login(
         Some(&body.device_kind),
         Some(&body.public_key),
         &metadata,
+    )
+    .await
+    .map_err(|error| {
+        err(
+            "device registration failed",
+            registration_error_status(&error),
+        )
+    })?;
+    // Refresh the client build from this login. An older client that omits the
+    // fields clears the stored values to NULL rather than leaving a stale build.
+    let client_version = crate::db::normalize_client_version(body.client_version.as_deref());
+    crate::db::DeviceRow::set_client_build(
+        db,
+        &user.user_id,
+        &body.device_id,
+        client_version.as_deref(),
+        body.client_protocol,
     )
     .await
     .map_err(|error| {
@@ -838,6 +862,91 @@ mod tests {
             .status(),
             StatusCode::NOT_FOUND
         );
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn login_records_and_clears_the_client_build() {
+        let (app, db, _) = setup_app().await;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/me", listener.local_addr().unwrap());
+        let authority = axum::Router::new().route(
+            "/me",
+            axum::routing::get(|headers: HeaderMap| async move {
+                if headers
+                    .get(header::AUTHORIZATION)
+                    .and_then(|h| h.to_str().ok())
+                    != Some("Bearer shared-account-token")
+                {
+                    return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({})));
+                }
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({"user":{"githubId":123,"login":"github-user"}})),
+                )
+            }),
+        );
+        let task = tokio::spawn(async move {
+            axum::serve(listener, authority).await.unwrap();
+        });
+        let app = app.layer(Extension(
+            crate::identity::IdentityVerifier::with_url(&url).unwrap(),
+        ));
+        let base = serde_json::json!({
+            "access_token":"shared-account-token",
+            "device_id":"new-device", "device_name":"Laptop", "device_kind":"desktop",
+            "public_key":BASE64.encode([9u8; 32]),
+            "request_id":uuid::Uuid::new_v4().to_string(),
+        });
+
+        // An old client that sends no build fields still logs in and stores NULL.
+        assert_eq!(
+            post_json(&app, "/api/auth/login", "", base.clone())
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        let row = DeviceRow::list_by_user(&db, "123").await.unwrap().remove(0);
+        assert!(row.client_version.is_none());
+        assert!(row.client_protocol.is_none());
+
+        // A newer client reports a build, which is written to the device row.
+        let mut reporting = base.clone();
+        reporting["clientVersion"] = serde_json::json!("1.4.0");
+        reporting["clientProtocol"] = serde_json::json!(7);
+        assert_eq!(
+            post_json(&app, "/api/auth/login", "", reporting)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        let row = DeviceRow::list_by_user(&db, "123").await.unwrap().remove(0);
+        assert_eq!(row.client_version.as_deref(), Some("1.4.0"));
+        assert_eq!(row.client_protocol_u32(), Some(7));
+
+        // An older client logging in again clears the recorded build to NULL
+        // instead of leaving the newer value behind.
+        assert_eq!(
+            post_json(&app, "/api/auth/login", "", base.clone())
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        let row = DeviceRow::list_by_user(&db, "123").await.unwrap().remove(0);
+        assert!(row.client_version.is_none());
+        assert!(row.client_protocol.is_none());
+
+        // A malformed build string is treated as unreported, not rejected.
+        let mut malformed = base.clone();
+        malformed["clientVersion"] = serde_json::json!("bad\nbuild");
+        assert_eq!(
+            post_json(&app, "/api/auth/login", "", malformed)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        let row = DeviceRow::list_by_user(&db, "123").await.unwrap().remove(0);
+        assert!(row.client_version.is_none());
         task.abort();
     }
 

@@ -222,6 +222,9 @@ The additive nullable fields are:
 | `device_model` | Host-reported device model |
 | `device_os` | Host-reported operating-system name |
 | `device_os_version` | Host-reported operating-system version |
+| `client_version` | Client build string reported at login/handshake, null when unreported |
+| `client_protocol` | Client protocol number reported at login/handshake, null when unreported |
+| `compatible` | Relay-computed; whether the requesting token's device may remote-control this device |
 
 `device_name` remains the technical/self-reported name; the Relay never replaces it
 with the alias. New clients display alias, then technical name, then device id as
@@ -256,11 +259,41 @@ negotiation before use; clients must not probe old servers with unknown mutation
 An older Relay returning `404`/`405` must produce an explicit unsupported state,
 not a successful local-only rename.
 
+### Client-build compatibility
+
+Newer clients also report their build so the Relay can refuse a remote-control
+pair it cannot prove compatible. `device_client_build_v1` advertises this: an
+optional `clientVersion` string and `clientProtocol` number travel with the
+realtime handshake and with `POST /api/auth/login`.
+
+- The device row stores the build from the **current** connection. Every login
+  and handshake refreshes both values, including writing `NULL` when the client
+  reports nothing, so a stale build is never left behind. `clientVersion` is
+  limited to 64 UTF-8 bytes with no control characters; a malformed or absent
+  value is treated as unreported rather than rejected, so an older client still
+  connects.
+- Compatibility is decided only from `clientProtocol`, and a report is required
+  rather than merely tolerated: control is allowed only when both sides reported
+  a protocol number and the numbers match. Two legacy clients that report
+  nothing, and any pair where either side never reported, are incompatible.
+- `GET /api/devices` reports the relay-computed `compatible` flag per target,
+  based on the requesting token's device row. Incompatible devices are still
+  listed, never hidden or deleted.
+- A `rpc-call` between incompatible devices is answered with a `failure`
+  acknowledgement — `incompatible client build: remote control requires matching
+  client versions` — and is not dispatched.
+
+Presence `device-presence` entries carry the raw `client_version` and
+`client_protocol` values only; the relay-computed `compatible` flag appears
+exclusively in `GET /api/devices`.
+
 Login and provisioning accept optional model/OS metadata. Omission by an older
 client preserves stored metadata, and neither registration nor reconnect changes
-the alias. Additive SQLite migrations preserve existing device rows; aliases and
-metadata survive Relay restart when the same persistent database is used. Startup
-resets stale online presence, not the alias or technical metadata.
+the alias. Login (and the realtime handshake) additionally report the client
+build described above, which is refreshed rather than preserved. Additive SQLite
+migrations preserve existing device rows; aliases and metadata survive Relay
+restart when the same persistent database is used. Startup resets stale online
+presence, not the alias or technical metadata.
 
 Successful patches notify online same-account clients through the existing
 `device-presence` channel, whose device entries also carry the new fields.

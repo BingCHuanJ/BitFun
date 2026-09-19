@@ -6,6 +6,7 @@ import {
   X as LucideX,
 } from 'lucide-react';
 import { deviceDisplayName, type RelayDeviceInfo } from '../services/RelayHttpClient';
+import { isDeviceControllable } from '../services/accountDeviceSelection';
 import AccountAvatar from './AccountAvatar';
 import React from 'react';
 import {
@@ -130,17 +131,21 @@ export default function CompactSettingsSheet({
         <MobileCard padding="none" className="harmony-sidebar__settings-card harmony-sidebar__settings-card--devices">
           {devices.map((device) => {
             const current = device.device_id === selectedDeviceId;
+            // A confirmed-incompatible device stays listed but is never a target.
+            const controllable = isDeviceControllable(device);
             return (
               <MobileListRow
                 appearance="plain"
                 className={`harmony-sidebar__settings-device${current ? ' is-current' : ''}`}
-                disabled={!device.online}
+                disabled={!device.online || !controllable}
                 key={device.device_id}
                 label={deviceDisplayName(device)}
                 leading={<span className="harmony-sidebar__settings-device-icon">{renderDeviceIcon(deviceDisplayName(device))}</span>}
                 onClick={() => onSelectDevice(device)}
                 selected={current}
-                supportingText={current ? t('settings.currentDevice') : device.online ? t('devices.online') : t('devices.offline')}
+                supportingText={!controllable
+                  ? t('devices.clientIncompatible')
+                  : current ? t('settings.currentDevice') : device.online ? t('devices.online') : t('devices.offline')}
                 trailing={<span className={`harmony-sidebar__status${device.online ? ' is-online' : ''}`} />}
               />
             );

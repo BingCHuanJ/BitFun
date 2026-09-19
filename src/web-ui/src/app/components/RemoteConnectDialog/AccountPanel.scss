@@ -210,6 +210,13 @@
     color: var(--openbitfun-color-content-secondary);
   }
 
+  &__device-incompatible {
+    color: var(--openbitfun-color-status-warning-content);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    overflow-wrap: break-word;
+  }
+
   &__device-alias-editor {
     display: flex;
     align-items: center;

@@ -2930,6 +2930,9 @@ pub struct AccountDeviceInfo {
     pub device_model: Option<String>,
     pub device_os: Option<String>,
     pub device_os_version: Option<String>,
+    pub device_client_version: Option<String>,
+    pub device_client_protocol: Option<u32>,
+    pub compatible: Option<bool>,
     pub online: bool,
     pub last_seen_at: Option<i64>,
 }
@@ -2961,6 +2964,9 @@ pub async fn account_list_devices() -> Result<Vec<AccountDeviceInfo>, String> {
             device_model: d.device_model,
             device_os: d.device_os,
             device_os_version: d.device_os_version,
+            device_client_version: d.device_client_version,
+            device_client_protocol: d.device_client_protocol,
+            compatible: d.compatible,
             online: d.online,
             last_seen_at: d.last_seen_at,
         })
@@ -3547,6 +3553,7 @@ mod sync_state_tests {
                 device_model: Some("Mac14,7".into()),
                 device_os: Some("macos".into()),
                 device_os_version: Some("15".into()),
+                ..Default::default()
             }],
         ));
 

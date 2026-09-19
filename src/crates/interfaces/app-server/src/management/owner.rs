@@ -1736,6 +1736,9 @@ fn project_account_snapshot(
                 device_model: device.device_model,
                 device_os: device.device_os,
                 device_os_version: device.device_os_version,
+                device_client_version: device.device_client_version,
+                device_client_protocol: device.device_client_protocol,
+                compatible: device.compatible,
                 online: device.online,
             })
             .collect(),

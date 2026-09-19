@@ -83,6 +83,10 @@ pub(crate) async fn server_info_for_host(host_version: &'static str) -> Json<Ser
         name: "OpenBitFun Relay Server".to_string(),
         version: host_version.to_string(),
         protocol_version: 3,
-        capabilities: vec!["device_alias_v1", "device_metadata_v1"],
+        capabilities: vec![
+            "device_alias_v1",
+            "device_metadata_v1",
+            "device_client_build_v1",
+        ],
     })
 }

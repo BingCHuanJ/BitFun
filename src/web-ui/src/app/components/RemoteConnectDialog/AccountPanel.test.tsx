@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   getDeviceInfo: vi.fn(), accountStatus: vi.fn(), accountLogin: vi.fn(),
   accountRelayCapabilities: vi.fn(), accountUpdateDevice: vi.fn(),
   accountConnectDevices: vi.fn(), accountListDevices: vi.fn(),
+  peerMode: { active: false } as { active: boolean },
+  switchToDevice: vi.fn(), switchToLocal: vi.fn(),
   t: (key: string) => key,
 }));
 const presenceListeners = vi.hoisted(() => [] as Array<(payload: { devices: Array<Record<string, unknown>> }) => void>);
@@ -23,7 +25,13 @@ vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
   },
 }));
 vi.mock('@/infrastructure/i18n', () => ({ useI18n: () => ({ t: mocks.t, formatRelativeTime: () => '' }) }));
-vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({ usePeerDeviceMode: () => ({ peerMode: { active: false } }) }));
+vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({
+  usePeerDeviceMode: () => ({
+    peerMode: mocks.peerMode,
+    switchToDevice: mocks.switchToDevice,
+    switchToLocal: mocks.switchToLocal,
+  }),
+}));
 vi.mock('@/infrastructure/confirm-dialog', () => ({ confirmDanger: vi.fn() }));
 vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({ success: vi.fn() }) }));
 vi.mock('@openbitfun/ui', () => {
@@ -41,6 +49,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.resetAllMocks();
   mocks.identity = { resolved: true, status: 'signed-in', me: { user: { githubId: 42, login: 'alice' } } };
+  mocks.peerMode = { active: false };
   mocks.getDeviceInfo.mockResolvedValueOnce({ device_id: 'local', device_name: 'My computer' })
     .mockImplementation(() => new Promise(() => {}));
   // A second initialization is deliberately held so the regression fails
@@ -310,4 +319,38 @@ it('merges presence metadata without clearing fields an older relay omits', asyn
   expect(container.textContent).toContain('Model');
   expect(container.textContent).toContain('Linux');
   expect(container.textContent).toContain('accountLogin.online');
+});
+
+it('keeps an incompatible device listed with a reason and never targets it', async () => {
+  mocks.accountRelayCapabilities.mockResolvedValue(['device_alias_v1']);
+  mocks.accountConnectDevices.mockResolvedValue([]);
+  mocks.getDeviceInfo.mockReset().mockResolvedValue({ device_id: 'local' });
+  mocks.accountListDevices.mockResolvedValue([
+    { device_id: 'local', device_name: 'My computer', online: true },
+    { device_id: 'peer', device_name: 'Old build', online: true, compatible: false, device_client_version: '0.9.0' },
+  ]);
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  // The device stays visible; the reason mentions the peer version.
+  expect(container.textContent).toContain('Old build');
+  expect(container.textContent).toContain('accountLogin.deviceClientIncompatibleWithVersion');
+  // No control target: the peer never becomes a peer-mode switch button.
+  expect(container.querySelector('button[aria-label="accountLogin.openDevice"]')).toBeNull();
+  expect(mocks.switchToDevice).not.toHaveBeenCalled();
+  // Alias editing is a plain directory operation and stays available on both rows.
+  expect(container.querySelectorAll('button[aria-label="accountLogin.editDeviceAlias"]').length).toBe(2);
+});
+
+it('still allows switching to a device whose compatibility flag is absent', async () => {
+  mocks.accountConnectDevices.mockResolvedValue([]);
+  mocks.getDeviceInfo.mockReset().mockResolvedValue({ device_id: 'local' });
+  mocks.switchToDevice.mockResolvedValue('activated');
+  mocks.accountListDevices.mockResolvedValue([
+    { device_id: 'local', device_name: 'My computer', online: true },
+    { device_id: 'peer', device_name: 'Peer build', online: true },
+  ]);
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  const peer = container.querySelector<HTMLButtonElement>('button[aria-label="accountLogin.openDevice"]');
+  expect(peer).not.toBeNull();
+  await act(async () => { peer!.click(); });
+  expect(mocks.switchToDevice).toHaveBeenCalledWith('peer', 'Peer build');
 });

@@ -39,6 +39,19 @@ export interface RelayDeviceInfo {
   device_model?: string | null;
   device_os?: string | null;
   device_os_version?: string | null;
+  /** Client build the device reported to the Relay. Absent on older Relays. */
+  client_version?: string | null;
+  /** Client wire protocol the device reported. Absent on older Relays. */
+  client_protocol?: number | null;
+  /**
+   * Relay-computed mutual-control compatibility of this device with this one.
+   *
+   * `false` means confirmed incompatible: either a client build/protocol
+   * mismatch or a peer that reported no version information (an older client).
+   * Absent only on an older Relay that does not gate at all, which must be
+   * treated as "unknown but usable", never as incompatible.
+   */
+  compatible?: boolean;
   online: boolean;
   last_seen_at?: number | null;
 }

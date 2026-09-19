@@ -1,4 +1,4 @@
-import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
+import { useDeviceDirectory, resolveDeviceName, isDeviceControllable, deviceClientVersion } from '@/infrastructure/account/deviceDirectory';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OverflowText, Button, Card, CardBody, CardFooter, CardHeader, Icon, IconButton, ScrollArea } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
@@ -129,6 +129,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
   const connectPreview = async () => {
     if (!peerContext || !availableTargets || !previewTarget || !isPreviewing || switchingRef.current || returningLocal) return;
     const target = previewTarget;
+    // A confirmed-incompatible peer is shown so its state is legible, but it is
+    // never a control target. This machine is never gated by its own flag.
+    if (target.device_id !== availableTargets.localId && !isDeviceControllable(target)) return;
     switchingRef.current = true;
     setSwitchingDevice(true);
     try {
@@ -372,17 +375,38 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 <div className="openbitfun-device-overview__carousel-viewport">
                   <div className="openbitfun-device-overview__carousel-track"
                     style={{ transform: `translateX(-${previewIndex * 100}%)` }}>
-                    {previewDevices.map((device, index) => (
+                    {previewDevices.map((device, index) => {
+                      const slideTarget = availableTargets?.devices[index];
+                      // A confirmed-incompatible peer stays in the carousel so its
+                      // state is legible, but it never becomes a control target.
+                      const incompatible = Boolean(slideTarget
+                        && slideTarget.device_id !== availableTargets?.localId
+                        && !isDeviceControllable(slideTarget));
+                      const incompatibleVersion = slideTarget ? deviceClientVersion(slideTarget) : null;
+                      const incompatibleNotice = incompatibleVersion
+                        ? t('deviceOverview.deviceClientIncompatibleWithVersion', { version: incompatibleVersion })
+                        : t('deviceOverview.deviceClientIncompatible');
+                      return (
                       <div className="openbitfun-device-overview__carousel-slide" key={availableTargets?.devices[index]?.device_id ?? device.id}
                         aria-hidden={index !== previewIndex}>
                         <div className="openbitfun-device-overview__device-switcher">
                           <DeviceArtwork device={device} />
                           {index === previewIndex && isPreviewing && (
                             <div className="openbitfun-device-overview__connect-overlay">
-                              <Button variant="outline" size="sm" disabled={switchingDevice || returningLocal}
-                                onClick={() => { void connectPreview(); }}>
-                                {t('deviceOverview.connectDevice')}
-                              </Button>
+                              {incompatible ? (
+                                <span
+                                  className="openbitfun-device-overview__incompatible"
+                                  data-testid="nav-device-status-incompatible"
+                                  title={incompatibleNotice}
+                                >
+                                  {incompatibleNotice}
+                                </span>
+                              ) : (
+                                <Button variant="outline" size="sm" disabled={switchingDevice || returningLocal}
+                                  onClick={() => { void connectPreview(); }}>
+                                  {t('deviceOverview.connectDevice')}
+                                </Button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -390,10 +414,13 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                           {device.name}
                         </span>
                         <span className="openbitfun-device-overview__activity">
-                          {index === previewIndex && !isPreviewing ? deviceActivity(overview.primaryDevice) : '\u00a0'}
+                          {index === previewIndex && !isPreviewing
+                            ? (incompatible ? incompatibleNotice : deviceActivity(overview.primaryDevice))
+                            : '\u00a0'}
                         </span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="openbitfun-device-overview__carousel-controls">

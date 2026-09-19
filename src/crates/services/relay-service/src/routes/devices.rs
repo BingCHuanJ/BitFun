@@ -98,6 +98,11 @@ pub struct DeviceListEntry {
     pub device_model: Option<String>,
     pub device_os: Option<String>,
     pub device_os_version: Option<String>,
+    pub client_version: Option<String>,
+    pub client_protocol: Option<u32>,
+    /// Relay-computed: whether this device can be remote-controlled by the
+    /// caller, based on the two stored client protocol versions.
+    pub compatible: bool,
     pub online: bool,
     pub last_seen_at: Option<i64>,
 }
@@ -112,6 +117,20 @@ async fn list_devices(
 ) -> Result<Json<Vec<DeviceListEntry>>, StatusCode> {
     let auth = validate_user(&state, &headers).await?;
     let user_id = auth.user_id.clone();
+
+    // The caller's own stored build decides compatibility. For a delegated
+    // controller token this is the row of the device the token belongs to.
+    let caller_protocol = crate::db::stored_client_protocol(
+        sqlx::query_scalar::<_, Option<i64>>(
+            "SELECT client_protocol FROM devices WHERE user_id = ? AND device_id = ?",
+        )
+        .bind(&auth.user_id)
+        .bind(&auth.device_id)
+        .fetch_optional(state.db.as_ref())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .flatten(),
+    );
 
     // Get online devices from DeviceManager (in-memory)
     let online = state.device_manager.online_devices(&user_id);
@@ -130,6 +149,7 @@ async fn list_devices(
                     continue;
                 }
                 let is_online = online_ids.contains(&row.device_id);
+                let target_protocol = row.client_protocol_u32();
                 devices.push(DeviceListEntry {
                     device_id: row.device_id,
                     device_name: row.device_name.unwrap_or_default(),
@@ -138,6 +158,12 @@ async fn list_devices(
                     device_model: row.device_model,
                     device_os: row.device_os,
                     device_os_version: row.device_os_version,
+                    client_version: row.client_version,
+                    client_protocol: target_protocol,
+                    compatible: crate::db::client_builds_compatible(
+                        caller_protocol,
+                        target_protocol,
+                    ),
                     online: is_online,
                     last_seen_at: row.last_seen_at,
                 });
@@ -161,6 +187,9 @@ async fn list_devices(
                 device_model: None,
                 device_os: None,
                 device_os_version: None,
+                client_version: None,
+                client_protocol: None,
+                compatible: crate::db::client_builds_compatible(caller_protocol, None),
                 online: true,
                 last_seen_at: None,
             });
@@ -723,6 +752,77 @@ mod tests {
             .into_iter()
             .map(|entry| entry["device_id"].as_str().unwrap().to_string())
             .collect()
+    }
+
+    async fn listed_devices(app: &axum::Router, token: &str) -> Vec<serde_json::Value> {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/devices")
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    fn entry<'a>(devices: &'a [serde_json::Value], id: &str) -> &'a serde_json::Value {
+        devices
+            .iter()
+            .find(|device| device["device_id"] == id)
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn device_directory_reports_client_build_compatibility() {
+        let ctx = setup_app().await;
+
+        // Legacy-to-legacy: neither side reports a build, so compatibility
+        // cannot be proven and the device is reported as incompatible — but it
+        // is still listed, never hidden.
+        let devices = listed_devices(&ctx.app, &ctx.owner_token).await;
+        let target = entry(&devices, "target-device");
+        assert_eq!(target["compatible"], false);
+        assert_eq!(target["device_name"], "Target");
+        assert_eq!(target["client_version"], serde_json::Value::Null);
+        assert_eq!(target["client_protocol"], serde_json::Value::Null);
+
+        // The caller reports but the target does not: compatibility cannot be
+        // proven, so the pair is reported as incompatible.
+        DeviceRow::set_client_build(&ctx.db, "owner", "owner-device", Some("1.0.0"), Some(5))
+            .await
+            .unwrap();
+        let devices = listed_devices(&ctx.app, &ctx.owner_token).await;
+        assert_eq!(entry(&devices, "target-device")["compatible"], false);
+        assert_eq!(entry(&devices, "owner-device")["compatible"], true);
+
+        // Matching protocols are compatible and both fields are exposed.
+        DeviceRow::set_client_build(&ctx.db, "owner", "target-device", Some("1.2.0"), Some(5))
+            .await
+            .unwrap();
+        let devices = listed_devices(&ctx.app, &ctx.owner_token).await;
+        let target = entry(&devices, "target-device");
+        assert_eq!(target["compatible"], true);
+        assert_eq!(target["client_version"], "1.2.0");
+        assert_eq!(target["client_protocol"], 5);
+
+        // Differing protocols are incompatible but the device stays listed.
+        DeviceRow::set_client_build(&ctx.db, "owner", "target-device", Some("1.3.0"), Some(6))
+            .await
+            .unwrap();
+        let devices = listed_devices(&ctx.app, &ctx.owner_token).await;
+        let target = entry(&devices, "target-device");
+        assert_eq!(target["compatible"], false);
+        assert_eq!(target["device_name"], "Target");
+        assert_eq!(target["client_protocol"], 6);
     }
 
     #[tokio::test]

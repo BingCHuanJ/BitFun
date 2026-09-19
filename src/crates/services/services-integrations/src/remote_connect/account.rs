@@ -271,6 +271,29 @@ impl Default for AccountClient {
     }
 }
 
+/// The GitHub/relay login request body.
+///
+/// `clientVersion`/`clientProtocol` are optional from the Relay's point of view,
+/// but a current build always reports both so the Relay can gate control
+/// compatibility instead of treating this device as legacy.
+fn login_request_body(
+    access_token: &str,
+    device: &DeviceIdentity,
+    public_key: String,
+    request_id: String,
+) -> serde_json::Value {
+    serde_json::json!({
+        "access_token": access_token,
+        "device_id": device.device_id,
+        "device_name": device.device_name,
+        "device_kind": "desktop",
+        "public_key": public_key,
+        "request_id": request_id,
+        "clientVersion": openbitfun_product_domains::account::client_version(),
+        "clientProtocol": openbitfun_product_domains::account::CLIENT_PROTOCOL_VERSION,
+    })
+}
+
 impl AccountClient {
     /// Reuse the shared GitHub login used by the OpenBitFun marketplaces.
     pub async fn login_with_identity(
@@ -297,14 +320,12 @@ impl AccountClient {
             .ok_or_else(|| anyhow!("Unsupported account identity"))?;
         let device_secret =
             super::session_store::device_secret(relay_url, &account_id, &device.device_id)?;
-        let body = serde_json::json!({
-            "access_token": access_token,
-            "device_id": device.device_id,
-            "device_name": device.device_name,
-            "device_kind": "desktop",
-            "public_key": device_crypto::public_key_base64(&device_secret),
-            "request_id": uuid::Uuid::new_v4().to_string(),
-        });
+        let body = login_request_body(
+            &access_token,
+            device,
+            device_crypto::public_key_base64(&device_secret),
+            uuid::Uuid::new_v4().to_string(),
+        );
         let response = send_with_retry(
             "GitHub relay login",
             self.http
@@ -496,21 +517,7 @@ impl AccountClient {
             return Err(Self::into_buffered_error(resp));
         }
         let entries: Vec<DeviceListEntry> = resp.json().await?;
-        Ok(entries
-            .into_iter()
-            .map(|e| DeviceInfo {
-                device_id: e.device_id,
-                device_name: e.device_name,
-                device_alias: e.device_alias,
-                device_model: e.device_model,
-                device_os: e.device_os,
-                device_os_version: e.device_os_version,
-                // Legacy relays omit `online` and only return currently-online
-                // devices; treat a missing field as online.
-                online: e.online.unwrap_or(true),
-                last_seen_at: e.last_seen_at,
-            })
-            .collect())
+        Ok(entries.into_iter().map(project_device_list_entry).collect())
     }
 
     /// Missing capabilities (including an old info endpoint) mean unsupported.
@@ -735,8 +742,36 @@ pub struct DeviceInfo {
     pub device_os: Option<String>,
     #[serde(default)]
     pub device_os_version: Option<String>,
+    /// Build string the device last reported to the Relay. Absent for legacy
+    /// devices and for Relays that predate the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_client_version: Option<String>,
+    /// Control-contract protocol number the device last reported. Absent for
+    /// legacy devices and for Relays that predate the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_client_protocol: Option<u32>,
+    /// Relay-computed compatibility with this client's control contract.
+    /// `None` means unknown (an older Relay without the field) and must be
+    /// treated as compatible rather than incompatible.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compatible: Option<bool>,
     pub online: bool,
     pub last_seen_at: Option<i64>,
+}
+
+impl DeviceInfo {
+    /// Whether the Relay considers this device compatible with our control
+    /// contract.
+    ///
+    /// `Some(false)` is the Relay's verdict that the pair must not be
+    /// remote-controlled (a device that never reported a protocol number, or
+    /// one whose number differs). `None` means an older Relay that predates the
+    /// gating field and cannot judge, which is unknown and treated as
+    /// compatible. These are different situations; do not fold the
+    /// missing-version case into the fallback.
+    pub fn is_compatible(&self) -> bool {
+        self.compatible.unwrap_or(true)
+    }
 }
 
 #[derive(Deserialize)]
@@ -751,12 +786,39 @@ struct DeviceListEntry {
     device_os: Option<String>,
     #[serde(default)]
     device_os_version: Option<String>,
+    /// Relay field `client_version`; absent on legacy Relays.
+    #[serde(default, rename = "client_version", alias = "clientVersion")]
+    device_client_version: Option<String>,
+    /// Relay field `client_protocol`; absent on legacy Relays.
+    #[serde(default, rename = "client_protocol", alias = "clientProtocol")]
+    device_client_protocol: Option<u32>,
+    /// Relay-computed; absent on legacy Relays.
+    #[serde(default)]
+    compatible: Option<bool>,
     /// Absent on legacy relays that only listed in-memory online devices.
     /// `None` means "legacy online list" → treat as online.
     #[serde(default)]
     online: Option<bool>,
     #[serde(default)]
     last_seen_at: Option<i64>,
+}
+
+fn project_device_list_entry(entry: DeviceListEntry) -> DeviceInfo {
+    DeviceInfo {
+        device_id: entry.device_id,
+        device_name: entry.device_name,
+        device_alias: entry.device_alias,
+        device_model: entry.device_model,
+        device_os: entry.device_os,
+        device_os_version: entry.device_os_version,
+        device_client_version: entry.device_client_version,
+        device_client_protocol: entry.device_client_protocol,
+        compatible: entry.compatible,
+        // Legacy relays omit `online` and only return currently-online
+        // devices; treat a missing field as online.
+        online: entry.online.unwrap_or(true),
+        last_seen_at: entry.last_seen_at,
+    }
 }
 
 #[cfg(test)]
@@ -781,6 +843,71 @@ mod tests {
         assert_eq!(entry.device_name, "technical");
         assert_eq!(entry.online, None);
         assert_eq!(entry.device_os_version, None);
+    }
+
+    #[test]
+    fn login_request_body_always_reports_client_protocol_and_version() {
+        let device = DeviceIdentity {
+            device_id: "0123456789abcdef0123456789abcdef".to_string(),
+            device_name: "Laptop".to_string(),
+            mac_address: "aa:bb:cc:dd:ee:ff".to_string(),
+        };
+        let body = login_request_body("token-1", &device, "public-key".to_string(), "req-1".into());
+        assert_eq!(
+            body["clientProtocol"].as_u64(),
+            Some(openbitfun_product_domains::account::CLIENT_PROTOCOL_VERSION as u64)
+        );
+        assert_eq!(
+            body["clientVersion"].as_str(),
+            Some(openbitfun_product_domains::account::client_version())
+        );
+        assert_eq!(body["device_id"], device.device_id);
+        assert_eq!(body["request_id"], "req-1");
+    }
+
+    #[test]
+    fn device_directory_projects_client_compatibility_for_legacy_and_extended_relays() {
+        // Legacy Relay rows have neither the new build fields nor `compatible`.
+        let legacy: DeviceListEntry = serde_json::from_value(serde_json::json!({
+            "device_id": "id", "device_name": "technical", "online": true
+        }))
+        .unwrap();
+        let projected = project_device_list_entry(legacy);
+        assert!(projected.device_client_version.is_none());
+        assert!(projected.device_client_protocol.is_none());
+        assert!(projected.compatible.is_none());
+        assert!(projected.is_compatible());
+
+        // A current Relay reports the build fields and the computed flag.
+        let extended: DeviceListEntry = serde_json::from_value(serde_json::json!({
+            "device_id": "id", "device_name": "technical", "online": true,
+            "client_version": "1.0.1", "client_protocol": 2, "compatible": false
+        }))
+        .unwrap();
+        let projected = project_device_list_entry(extended);
+        assert_eq!(projected.device_client_version.as_deref(), Some("1.0.1"));
+        assert_eq!(projected.device_client_protocol, Some(2));
+        assert!(!projected.is_compatible());
+
+        // A device that never reported a version is judged incompatible by the
+        // Relay: no build fields, present `compatible: false`.
+        let unversioned: DeviceListEntry = serde_json::from_value(serde_json::json!({
+            "device_id": "id", "device_name": "technical", "online": true, "compatible": false
+        }))
+        .unwrap();
+        let projected = project_device_list_entry(unversioned);
+        assert!(projected.device_client_protocol.is_none());
+        assert!(!projected.is_compatible());
+
+        // The camelCase aliases are accepted for forward tolerance.
+        let aliased: DeviceListEntry = serde_json::from_value(serde_json::json!({
+            "device_id": "id", "device_name": "technical",
+            "clientVersion": "1.0.1", "clientProtocol": 2, "compatible": true
+        }))
+        .unwrap();
+        assert_eq!(aliased.device_client_version.as_deref(), Some("1.0.1"));
+        assert_eq!(aliased.device_client_protocol, Some(2));
+        assert_eq!(aliased.compatible, Some(true));
     }
 
     #[tokio::test]

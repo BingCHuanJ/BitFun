@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS devices (
   device_model TEXT,
   device_os TEXT,
   device_os_version TEXT,
+  client_version TEXT,
+  client_protocol INTEGER,
   public_key   TEXT,
   last_seen_at INTEGER,
   online       INTEGER NOT NULL DEFAULT 0,
@@ -149,6 +151,14 @@ const MIGRATE_DEVICE_DIRECTORY_METADATA: [&str; 4] = [
     "ALTER TABLE devices ADD COLUMN device_os_version TEXT",
 ];
 
+/// The client build a device last connected with. Unlike directory metadata,
+/// these are refreshed from the *current* connection on every login and
+/// handshake, so an unreported value is stored as NULL rather than preserved.
+const MIGRATE_DEVICE_CLIENT_BUILD: [&str; 2] = [
+    "ALTER TABLE devices ADD COLUMN client_version TEXT",
+    "ALTER TABLE devices ADD COLUMN client_protocol INTEGER",
+];
+
 /// Open (or create) the SQLite database and ensure the schema exists.
 pub async fn connect(db_path: &str) -> Result<DbPool> {
     connect_with_presence_reset(db_path, true).await
@@ -238,6 +248,15 @@ async fn connect_with_presence_reset(db_path: &str, reset_presence: bool) -> Res
         if let Err(error) = sqlx::query(migration).execute(&pool).await {
             if !error.to_string().contains("duplicate column name") {
                 return Err(anyhow!("migrate device directory metadata: {error}"));
+            }
+        }
+    }
+    // Runs after the account-scoping rebuild and the device-kind column, so it
+    // covers both a rebuilt table and a database that never needed rebuilding.
+    for migration in MIGRATE_DEVICE_CLIENT_BUILD {
+        if let Err(error) = sqlx::query(migration).execute(&pool).await {
+            if !error.to_string().contains("duplicate column name") {
+                return Err(anyhow!("migrate device client build: {error}"));
             }
         }
     }
@@ -577,6 +596,36 @@ impl DeviceMetadata {
     }
 }
 
+/// Upper bound on a self-reported client build string. It is deliberately
+/// short: it records a released client identity, not user content.
+pub const MAX_CLIENT_VERSION_BYTES: usize = 64;
+
+/// Normalize a client-reported build string. A blank, oversized, or
+/// control-character-bearing value is treated as unreported (`None`) so a noisy
+/// or buggy client still connects instead of being rejected at the handshake.
+pub fn normalize_client_version(value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    if value.is_empty()
+        || value.len() > MAX_CLIENT_VERSION_BYTES
+        || value.chars().any(char::is_control)
+    {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+/// Decide whether a caller and a target may exchange remote control.
+///
+/// A reported build is required, not merely tolerated: control is allowed only
+/// when both sides reported a protocol number and the numbers match. Two legacy
+/// clients that report nothing, and any pair where either side never reported,
+/// are incompatible because a matching build cannot be proven. This is the
+/// single implementation used by the directory projection and the RPC dispatch
+/// gate.
+pub fn client_builds_compatible(caller: Option<u32>, target: Option<u32>) -> bool {
+    matches!((caller, target), (Some(caller), Some(target)) if caller == target)
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct DeviceRow {
     pub device_id: String,
@@ -587,12 +636,25 @@ pub struct DeviceRow {
     pub device_model: Option<String>,
     pub device_os: Option<String>,
     pub device_os_version: Option<String>,
+    pub client_version: Option<String>,
+    pub client_protocol: Option<i64>,
     pub public_key: Option<String>,
     pub last_seen_at: Option<i64>,
     pub online: i64,
 }
 
+/// Convert a stored `client_protocol` integer into the wire type. An absent or
+/// out-of-range value is reported as `None` (unreported).
+pub fn stored_client_protocol(value: Option<i64>) -> Option<u32> {
+    value.and_then(|value| u32::try_from(value).ok())
+}
+
 impl DeviceRow {
+    /// The stored client protocol as the wire type. `None` means the device has
+    /// never reported one (a legacy row) or the stored value is out of range.
+    pub fn client_protocol_u32(&self) -> Option<u32> {
+        stored_client_protocol(self.client_protocol)
+    }
     pub async fn upsert(
         pool: &DbPool,
         device_id: &str,
@@ -676,7 +738,7 @@ impl DeviceRow {
 
     pub async fn list_by_user(pool: &DbPool, user_id: &str) -> Result<Vec<DeviceRow>> {
         let rows = sqlx::query_as::<_, DeviceRow>(
-            "SELECT device_id, user_id, device_name, device_kind, device_alias, device_model, device_os, device_os_version, public_key, last_seen_at, online \
+            "SELECT device_id, user_id, device_name, device_kind, device_alias, device_model, device_os, device_os_version, client_version, client_protocol, public_key, last_seen_at, online \
              FROM devices WHERE user_id = ?",
         )
         .bind(user_id)
@@ -684,6 +746,36 @@ impl DeviceRow {
         .await
         .map_err(|e| anyhow!("list devices: {e}"))?;
         Ok(rows)
+    }
+
+    /// Record the client build of the connection that just authenticated.
+    ///
+    /// Both columns are overwritten from the *current* connection, including
+    /// with NULL when the client reports nothing. This intentionally differs
+    /// from directory metadata: a build string is a fact about the live
+    /// connection, so a client that upgrades, downgrades, or stops reporting
+    /// must never leave a stale value behind. Returns the number of device rows
+    /// updated; a delegated controller resolves to a routing id with no row, so
+    /// it updates nothing.
+    pub async fn set_client_build(
+        pool: &DbPool,
+        user_id: &str,
+        device_id: &str,
+        client_version: Option<&str>,
+        client_protocol: Option<u32>,
+    ) -> Result<u64> {
+        let result = sqlx::query(
+            "UPDATE devices SET client_version = ?, client_protocol = ? \
+             WHERE user_id = ? AND device_id = ?",
+        )
+        .bind(client_version)
+        .bind(client_protocol.map(i64::from))
+        .bind(user_id)
+        .bind(device_id)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("set device client build: {e}"))?;
+        Ok(result.rows_affected())
     }
 
     /// Delete a device owned by `user_id` and revoke all of its auth tokens.
@@ -2633,6 +2725,128 @@ mod tests {
         assert_eq!(rows[0].device_os.as_deref(), Some("Linux"));
         assert_eq!(rows[0].device_os_version.as_deref(), Some("6"));
         pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn client_build_migration_is_additive_and_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.db");
+        let path = path.to_str().unwrap();
+        let pool = connect(path).await.unwrap();
+        UserRow::create(&pool, "owner", "owner").await.unwrap();
+        DeviceRow::upsert(&pool, "device", "owner", "Technical", None, None)
+            .await
+            .unwrap();
+        let token = AuthToken::create(&pool, "owner", "device").await.unwrap();
+        // Simulate a database written before the client-build columns existed.
+        for column in ["client_version", "client_protocol"] {
+            sqlx::query(&format!("ALTER TABLE devices DROP COLUMN {column}"))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        pool.close().await;
+
+        // Reopening re-adds the columns as NULL and keeps the existing row/token.
+        let pool = connect(path).await.unwrap();
+        let rows = DeviceRow::list_by_user(&pool, "owner").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].client_version.is_none());
+        assert!(rows[0].client_protocol.is_none());
+        assert!(AuthToken::find(&pool, &token.token)
+            .await
+            .unwrap()
+            .is_some());
+        DeviceRow::set_client_build(&pool, "owner", "device", Some("1.2.3"), Some(7))
+            .await
+            .unwrap();
+        pool.close().await;
+
+        // The values survive another startup, and the ALTER stays idempotent.
+        let pool = connect(path).await.unwrap();
+        let rows = DeviceRow::list_by_user(&pool, "owner").await.unwrap();
+        assert_eq!(rows[0].client_version.as_deref(), Some("1.2.3"));
+        assert_eq!(rows[0].client_protocol_u32(), Some(7));
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn set_client_build_refreshes_to_null_when_unreported() {
+        let pool = connect(":memory:").await.unwrap();
+        UserRow::create(&pool, "owner", "owner").await.unwrap();
+        DeviceRow::upsert(&pool, "device", "owner", "Technical", None, None)
+            .await
+            .unwrap();
+
+        // A reconnect that reports a new build replaces the old one rather than
+        // preserving it.
+        DeviceRow::set_client_build(&pool, "owner", "device", Some("1.0.0"), Some(3))
+            .await
+            .unwrap();
+        let row = DeviceRow::list_by_user(&pool, "owner")
+            .await
+            .unwrap()
+            .remove(0);
+        assert_eq!(row.client_version.as_deref(), Some("1.0.0"));
+        assert_eq!(row.client_protocol_u32(), Some(3));
+
+        DeviceRow::set_client_build(&pool, "owner", "device", Some("1.1.0"), Some(4))
+            .await
+            .unwrap();
+        let row = DeviceRow::list_by_user(&pool, "owner")
+            .await
+            .unwrap()
+            .remove(0);
+        assert_eq!(row.client_version.as_deref(), Some("1.1.0"));
+        assert_eq!(row.client_protocol_u32(), Some(4));
+
+        // A later connection that reports nothing must clear the values rather
+        // than roll back to an earlier one.
+        DeviceRow::set_client_build(&pool, "owner", "device", None, None)
+            .await
+            .unwrap();
+        let row = DeviceRow::list_by_user(&pool, "owner")
+            .await
+            .unwrap()
+            .remove(0);
+        assert!(row.client_version.is_none());
+        assert!(row.client_protocol.is_none());
+
+        // A delegated controller resolves to a routing id with no device row.
+        assert_eq!(
+            DeviceRow::set_client_build(&pool, "owner", "controller-elsewhere", Some("9"), Some(1))
+                .await
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn client_build_compatibility_requires_matching_reports() {
+        // Only an explicit, matching report is compatible. No report on either
+        // side is incompatible, including legacy-to-legacy.
+        assert!(!client_builds_compatible(None, None));
+        assert!(client_builds_compatible(Some(3), Some(3)));
+        assert!(!client_builds_compatible(Some(3), Some(4)));
+        // A single-sided report cannot prove compatibility.
+        assert!(!client_builds_compatible(Some(3), None));
+        assert!(!client_builds_compatible(None, Some(3)));
+    }
+
+    #[test]
+    fn client_version_normalization_rejects_unreported_shapes() {
+        assert_eq!(normalize_client_version(None), None);
+        assert_eq!(normalize_client_version(Some("  ")), None);
+        assert_eq!(normalize_client_version(Some("back\nline")), None);
+        assert_eq!(normalize_client_version(Some(&"a".repeat(65))), None);
+        assert_eq!(
+            normalize_client_version(Some(" 1.2.3 ")),
+            Some("1.2.3".to_string())
+        );
+        assert_eq!(
+            normalize_client_version(Some(&"a".repeat(64))),
+            Some("a".repeat(64))
+        );
     }
 
     #[tokio::test]

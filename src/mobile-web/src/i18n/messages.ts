@@ -326,6 +326,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       editAlias: 'Edit name',
       saveAlias: 'Save name',
       aliasUnsupported: 'This older Relay does not support device aliases. Update the Relay to rename devices.',
+      clientIncompatible: 'Incompatible client — this device cannot be controlled here',
     },
     tools: {
       ls: 'LS',
@@ -655,6 +656,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       editAlias: '编辑名称',
       saveAlias: '保存名称',
       aliasUnsupported: '旧版 Relay 不支持设备别名，请升级 Relay 后重试。',
+      clientIncompatible: '客户端版本不兼容，无法互控。',
     },
     tools: {
       ls: '列表',
@@ -984,6 +986,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       editAlias: '編輯名稱',
       saveAlias: '儲存名稱',
       aliasUnsupported: '舊版 Relay 不支援裝置別名，請升級 Relay 後重試。',
+      clientIncompatible: '客戶端版本不相容，無法互控。',
     },
     tools: {
       ls: '列表',

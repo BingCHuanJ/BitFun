@@ -1,4 +1,4 @@
-import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
+import { useDeviceDirectory, resolveDeviceName, isDeviceControllable } from '@/infrastructure/account/deviceDirectory';
 import { useAccountIdentity } from '@/infrastructure/account-identity';
 /**
  * Account device roster for the sidebar device switcher.
@@ -24,6 +24,8 @@ export interface DeviceRosterEntry {
   deviceName: string;
   online: boolean;
   isLocal: boolean;
+  /** Relay-confirmed client compatibility; `false` blocks mutual control. */
+  controllable: boolean;
 }
 
 export interface AccountDeviceRoster {
@@ -67,6 +69,7 @@ export function useAccountDeviceRoster(): AccountDeviceRoster {
               deviceName: deviceDisplayName(device),
               online: device.online,
               isLocal: false,
+              controllable: isDeviceControllable(device),
             })),
         );
       } catch (error) {
@@ -114,6 +117,7 @@ export function useAccountDeviceRoster(): AccountDeviceRoster {
         deviceName: localDeviceName || localDeviceId,
         online: true,
         isLocal: true,
+        controllable: true,
       },
       ...sortedPeers,
     ];

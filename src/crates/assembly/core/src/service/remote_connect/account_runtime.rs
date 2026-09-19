@@ -84,6 +84,15 @@ pub struct AccountDevice {
     pub device_model: Option<String>,
     pub device_os: Option<String>,
     pub device_os_version: Option<String>,
+    /// Build string the device last reported to the Relay; absent for legacy
+    /// devices and older Relays.
+    pub device_client_version: Option<String>,
+    /// Control-contract protocol number the device last reported; absent for
+    /// legacy devices and older Relays.
+    pub device_client_protocol: Option<u32>,
+    /// Relay-computed compatibility with our control contract. `None` means
+    /// unknown (older Relay) and must be treated as compatible.
+    pub compatible: Option<bool>,
     pub online: bool,
 }
 
@@ -545,6 +554,9 @@ impl AccountRuntime {
                 device_model: device.device_model,
                 device_os: device.device_os,
                 device_os_version: device.device_os_version,
+                device_client_version: device.device_client_version,
+                device_client_protocol: device.device_client_protocol,
+                compatible: device.compatible,
                 online: device.online,
             })
             .collect())

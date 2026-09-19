@@ -1,4 +1,4 @@
-import { refreshDeviceDirectory } from '@/infrastructure/account/deviceDirectory';
+import { refreshDeviceDirectory, isDeviceControllable, deviceClientVersion } from '@/infrastructure/account/deviceDirectory';
 /** Account login and authenticated device connections. */
 
 import { OverflowText, Alert, Avatar, Button, Icon, IconButton, Input, ScrollArea, StatusPill } from '@openbitfun/ui';
@@ -77,6 +77,11 @@ function mergePresenceDevice(device: AccountDeviceInfo, presence: OnlineDeviceIn
     ...(presence.device_model !== undefined ? { device_model: presence.device_model } : {}),
     ...(presence.device_os !== undefined ? { device_os: presence.device_os } : {}),
     ...(presence.device_os_version !== undefined ? { device_os_version: presence.device_os_version } : {}),
+    ...(presence.device_client_version !== undefined ? { device_client_version: presence.device_client_version } : {}),
+    ...(presence.client_version !== undefined ? { client_version: presence.client_version } : {}),
+    ...(presence.device_client_protocol !== undefined ? { device_client_protocol: presence.device_client_protocol } : {}),
+    ...(presence.client_protocol !== undefined ? { client_protocol: presence.client_protocol } : {}),
+    ...(presence.compatible !== undefined ? { compatible: presence.compatible } : {}),
     device_name: presence.device_name || device.device_name,
     online: true,
   };
@@ -286,6 +291,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               ...(d.device_model !== undefined ? { device_model: d.device_model } : {}),
               ...(d.device_os !== undefined ? { device_os: d.device_os } : {}),
               ...(d.device_os_version !== undefined ? { device_os_version: d.device_os_version } : {}),
+              ...(d.device_client_version !== undefined ? { device_client_version: d.device_client_version } : {}),
+              ...(d.client_version !== undefined ? { client_version: d.client_version } : {}),
+              ...(d.device_client_protocol !== undefined ? { device_client_protocol: d.device_client_protocol } : {}),
+              ...(d.client_protocol !== undefined ? { client_protocol: d.client_protocol } : {}),
+              ...(d.compatible !== undefined ? { compatible: d.compatible } : {}),
               online: true,
               last_seen_at: Math.floor(Date.now() / 1000),
             });
@@ -616,6 +626,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     // Picking this machine is a normal surface switch back, not a no-op: the
     // window may currently be rendering a peer.
     const isLocalDevice = Boolean(localDeviceId) && device.device_id === localDeviceId;
+    // A confirmed-incompatible peer is never a control target. Renaming stays a
+    // plain directory operation and is handled by its own row action.
+    if (!isLocalDevice && !isDeviceControllable(device)) return;
     setLoading(true);
     setError(null);
     try {
@@ -724,9 +737,15 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   const isLocal = localDeviceId === d.device_id;
                   // This machine is selectable while the window renders a peer,
                   // so the dialog can bring the UI back without disconnecting.
-                  const isSelectable = isLocal
-                    ? peerMode.active
-                    : d.online;
+                  // A confirmed-incompatible peer stays listed but is never a
+                  // control target; this machine is never gated by its own flag.
+                  const deviceControllable = isLocal || isDeviceControllable(d);
+                  const isSelectable = (isLocal ? peerMode.active : d.online) && deviceControllable;
+                  const incompatible = isLocal ? false : !isDeviceControllable(d);
+                  const incompatibleVersion = deviceClientVersion(d);
+                  const incompatibleNotice = incompatibleVersion
+                    ? t('accountLogin.deviceClientIncompatibleWithVersion', { version: incompatibleVersion })
+                    : t('accountLogin.deviceClientIncompatible');
                   const removeLabel = isLocal
                     ? t('accountLogin.removeCurrentDevice')
                     : t('accountLogin.removeDevice');
@@ -799,6 +818,14 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                               : t('accountLogin.offline')}</span>
                           {metadata && <span className="account-panel__device-meta-detail">{` · ${metadata}`}</span>}
                         </span>
+                        {incompatible && (
+                          <span
+                            className="account-panel__device-incompatible"
+                            title={incompatibleNotice}
+                          >
+                            {incompatibleNotice}
+                          </span>
+                        )}
                       </span>
                       {isSelectable && <Icon name="chevron-right" size="sm" />}
                     </DeviceEntry>

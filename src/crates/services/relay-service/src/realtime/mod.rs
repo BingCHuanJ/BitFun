@@ -39,6 +39,13 @@ struct Identity {
     device: String,
     token: String,
     scope: Scope,
+    /// Client build reported by this connection, normalized at the handshake.
+    /// Malformed or absent values are `None` (unreported), never a rejection.
+    /// The version text is recorded on the device row; compatibility is decided
+    /// from the protocol number below.
+    #[allow(dead_code)]
+    client_version: Option<String>,
+    client_protocol: Option<u32>,
     account_calls: Arc<Semaphore>,
     server_calls: Arc<Semaphore>,
     _connection: Arc<OwnedSemaphorePermit>,
@@ -58,6 +65,11 @@ struct Handshake {
     token: String,
     client_type: Scope,
     machine_id: Option<String>,
+    /// Optional self-reported client build. Older clients omit both.
+    #[serde(default)]
+    client_version: Option<String>,
+    #[serde(default)]
+    client_protocol: Option<u32>,
     /// Sent by session-scoped clients of earlier releases; the handshake is
     /// rejected before it is read.
     #[allow(dead_code)]
@@ -219,11 +231,31 @@ pub(crate) fn mount(router: Router<AppState>, state: AppState) -> Router<AppStat
                             budget
                         }
                     };
+                    let client_version =
+                        crate::db::normalize_client_version(data.client_version.as_deref());
+                    let client_protocol = data.client_protocol;
+                    // Refresh the device's recorded build from *this* connection
+                    // on every handshake, including reconnects. Unreported values
+                    // are written as NULL. A failure here must not tear down an
+                    // otherwise valid authenticated session, so it is logged.
+                    if let Err(error) = crate::db::DeviceRow::set_client_build(
+                        &state.db,
+                        &auth.user_id,
+                        &device,
+                        client_version.as_deref(),
+                        client_protocol,
+                    )
+                    .await
+                    {
+                        tracing::warn!(%error, "Failed to record device client build at handshake");
+                    }
                     socket.extensions.insert(Identity {
                         account: auth.user_id,
                         device,
                         token: data.token,
                         scope: data.client_type,
+                        client_version,
+                        client_protocol,
                         account_calls,
                         server_calls,
                         _connection: Arc::new(permit),
@@ -365,6 +397,13 @@ async fn install(socket: SocketRef, state: AppState, io: SocketIo) {
             let Some(target_identity)=target.extensions.get::<Identity>() else { let _=ack.send(&failure("RPC target unavailable")); return; };
             if !authorized(&state,&identity).await || !authorized(&state,&target_identity).await {
                 let _=ack.send(&failure("RPC authorization expired")); return;
+            }
+            // Both ends must run a comparable client build before anything is
+            // dispatched. The caller may hold a delegated token, so its build is
+            // taken from its own connection identity rather than the token's
+            // (parent) device row.
+            if !crate::db::client_builds_compatible(identity.client_protocol, target_identity.client_protocol) {
+                let _=ack.send(&failure("incompatible client build: remote control requires matching client versions")); return;
             }
             let remaining = call_deadline.saturating_duration_since(tokio::time::Instant::now());
             if remaining.is_zero() { let _=ack.send(&failure("RPC deadline elapsed before dispatch")); return; }

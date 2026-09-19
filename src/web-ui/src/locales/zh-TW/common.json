@@ -787,7 +787,9 @@
     "connectOtherDevices": "連線其他裝置",
     "backToThisDevice": "返回本地裝置",
     "returningToThisDevice": "正在返回本地裝置…",
-    "returnedToThisDevice": "已返回本地裝置"
+    "returnedToThisDevice": "已返回本地裝置",
+    "deviceClientIncompatible": "客戶端版本不相容，無法互控。",
+    "deviceClientIncompatibleWithVersion": "客戶端版本不相容（{{version}}），無法互控。"
   },
   "accountLogin": {
     "deviceAlias": "裝置別名",
@@ -796,6 +798,9 @@
     "saveDeviceAlias": "儲存名稱",
     "deviceAliasUpdated": "裝置名稱已更新",
     "deviceAliasUnsupported": "目前主機或 Relay 不支援裝置別名，請升級後重試。",
+    "deviceClientIncompatible": "該裝置執行的客戶端版本與本機不相容，無法互控。",
+    "deviceClientIncompatibleWithVersion": "該裝置執行的 OpenBitFun {{version}} 與本機不相容，無法互控。",
+    "deviceClientIncompatibleTag": "客戶端不相容",
     "signedInAccount": "已登入帳號",
     "username": "帳號",
     "password": "密碼",
