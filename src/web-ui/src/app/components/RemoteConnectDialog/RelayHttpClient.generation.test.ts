@@ -10,17 +10,21 @@ beforeEach(() => { vi.stubGlobal('window', globalThis); });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe.each(['https://remote.openbitfun.com/v/1.0.2', 'http://192.168.1.9:9700'])('account device routing on %s', (relayUrl) => {
-  it('rejects older directory completions and publishes authoritative names to active-label subscribers', async () => {
+  it('answers a superseded directory read with the newest completion and publishes authoritative names', async () => {
     const client = new RelayHttpClient(relayUrl, identity());
     const old = deferred<Response>();
     vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(old.promise).mockResolvedValueOnce(Response.json([
       { device_id: 'desktop', device_name: 'technical', device_alias: 'Current alias', online: true },
     ])));
     const changed = vi.fn(); client.onDeviceDirectorySnapshot(changed);
-    const stale = client.listDevices();
-    await client.listDevices();
+    const superseded = client.listDevices();
+    const newest = await client.listDevices();
     old.resolve(Response.json([{ device_id: 'desktop', device_name: 'old', online: true }]));
-    await expect(stale).rejects.toBeInstanceOf(AccountIdentityChangedError);
+    // Several surfaces read the directory at once, so a read that another read
+    // superseded still answers: failing its caller would leave that surface on an
+    // empty device list, and answering with its own older payload would regress
+    // the newest directory. The newest completion wins for everyone.
+    expect(await superseded).toEqual(newest);
     expect(client.resolveDeviceName('desktop', 'saved name')).toBe('Current alias');
     expect(changed).toHaveBeenCalledOnce();
     client.setAccountIdentity(identity('user-b'));

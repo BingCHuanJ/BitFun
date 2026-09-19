@@ -325,14 +325,15 @@ export class RelayHttpClient {
       }
       const devices = await resp.json() as RelayDeviceInfo[];
       if (identity.generation !== this.identityGeneration) throw new AccountIdentityChangedError();
-      // Several surfaces read the directory at once (this app's own mount effect,
-      // the device page, the compact session list). Every caller gets its answer;
-      // only a response that arrived out of order is kept out of the shared cache.
-      if (request >= this.appliedDirectoryRequest) {
-        this.appliedDirectoryRequest = request;
-        this.directorySnapshot = devices;
-        for (const listener of this.directorySnapshotListeners) listener(devices);
-      }
+      // Several surfaces read the directory at once (this app's mount effect, the
+      // device page, the compact session list). A read that another read
+      // superseded answers with the newest completion instead of failing its
+      // caller: a spurious failure here leaves that surface on an empty device
+      // list until its next poll, which is exactly what a second tab used to do.
+      if (request < this.appliedDirectoryRequest) return this.directorySnapshot;
+      this.appliedDirectoryRequest = request;
+      this.directorySnapshot = devices;
+      for (const listener of this.directorySnapshotListeners) listener(devices);
       return devices;
     });
   }
