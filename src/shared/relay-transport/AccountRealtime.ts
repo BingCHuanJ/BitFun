@@ -1,4 +1,5 @@
 import { DEFAULT_RPC_TIMEOUT_MS } from './RpcPolicy';
+import { CLIENT_PROTOCOL_VERSION, CLIENT_VERSION } from './ClientBuild';
 /** Shared account connection. Protocol reference: Happy apiSocket/RpcHandlerManager. */
 import { io, type Socket } from 'socket.io-client';
 import { RpcPayload } from './RpcPayload';
@@ -40,7 +41,10 @@ export class AccountRealtime {
     this.socket = io(url.origin, {
       path, transports: ['websocket'], forceNew: true, autoConnect: false,
       auth: { token: options.token, clientType: options.machineId ? 'machine-scoped' : 'user-scoped',
-        ...(options.machineId ? { machineId: options.machineId } : {}) },
+        ...(options.machineId ? { machineId: options.machineId } : {}),
+        // The Relay gates control compatibility on the reported protocol number,
+        // so every (re)connect carries the build instead of looking legacy.
+        clientVersion: CLIENT_VERSION, clientProtocol: CLIENT_PROTOCOL_VERSION },
       reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000,
       randomizationFactor: 0.5, timeout: 15000,
     });

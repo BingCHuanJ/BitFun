@@ -66,13 +66,25 @@ fn relay_invitations_and_authentication_use_the_same_protocol_for_all_endpoints(
         );
     }
     use openbitfun_services_integrations::remote_connect::realtime_client::account_auth_payload;
+    // Every handshake reports the build string and control-contract protocol
+    // number, including on reconnect.
     assert_eq!(
         account_auth_payload("test-token", true),
-        serde_json::json!({"token":"test-token","clientType":"machine-scoped"})
+        serde_json::json!({
+            "token":"test-token",
+            "clientType":"machine-scoped",
+            "clientVersion": openbitfun_product_domains::account::client_version(),
+            "clientProtocol": openbitfun_product_domains::account::CLIENT_PROTOCOL_VERSION,
+        })
     );
     assert_eq!(
         account_auth_payload("test-token", false),
-        serde_json::json!({"token":"test-token","clientType":"user-scoped"})
+        serde_json::json!({
+            "token":"test-token",
+            "clientType":"user-scoped",
+            "clientVersion": openbitfun_product_domains::account::client_version(),
+            "clientProtocol": openbitfun_product_domains::account::CLIENT_PROTOCOL_VERSION,
+        })
     );
 }
 

@@ -727,6 +727,7 @@
       "noDeviceTargets": "沒有其他帳號裝置",
       "deviceDescription": "在已登入的另一台裝置上執行",
       "deviceOffline": "離線",
+      "deviceIncompatible": "客戶端版本不相容，無法在此裝置上執行任務",
       "createFailed": "無法建立遠端任務。請重新檢查目標後再試。",
       "remoteTarget": "遠端裝置",
       "transferInProgress": "正在準備目標並傳送專案…",

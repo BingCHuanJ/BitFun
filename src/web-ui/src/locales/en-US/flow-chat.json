@@ -727,6 +727,7 @@
       "noDeviceTargets": "No other account devices",
       "deviceDescription": "Run on another device signed in to your account",
       "deviceOffline": "Offline",
+      "deviceIncompatible": "Incompatible client — this device cannot run tasks from here",
       "createFailed": "Could not create the remote task. Check the target and try again.",
       "remoteTarget": "the remote device",
       "transferInProgress": "Preparing the target and transferring the project…",

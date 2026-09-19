@@ -727,6 +727,7 @@
       "noDeviceTargets": "没有其他账号设备",
       "deviceDescription": "在已登录的另一台设备上运行",
       "deviceOffline": "离线",
+      "deviceIncompatible": "客户端版本不兼容，无法在此设备上运行任务",
       "createFailed": "无法创建远程任务。请重新检查目标后再试。",
       "remoteTarget": "远程设备",
       "transferInProgress": "正在准备目标并传输项目…",

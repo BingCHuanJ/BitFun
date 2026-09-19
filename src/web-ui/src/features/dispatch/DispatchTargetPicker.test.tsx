@@ -18,13 +18,18 @@ vi.mock('@/infrastructure/i18n', () => ({
   }),
 }));
 
+const pickerState = vi.hoisted(() => ({
+  loggedIn: false,
+  targets: [] as Array<Record<string, unknown>>,
+}));
+
 vi.mock('@/infrastructure/account/useAccountLoginState', () => ({
-  useAccountLoginState: () => ({ loggedIn: false }),
+  useAccountLoginState: () => ({ loggedIn: pickerState.loggedIn }),
 }));
 
 vi.mock('./useDispatchTargets', () => ({
   useDispatchTargets: () => ({
-    targets: [],
+    targets: pickerState.targets,
     loading: false,
     error: false,
     refresh: vi.fn(async () => undefined),
@@ -61,6 +66,8 @@ describe('DispatchTargetPicker overlay', () => {
   let root: Root;
 
   beforeEach(() => {
+    pickerState.loggedIn = false;
+    pickerState.targets = [];
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
@@ -182,5 +189,35 @@ describe('DispatchTargetPicker overlay', () => {
     )?.click());
     expect(onSelectLocal).toHaveBeenCalledTimes(2);
     expect(onWorktreeChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('lists a confirmed-incompatible device but never offers it as a target', async () => {
+    pickerState.loggedIn = true;
+    pickerState.targets = [
+      { kind: 'device', deviceId: 'peer', displayName: 'Old build', online: true, incompatible: true },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DispatchTargetPicker
+          target={{ kind: 'local' }}
+          locked={false}
+          onSelectTarget={vi.fn()}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-dispatch-trigger"]',
+    );
+    await act(async () => trigger?.click());
+
+    const option = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[data-openbitfun-menu-item]'),
+    ).find(node => node.textContent?.includes('Old build'));
+    expect(option).toBeDefined();
+    // The device is visible with its reason but cannot be selected.
+    expect(option?.textContent).toContain('chatInput.dispatch.deviceIncompatible');
+    expect(option?.disabled).toBe(true);
   });
 });

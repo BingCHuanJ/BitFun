@@ -297,13 +297,29 @@ impl LoginFormState {
                 let is_local = local_id == Some(d.device_id.as_str());
                 let status = if d.online { "online" } else { "offline" };
                 let badge = if is_local { " [this device]" } else { "" };
+                // A missing flag (older Relay) is unknown and shows nothing.
+                let compat = if d.is_compatible() {
+                    ""
+                } else {
+                    "  · incompatible"
+                };
                 device_lines.push(Line::from(Span::styled(
                     format!(
-                        "  {}{}  {}  · {}",
-                        d.device_name,
+                        "  {}{}  {}  · {}{}  {}",
+                        d.display_name(),
                         badge,
                         truncate_id(&d.device_id),
-                        status
+                        status,
+                        compat,
+                        [
+                            d.device_model.as_deref(),
+                            d.device_os.as_deref(),
+                            d.device_os_version.as_deref()
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join(" ")
                     ),
                     if d.online {
                         Style::default().fg(Color::White)

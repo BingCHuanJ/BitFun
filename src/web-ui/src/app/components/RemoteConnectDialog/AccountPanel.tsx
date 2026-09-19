@@ -1,13 +1,14 @@
+import { refreshDeviceDirectory, isDeviceControllable, deviceClientVersion } from '@/infrastructure/account/deviceDirectory';
 /** Account login and authenticated device connections. */
 
-import { OverflowText, Alert, Avatar, Button, Icon, IconButton, ScrollArea, StatusPill } from '@openbitfun/ui';
+import { OverflowText, Alert, Avatar, Button, Icon, IconButton, Input, ScrollArea, StatusPill } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import {
   confirmDanger,
 } from '@/infrastructure/confirm-dialog';
-import { LogIn, Monitor } from 'lucide-react';
-import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { LogIn, Monitor, Pencil, Check, X } from 'lucide-react';
+import { remoteConnectAPI, deviceDisplayName, deviceMetadataLabel } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type {
   AccountDeviceInfo,
   OnlineDeviceInfo,
@@ -64,6 +65,28 @@ interface AccountPanelProps {
   onCloseDialog: () => void;
 }
 
+/**
+ * Merge one presence entry into a known device. Absent keys mean "this relay
+ * cannot report the field", so they must never erase metadata that came from
+ * the authoritative directory snapshot.
+ */
+function mergePresenceDevice(device: AccountDeviceInfo, presence: OnlineDeviceInfo): AccountDeviceInfo {
+  return {
+    ...device,
+    ...(presence.device_alias !== undefined ? { device_alias: presence.device_alias } : {}),
+    ...(presence.device_model !== undefined ? { device_model: presence.device_model } : {}),
+    ...(presence.device_os !== undefined ? { device_os: presence.device_os } : {}),
+    ...(presence.device_os_version !== undefined ? { device_os_version: presence.device_os_version } : {}),
+    ...(presence.device_client_version !== undefined ? { device_client_version: presence.device_client_version } : {}),
+    ...(presence.client_version !== undefined ? { client_version: presence.client_version } : {}),
+    ...(presence.device_client_protocol !== undefined ? { device_client_protocol: presence.device_client_protocol } : {}),
+    ...(presence.client_protocol !== undefined ? { client_protocol: presence.client_protocol } : {}),
+    ...(presence.compatible !== undefined ? { compatible: presence.compatible } : {}),
+    device_name: presence.device_name || device.device_name,
+    online: true,
+  };
+}
+
 type View = 'login' | 'devices';
 
 export const AccountPanel: React.FC<AccountPanelProps> = ({
@@ -80,6 +103,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const [view, setView] = useState<View>('login');
 
   const [devices, setDevices] = useState<AccountDeviceInfo[]>([]);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [aliasDraft, setAliasDraft] = useState('');
+  const [savingAliasId, setSavingAliasId] = useState<string | null>(null);
+  const [aliasSupported, setAliasSupported] = useState(false);
+  const refreshDirtyRef = useRef(false);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   // Device discovery updates presentation, not the account lifecycle. Keep
   // refresh callbacks stable so adopting an ID cannot restart initialization.
@@ -103,6 +131,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const deviceListFailureCountRef = useRef(0);
   /** Coalesce manual and background recovery so they never replace each other's WS. */
   const deviceReconnectInFlightRef = useRef<number | null>(null);
+  /**
+   * Latest refresh for callers that must not depend on its identity: the
+   * successor refresh scheduled below, the polling interval, and the presence
+   * listener. Assigned right after `refreshDevices` is created.
+   */
+  const refreshDevicesRef = useRef<(() => Promise<void>) | null>(null);
   const invalidateAccountRequests = useCallback(() => {
     accountEpochRef.current += 1;
     refreshRequestRef.current += 1;
@@ -131,12 +165,17 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     const rightLocal = right.device_id === localDeviceId;
     if (leftLocal !== rightLocal) return leftLocal ? -1 : 1;
     if (left.online !== right.online) return left.online ? -1 : 1;
-    return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
+    return deviceDisplayName(left).localeCompare(deviceDisplayName(right));
   }), [devices, localDeviceId]);
 
   const resetState = useCallback(() => {
     setActiveAccountEpoch(null);
     setDevices([]);
+    setAliasSupported(false);
+    refreshDirtyRef.current = false;
+    setEditingDeviceId(null);
+    setAliasDraft('');
+    setSavingAliasId(null);
     setLocalDeviceId(null);
     setDevicesReady(false);
     setRelayError(null);
@@ -171,7 +210,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const refreshDevices = useCallback(async () => {
     const epoch = accountEpochRef.current;
     if (refreshInFlightRef.current?.epoch === epoch) {
-      log.debug('Device list refresh already in flight; coalescing duplicate request');
+      refreshDirtyRef.current = true;
+      log.debug('Device list refresh already in flight; scheduling successor');
       return;
     }
     const requestId = ++refreshRequestRef.current;
@@ -180,6 +220,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       isAccountEpochCurrent(epoch) && refreshRequestRef.current === requestId
     );
     try {
+      void remoteConnectAPI.accountRelayCapabilities().then(capabilities => {
+        if (isCurrent()) setAliasSupported(capabilities.includes('device_alias_v1'));
+      }).catch(() => { if (isCurrent()) setAliasSupported(false); });
       let list = await remoteConnectAPI.accountListDevices();
       if (!isCurrent()) return;
       const currentLocalDeviceId = localDeviceIdRef.current;
@@ -190,7 +233,15 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         list = await remoteConnectAPI.accountListDevices();
         if (!isCurrent()) return;
       }
-      setDevices(list);
+      // The directory snapshot owns online state, but the relay can report this
+      // machine offline for a moment after its own routing socket reconnects.
+      // While our routing is up this device is online by definition, so pin it
+      // instead of flashing a "last seen" line on every refresh.
+      setDevices(deviceRoutingReadyRef.current && currentLocalDeviceId
+        ? list.map(device => (
+            device.device_id === currentLocalDeviceId ? { ...device, online: true } : device
+          ))
+        : list);
       setDevicesReady(true);
       setRelayError(null);
       deviceListFailureCountRef.current = 0;
@@ -213,38 +264,54 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       if (refreshInFlightRef.current?.epoch === epoch
         && refreshInFlightRef.current.requestId === requestId) {
         refreshInFlightRef.current = null;
+        if (refreshDirtyRef.current && isAccountEpochCurrent(epoch)) {
+          refreshDirtyRef.current = false;
+          void refreshDevicesRef.current?.();
+        }
       }
     }
   }, [handleSessionExpired, isAccountEpochCurrent, markRelayUnreachable]);
 
-  const applyPresenceOnline = useCallback((onlineDevices: Array<{ device_id: string; device_name: string }>) => {
-    const onlineIds = new Set(onlineDevices.map(d => d.device_id));
+  /**
+   * Presence lists the account's *online* devices, and the desktop emits an
+   * empty list when its routing socket drops. That empty list is an unknown
+   * state, not proof that every device went offline, so presence only upgrades a
+   * device to online and merges the metadata it carries. Offline state and
+   * `last_seen_at` stay owned by the directory snapshot, which is re-fetched
+   * after every presence signal and on the polling interval.
+   */
+  const applyPresenceOnline = useCallback((onlineDevices: OnlineDeviceInfo[]) => {
+    if (onlineDevices.length === 0) return;
     setDevices(prev => {
       const byId = new Map(prev.map(d => [d.device_id, d]));
       for (const d of onlineDevices) {
         const existing = byId.get(d.device_id);
-        if (existing) {
-          byId.set(d.device_id, { ...existing, online: true, device_name: d.device_name || existing.device_name });
-        } else {
-          byId.set(d.device_id, {
-            device_id: d.device_id,
-            device_name: d.device_name,
-            online: true,
-            last_seen_at: Math.floor(Date.now() / 1000),
-          });
-        }
-      }
-      for (const [id, device] of byId) {
-        if (!onlineIds.has(id) && device.online) {
-          byId.set(id, { ...device, online: false });
-        }
+        byId.set(d.device_id, existing
+          ? mergePresenceDevice(existing, d)
+          : {
+              device_id: d.device_id,
+              device_name: d.device_name,
+              // An older relay omits these keys entirely, so they stay absent
+              // rather than clearing metadata that came from the directory.
+              ...(d.device_alias !== undefined ? { device_alias: d.device_alias } : {}),
+              ...(d.device_model !== undefined ? { device_model: d.device_model } : {}),
+              ...(d.device_os !== undefined ? { device_os: d.device_os } : {}),
+              ...(d.device_os_version !== undefined ? { device_os_version: d.device_os_version } : {}),
+              ...(d.device_client_version !== undefined ? { device_client_version: d.device_client_version } : {}),
+              ...(d.client_version !== undefined ? { client_version: d.client_version } : {}),
+              ...(d.device_client_protocol !== undefined ? { device_client_protocol: d.device_client_protocol } : {}),
+              ...(d.client_protocol !== undefined ? { client_protocol: d.client_protocol } : {}),
+              ...(d.compatible !== undefined ? { compatible: d.compatible } : {}),
+              online: true,
+              last_seen_at: Math.floor(Date.now() / 1000),
+            });
       }
       return Array.from(byId.values());
     });
   }, []);
 
-  /** Latest refreshDevices for the polling interval (avoids stale closures). */
-  const refreshDevicesRef = useRef(refreshDevices);
+  /** Latest refreshDevices for the successor refresh, the polling interval and
+   * the presence listener (avoids stale closures). */
   refreshDevicesRef.current = refreshDevices;
 
   const startDevicePolling = useCallback(() => {
@@ -252,7 +319,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       clearInterval(refreshTimer.current);
     }
     refreshTimer.current = setInterval(
-      () => { void refreshDevicesRef.current(); },
+      () => { void refreshDevicesRef.current?.(); },
       DEVICE_POLL_FALLBACK_MS,
     );
   }, []);
@@ -419,9 +486,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   useEffect(() => {
     if (activeAccountEpoch === null) return undefined;
     const subscribedEpoch = activeAccountEpoch;
-    const unlistenPresence = api.listen<{
-      devices: Array<{ device_id: string; device_name: string }>;
-    }>(
+    const unlistenPresence = api.listen<{ devices: OnlineDeviceInfo[] }>(
       'account://device-presence',
       (payload) => {
         if (isAccountEpochCurrent(subscribedEpoch) && payload?.devices) {
@@ -436,6 +501,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             deviceListFailureCountRef.current = 0;
           }
           applyPresenceOnline(payload.devices);
+          void refreshDevicesRef.current?.();
         }
       },
     );
@@ -533,11 +599,42 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     t,
   ]);
 
+  const handleUpdateAlias = useCallback(async (device: AccountDeviceInfo) => {
+    const epoch = accountEpochRef.current;
+    if (!aliasSupported) { setError(t('accountLogin.deviceAliasUnsupported')); return; }
+    const alias = aliasDraft.trim() || null;
+    // Renaming one device must not cover the directory with the panel-wide
+    // blocking overlay; the editor row shows its own progress instead.
+    setSavingAliasId(device.device_id);
+    setError(null);
+    try {
+      await remoteConnectAPI.accountUpdateDevice(device.device_id, alias);
+      if (!isAccountEpochCurrent(epoch)) return;
+      setEditingDeviceId(null);
+      void refreshDeviceDirectory();
+      await refreshDevices();
+      if (isAccountEpochCurrent(epoch)) success(t('accountLogin.deviceAliasUpdated'));
+    } catch (e: unknown) {
+      if (!isAccountEpochCurrent(epoch)) return;
+      const message = e instanceof Error ? e.message : String(e);
+      setError(/unsupported|not found|unknown command|404|405/i.test(message) ? t('accountLogin.deviceAliasUnsupported') : message);
+    } finally {
+      if (isAccountEpochCurrent(epoch)) setSavingAliasId(null);
+    }
+  }, [aliasDraft, aliasSupported, refreshDevices, isAccountEpochCurrent, success, t]);
+
+  const handleStartAliasEdit = useCallback((device: AccountDeviceInfo) => {
+    setEditingDeviceId(device.device_id);
+    setAliasDraft(device.device_alias ?? '');
+  }, []);
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
     if (!device.online) return;
     // Picking this machine is a normal surface switch back, not a no-op: the
     // window may currently be rendering a peer.
     const isLocalDevice = Boolean(localDeviceId) && device.device_id === localDeviceId;
+    // A confirmed-incompatible peer is never a control target. Renaming stays a
+    // plain directory operation and is handled by its own row action.
+    if (!isLocalDevice && !isDeviceControllable(device)) return;
     setLoading(true);
     setError(null);
     try {
@@ -548,9 +645,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           success(t('accountLogin.deviceSwitcher.switchedLocal'));
         }
       } else {
-        outcome = await switchToDevice(device.device_id, device.device_name);
+        outcome = await switchToDevice(device.device_id, deviceDisplayName(device));
         if (outcome === 'activated') {
-          success(t('accountLogin.enteredPeerMode', { name: device.device_name }));
+          success(t('accountLogin.enteredPeerMode', { name: deviceDisplayName(device) }));
         }
       }
       if (outcome === 'activated') {
@@ -623,6 +720,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </Button>
             </div>
             <div className="account-panel__devices-card">
+              {!aliasSupported && <Alert tone="info" message={t('accountLogin.deviceAliasUnsupported')} />}
               {relayError && (
                 <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
                   <Alert
@@ -645,14 +743,21 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   const isLocal = localDeviceId === d.device_id;
                   // This machine is selectable while the window renders a peer,
                   // so the dialog can bring the UI back without disconnecting.
-                  const isSelectable = isLocal
-                    ? peerMode.active
-                    : d.online;
+                  // A confirmed-incompatible peer stays listed but is never a
+                  // control target; this machine is never gated by its own flag.
+                  const deviceControllable = isLocal || isDeviceControllable(d);
+                  const isSelectable = (isLocal ? peerMode.active : d.online) && deviceControllable;
+                  const incompatible = isLocal ? false : !isDeviceControllable(d);
+                  const incompatibleVersion = deviceClientVersion(d);
+                  const incompatibleNotice = incompatibleVersion
+                    ? t('accountLogin.deviceClientIncompatibleWithVersion', { version: incompatibleVersion })
+                    : t('accountLogin.deviceClientIncompatible');
                   const removeLabel = isLocal
                     ? t('accountLogin.removeCurrentDevice')
                     : t('accountLogin.removeDevice');
-                  const displayName = d.device_name || t('accountLogin.unknownDevice');
-                  const DeviceEntry = isSelectable ? 'button' : 'div';
+                  const displayName = deviceDisplayName(d);
+                  const metadata = deviceMetadataLabel(d);
+                  const DeviceEntry = isSelectable && editingDeviceId !== d.device_id ? 'button' : 'div';
                   return (
                   <div data-openbitfun-component="remote-account-panel" data-openbitfun-part="deviceCard" key={d.device_id}
                     data-openbitfun-state={[
@@ -662,7 +767,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     className={`account-panel__device-card ${isSelectable ? 'selectable' : ''} ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''}`}>
                     <DeviceEntry
                       className="account-panel__device-select"
-                      {...(isSelectable ? {
+                      {...(isSelectable && editingDeviceId !== d.device_id ? {
                         type: 'button' as const,
                         onClick: () => void selectDevice(d),
                         disabled: loading,
@@ -671,33 +776,89 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     >
                       <Monitor size={16} />
                       <span className="account-panel__device-info">
-                        <span className="account-panel__device-name">
-                          <OverflowText title={displayName}>{displayName}</OverflowText>
-                          {isLocal && <StatusPill tone="neutral" className="account-panel__device-badge">{t('accountLogin.thisDevice')}</StatusPill>}
-                        </span>
-                        <span className="account-panel__device-meta">
-                          <span className="account-panel__device-status">
-                            {d.online
-                              ? t('accountLogin.online')
-                              : d.last_seen_at
-                                ? t('accountLogin.lastSeen', {
-                                  time: formatRelativeTime(d.last_seen_at * 1000),
-                                })
-                                : t('accountLogin.offline')}
+                        {/* Renaming replaces the name in place: showing the old
+                            name next to an editor reads as two device names. */}
+                        {editingDeviceId === d.device_id ? (
+                          <span className="account-panel__device-alias-editor">
+                            <Input
+                              className="account-panel__device-alias-input"
+                              value={aliasDraft}
+                              onChange={e => setAliasDraft(e.target.value)}
+                              onKeyDown={event => {
+                                if (event.key === 'Enter') { event.preventDefault(); void handleUpdateAlias(d); }
+                                if (event.key === 'Escape') { event.preventDefault(); setEditingDeviceId(null); }
+                              }}
+                              placeholder={t('accountLogin.deviceAliasPlaceholder')}
+                              aria-label={t('accountLogin.deviceAlias')}
+                              autoFocus
+                              disabled={savingAliasId === d.device_id}
+                            />
+                            <IconButton
+                              aria-label={t('accountLogin.saveDeviceAlias')}
+                              icon={<Check size={14} />}
+                              loading={savingAliasId === d.device_id}
+                              onClick={() => void handleUpdateAlias(d)}
+                              size="sm"
+                              variant="primary"
+                            />
+                            <IconButton
+                              aria-label={t('accountLogin.cancel')}
+                              disabled={savingAliasId === d.device_id}
+                              icon={<X size={14} />}
+                              onClick={() => setEditingDeviceId(null)}
+                              size="sm"
+                              variant="quiet"
+                            />
                           </span>
+                        ) : (
+                          <span className="account-panel__device-name">
+                            <OverflowText title={displayName}>{displayName}</OverflowText>
+                            {isLocal && <StatusPill tone="neutral" className="account-panel__device-badge">{t('accountLogin.thisDevice')}</StatusPill>}
+                          </span>
+                        )}
+                        <span className="account-panel__device-meta">
+                          <span className="account-panel__device-status" data-openbitfun-state={d.online ? 'online' : 'offline'}>{d.online
+                            ? t('accountLogin.online')
+                            : d.last_seen_at
+                              ? t('accountLogin.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
+                              : t('accountLogin.offline')}</span>
+                          {metadata && <span className="account-panel__device-meta-detail">{` · ${metadata}`}</span>}
                         </span>
+                        {incompatible && (
+                          <span
+                            className="account-panel__device-incompatible"
+                            title={incompatibleNotice}
+                          >
+                            {incompatibleNotice}
+                          </span>
+                        )}
                       </span>
                       {isSelectable && <Icon name="chevron-right" size="sm" />}
                     </DeviceEntry>
-                    <IconButton
-                      aria-label={`${removeLabel}: ${displayName}`}
-                      disabled={loading}
-                      icon={<Icon name="delete" size="sm" />}
-                      onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}
-                      size="sm"
-                      title={removeLabel}
-                      variant="quiet"
-                    />
+                    {/* The open editor owns the row's actions; keeping rename and
+                        delete beside it rendered two competing icon clusters. */}
+                    {editingDeviceId !== d.device_id && (
+                      <>
+                        <IconButton
+                          aria-label={t('accountLogin.editDeviceAlias')}
+                          disabled={loading || editingDeviceId !== null || !aliasSupported || savingAliasId !== null}
+                          icon={<Pencil size={14} />}
+                          onClick={(e) => { e.stopPropagation(); handleStartAliasEdit(d); }}
+                          size="sm"
+                          title={t('accountLogin.editDeviceAlias')}
+                          variant="quiet"
+                        />
+                        <IconButton
+                          aria-label={`${removeLabel}: ${displayName}`}
+                          disabled={loading || savingAliasId !== null}
+                          icon={<Icon name="delete" size="sm" />}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}
+                          size="sm"
+                          title={removeLabel}
+                          variant="quiet"
+                        />
+                      </>
+                    )}
                   </div>
                   );
                 })}

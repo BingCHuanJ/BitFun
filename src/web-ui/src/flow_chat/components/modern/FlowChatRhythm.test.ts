@@ -72,6 +72,26 @@ describe('FlowChat transcript rhythm', () => {
     }
   });
 
+  it('gives no item gap to a tool row whose card hides itself', () => {
+    const toolStyles = readSource('../../_item-rhythm.scss');
+
+    // Exploration cards hide themselves once their tool settles in an error
+    // state, so their composition wrapper stays in the DOM at zero height. A
+    // reserved gap there is invisible space: two visible rows with one hidden
+    // item between them would read as 16px, and 24px with two.
+    expect(toolStyles).toMatch(
+      /> \.flowchat-flow-item:has\(> \.flow-tool-card-wrapper:empty\) \{\s*margin-bottom: 0;\s*\}/,
+    );
+    for (const hidingCard of [
+      '../../tool-cards/ReadFileDisplay.tsx',
+      '../../tool-cards/GrepSearchDisplay.tsx',
+      '../../tool-cards/GlobSearchDisplay.tsx',
+      '../../tool-cards/LSDisplay.tsx',
+    ]) {
+      expect(readSource(hidingCard)).toMatch(/if \(status === 'error'\) \{\s*return null;/);
+    }
+  });
+
   it('gives every new user Turn one token-owned boundary gap', () => {
     const rendererStyles = readSource('./VirtualItemRenderer.scss');
     const userMessageStyles = readSource('./UserMessageItem.scss');

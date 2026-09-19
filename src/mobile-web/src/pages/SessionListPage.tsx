@@ -71,7 +71,10 @@ import logoMarkLight from '../assets/openbitfun-mark-light.png';
 import {
   isAccountIdentityChangedError,
   type RelayHttpClient,
+  type RelayDeviceInfo,
+  deviceDisplayName,
 } from '../services/RelayHttpClient';
+import { isDeviceControllable } from '../services/accountDeviceSelection';
 
 const PAGE_SIZE = 30;
 
@@ -95,11 +98,7 @@ interface SessionListPageProps {
   onControlTargetChanged?: () => void;
 }
 
-type CompactDevice = {
-  device_id: string;
-  device_name: string;
-  online: boolean;
-};
+type CompactDevice = RelayDeviceInfo;
 
 
 function compactSelectedDeviceIdForClient(client?: RelayHttpClient): string | null {
@@ -805,10 +804,12 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   useEffect(() => {
     if (!compact) return;
     void loadCompactDirectory();
-  }, [compact, loadCompactDirectory]);
+    return client?.onDeviceDirectoryChanged(() => { void loadCompactDirectory(); });
+  }, [client, compact, loadCompactDirectory]);
 
   const handleSelectCompactDevice = useCallback(async (device: CompactDevice) => {
-    if (!client || !device.online || compactSwitchingDeviceId) return;
+    // A confirmed-incompatible device stays listed but is never a control target.
+    if (!client || !device.online || !isDeviceControllable(device) || compactSwitchingDeviceId) return;
     setCompactSelectedDeviceId(device.device_id);
 
     if (client.targetDeviceId === device.device_id) {
@@ -841,7 +842,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
       resetForDeviceSwitch();
       setControlTarget({
         deviceId: device.device_id,
-        deviceName: device.device_name || null,
+        deviceName: client.resolveDeviceName(device.device_id, deviceDisplayName(device)),
       });
       onControlTargetChanged?.();
       await loadCompactWorkspaceCatalog(switchedTargetEpoch);
@@ -1610,13 +1611,13 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                     block
                     className={`harmony-sidebar__device-row${isCurrent ? ' is-current' : ''}`}
                     key={device.device_id}
-                    disabled={!device.online || (!!compactSwitchingDeviceId && !isSwitching)}
+                    disabled={!device.online || !isDeviceControllable(device) || (!!compactSwitchingDeviceId && !isSwitching)}
                     onClick={() => void handleSelectCompactDevice(device)}
                   >
                     <span className="harmony-sidebar__device-icon" aria-hidden="true">
-                      <CompactDeviceIcon name={device.device_name || device.device_id}/>
+                      <CompactDeviceIcon name={deviceDisplayName(device)}/>
                     </span>
-                    <span className="harmony-sidebar__row-label">{device.device_name || device.device_id}</span>
+                    <span className="harmony-sidebar__row-label">{deviceDisplayName(device)}</span>
                     {isSwitching
                       ? <span className="spinner harmony-sidebar__row-spinner"/>
                       : <span className={`harmony-sidebar__status${device.online ? ' is-online' : ''}`}/>}

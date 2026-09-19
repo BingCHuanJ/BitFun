@@ -787,9 +787,20 @@
     "connectOtherDevices": "Connect another device",
     "backToThisDevice": "Return to local device",
     "returningToThisDevice": "Returning to local device…",
-    "returnedToThisDevice": "Returned to local device"
+    "returnedToThisDevice": "Returned to local device",
+    "deviceClientIncompatible": "Incompatible client — mutual control is unavailable.",
+    "deviceClientIncompatibleWithVersion": "Incompatible client ({{version}}) — mutual control is unavailable."
   },
   "accountLogin": {
+    "deviceAlias": "Device alias",
+    "deviceAliasPlaceholder": "Optional display name (empty restores technical name)",
+    "editDeviceAlias": "Edit name",
+    "saveDeviceAlias": "Save name",
+    "deviceAliasUpdated": "Device name updated",
+    "deviceAliasUnsupported": "Device aliases are unsupported by this host or Relay. Update it and retry.",
+    "deviceClientIncompatible": "This device runs an incompatible OpenBitFun build; mutual control is unavailable.",
+    "deviceClientIncompatibleWithVersion": "This device runs OpenBitFun {{version}}, an incompatible build; mutual control is unavailable.",
+    "deviceClientIncompatibleTag": "Incompatible client",
     "signedInAccount": "Signed-in account",
     "username": "Username",
     "password": "Password",

@@ -1,5 +1,6 @@
 import { toB64 } from './E2EEncryption';
 import { x25519 } from '@noble/curves/ed25519.js';
+import { CLIENT_PROTOCOL_VERSION, CLIENT_VERSION } from '../../../shared/relay-transport/ClientBuild';
 
 import { pairingRelayUrl } from './pairingLink';
 export interface CloudAccountSession { token: string; userId: string; masterKey: Uint8Array; }
@@ -166,6 +167,9 @@ export class CloudAccountClient {
       const auth = await requestJson<{ token: string; user_id: string }>(this.relayUrl, '/api/auth/login', {
         access_token: accessToken, device_id: deviceId, device_name: 'Mobile Browser',
         device_kind: 'mobile', public_key: toB64(keys.publicKey), request_id: generateRequestId(),
+        // Report the build so the Relay can gate control compatibility instead
+        // of treating this browser controller as a legacy client.
+        clientVersion: CLIENT_VERSION, clientProtocol: CLIENT_PROTOCOL_VERSION,
       });
       if (!auth.token?.trim() || !auth.user_id?.trim()) throw new Error('Invalid account identity.');
       return { token: auth.token, userId: auth.user_id, masterKey: keys.privateKey };

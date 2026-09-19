@@ -1,3 +1,4 @@
+import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
 import {
   Alert,
   Button,
@@ -55,6 +56,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   onClose,
   onReady,
 }) => {
+  useDeviceDirectory();
   const { t } = useI18n('common');
   const [includeUncommitted, setIncludeUncommitted] = useState(false);
   const [baseRef, setBaseRef] = useState('HEAD');
@@ -413,7 +415,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
         >
           <DialogHeading>
             <DialogTitle id={DIALOG_TITLE_ID}>
-              {t('dispatch.configureTitle', { target: target?.displayName ?? '' })}
+              {t('dispatch.configureTitle', { target: target?.kind === 'device' && target.deviceId ? resolveDeviceName(target.deviceId, target.displayName) : target?.displayName ?? '' })}
             </DialogTitle>
             <DialogDescription>{t('dispatch.configureSubtitle')}</DialogDescription>
           </DialogHeading>

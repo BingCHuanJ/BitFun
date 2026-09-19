@@ -1,3 +1,4 @@
+import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
 import React, {
   lazy,
   Suspense,
@@ -55,6 +56,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   onSelectLocal,
   onSelectTarget,
 }) => {
+  useDeviceDirectory();
   const { t } = useI18n('flow-chat');
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -80,7 +82,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
     : t('chatInput.dispatch.local');
   const displayLabel = target.kind === 'local'
     ? localDisplayLabel
-    : target.displayName;
+    : target.kind === 'device' ? resolveDeviceName(target.deviceId, target.displayName) : target.displayName;
   const tooltip = locked
     ? t('chatInput.dispatch.locked', { target: displayLabel })
     : t('chatInput.dispatch.current', { target: displayLabel });
@@ -219,16 +221,20 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         {deviceTargets.map(option => {
           const selected = target.kind === 'device' && target.deviceId === option.deviceId;
           const online = option.online !== false;
+          // A confirmed-incompatible device stays listed so the reason is legible,
+          // but it is never offered as a selectable dispatch target.
+          const incompatible = option.incompatible === true;
           return (
             <MenuItem data-overflow-trigger
               key={option.deviceId}
               role="menuitemradio"
               checked={selected}
               className="dispatch-target-picker__option-row"
-              disabled={!online}
+              disabled={!online || incompatible}
               leading={<MonitorSmartphone size={15} aria-hidden />}
               metadata={selected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
               onClick={() => {
+                if (incompatible) return;
                 setOpen(false);
                 setConfigureTarget(option);
               }}
@@ -236,9 +242,11 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
               <span className="dispatch-target-picker__option-copy">
                 <strong><OverflowText>{option.displayName}</OverflowText></strong>
                 <small><OverflowText>
-                  {online
-                    ? t('chatInput.dispatch.deviceDescription')
-                    : t('chatInput.dispatch.deviceOffline')}
+                  {incompatible
+                    ? t('chatInput.dispatch.deviceIncompatible')
+                    : online
+                      ? t('chatInput.dispatch.deviceDescription')
+                      : t('chatInput.dispatch.deviceOffline')}
                 </OverflowText></small>
               </span>
             </MenuItem>
