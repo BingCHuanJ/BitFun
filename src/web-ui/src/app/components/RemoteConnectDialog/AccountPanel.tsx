@@ -22,8 +22,8 @@ import {
 } from '@/infrastructure/account/accountErrorUtils';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
-import { systemAPI, type CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
-import { UpdateAvailableDialog } from '@/infrastructure/update/UpdateAvailableDialog';
+import { canCheckForAppUpdates } from '@/infrastructure/update/tauriEnv';
+import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 import {
   classifyRelayFailure,
   relayFailureAction,
@@ -134,7 +134,9 @@ interface FailureBannerProps {
  * action is the existing sign-in flow renders no extra button.
  */
 const FailureBanner: React.FC<FailureBannerProps> = ({ failure, t, busy, onClose, onAction }) => {
-  const actionable = failure.action === 'retry' || failure.action === 'check-updates'
+  // An update check only exists where updates can be installed; elsewhere the
+  // banner stays a statement instead of offering an action that cannot run.
+  const actionable = failure.action === 'retry' || (failure.action === 'check-updates' && canCheckForAppUpdates())
     ? failure.action
     : null;
   return (
@@ -187,9 +189,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   /** True after either device presence or a list_devices response is available. */
   const [devicesReady, setDevicesReady] = useState(false);
   const [relayFailure, setRelayFailure] = useState<PanelFailure | null>(null);
-  /** Result of the banner's "check updates" action; the dialog only opens for a real update. */
-  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
-  const [updateData, setUpdateData] = useState<CheckForUpdatesResponse | null>(null);
+  /** Update result the banner has to report itself; the update surface is shell-owned. */
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   /** Account epoch whose presence events may update the device list. */
@@ -467,21 +467,20 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, [attemptDeviceReconnect]);
 
   /**
-   * The banner's "check updates" step. A real update opens the existing dialog;
-   * otherwise the panel states it is already current instead of faking success.
+   * The banner's "check updates" step. Discovery and the update surface stay in
+   * the shared update store, so the shell opens its single details dialog; the
+   * panel only reports a check that found nothing or failed.
    */
   const handleCheckForUpdates = useCallback(async () => {
     if (checkingUpdates) return;
     setCheckingUpdates(true);
     setUpdateNotice(null);
     try {
-      const result = await systemAPI.checkForUpdates();
-      if (result.updateAvailable) {
-        setUpdateData(result);
-        setUpdateDialogOpen(true);
-      } else {
-        setUpdateNotice(t('update.noUpdate'));
-      }
+      await useUpdateInstallStore.getState().checkForUpdates('manual');
+      const update = useUpdateInstallStore.getState();
+      if (update.checkStatus === 'available' && update.availableUpdate) update.openDetails();
+      else if (update.checkStatus === 'latest') setUpdateNotice(t('update.noUpdate'));
+      else setUpdateNotice(t('update.checkFailed'));
     } catch (e: unknown) {
       log.warn('check_for_updates failed', e);
       setUpdateNotice(t('update.checkFailed'));
@@ -992,17 +991,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           </ScrollArea>
         )}
       </div>
-
-      <UpdateAvailableDialog
-        isOpen={updateDialogOpen}
-        variant="manual"
-        data={updateData}
-        onLater={() => { setUpdateDialogOpen(false); setUpdateData(null); }}
-        onInstall={() => {
-          setUpdateDialogOpen(false);
-          void systemAPI.installUpdate().catch(e => log.warn('install_update failed', e));
-        }}
-      />
     </>
   );
 };
