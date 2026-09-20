@@ -22,7 +22,7 @@ import {
   SettingsPlacementPolicy,
   SettingsSheetKind
 } from '../../policy/SettingsPlacementPolicy';
-import { CARD, STATUS_SUCCESS, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, CONTENT_ON_ACTION, STATUS_DANGER } from '../Theme';
+import { CARD, STATUS_SUCCESS, INK, MUTED, PAGE_BG, PRIMARY_ACTION, CONTENT_ON_ACTION, STATUS_DANGER } from '../Theme';
 
 export enum RemoteSurfaceMode {
   Master = 'master',
@@ -266,8 +266,11 @@ export struct RemoteSurfaceHost {
         .layoutWeight(1).alignItems(HorizontalAlign.Center)
         Blank().width(48).height(48)
       }
+      // No hairline under the welcome header. The compact header does not draw
+      // one and neither does the desktop client; the wide surface is the same
+      // page, not a sheet, so it should not grow a divider just because it is
+      // wider.
       .width('100%').height(76).padding({ left: 16, right: 16, top: 14, bottom: 12 })
-      .border({ width: { bottom: 1 }, color: LINE })
 
       this.CompactEmptyState()
 

@@ -138,7 +138,31 @@ internal data class OpenBitFunColors(
     val heroSurface: Color,
     val heroAccent: Color,
     val heroSecondary: Color,
+    val sidebar: SidebarColors,
     val code: CodeSyntaxColors,
+)
+
+/**
+ * The navigation chrome, held apart from the page palette above.
+ *
+ * The desktop client paints its sidebar from a separate family — `surface.chrome`
+ * one step off the scene, hairlines and selection fills carried as alpha over it
+ * — so the rail reads as structure rather than as another sheet of paper. These
+ * are those roles, one for one, and they belong to the sidebar only: a page that
+ * borrows them stops looking like the desktop, not more like it.
+ *
+ * [selection], [line] and [hover] are translucent on purpose. They are meant to
+ * composite over [background]; flattening them loses the rail's depth.
+ */
+internal data class SidebarColors(
+    val background: Color,
+    val raised: Color,
+    val line: Color,
+    val hover: Color,
+    val selection: Color,
+    val ink: Color,
+    val muted: Color,
+    val subtle: Color,
 )
 
 /**
@@ -179,6 +203,16 @@ private val LightExtras = OpenBitFunColors(
     heroSurface = LightTokens.ConnectHeroSurface,
     heroAccent = LightTokens.ConnectHeroAccent,
     heroSecondary = LightTokens.ConnectHeroSecondary,
+    sidebar = SidebarColors(
+        background = LightTokens.SidebarBg,
+        raised = LightTokens.SidebarRaised,
+        line = LightTokens.SidebarLine,
+        hover = LightTokens.SidebarHover,
+        selection = LightTokens.SidebarSelection,
+        ink = LightTokens.SidebarInk,
+        muted = LightTokens.SidebarMuted,
+        subtle = LightTokens.SidebarSubtle,
+    ),
     code = CodeSyntaxColors(
         lineNumber = LightTokens.CodeLineNumber,
         keyword = LightTokens.CodeKeyword,
@@ -210,6 +244,16 @@ private val DarkExtras = OpenBitFunColors(
     heroSurface = DarkTokens.ConnectHeroSurface,
     heroAccent = DarkTokens.ConnectHeroAccent,
     heroSecondary = DarkTokens.ConnectHeroSecondary,
+    sidebar = SidebarColors(
+        background = DarkTokens.SidebarBg,
+        raised = DarkTokens.SidebarRaised,
+        line = DarkTokens.SidebarLine,
+        hover = DarkTokens.SidebarHover,
+        selection = DarkTokens.SidebarSelection,
+        ink = DarkTokens.SidebarInk,
+        muted = DarkTokens.SidebarMuted,
+        subtle = DarkTokens.SidebarSubtle,
+    ),
     code = CodeSyntaxColors(
         lineNumber = DarkTokens.CodeLineNumber,
         keyword = DarkTokens.CodeKeyword,

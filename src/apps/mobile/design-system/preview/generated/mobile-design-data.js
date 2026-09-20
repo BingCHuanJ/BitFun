@@ -138,6 +138,42 @@ export const mobileTokens = {
       "light": "#F7F7F5",
       "dark": "#1E1E1C"
     },
+    "sidebar_bg": {
+      "light": "#F8F8F9",
+      "dark": "#0E0E10"
+    },
+    "sidebar_bg_fade": {
+      "light": "#00F8F8F9",
+      "dark": "#000E0E10"
+    },
+    "sidebar_raised": {
+      "light": "#FFFFFF",
+      "dark": "#1C1C1F"
+    },
+    "sidebar_line": {
+      "light": "#14101A27",
+      "dark": "#1FFFFFFF"
+    },
+    "sidebar_hover": {
+      "light": "#F3F3F5",
+      "dark": "#0FFFFFFF"
+    },
+    "sidebar_selection": {
+      "light": "#14000000",
+      "dark": "#1FFFFFFF"
+    },
+    "sidebar_ink": {
+      "light": "#CC000000",
+      "dark": "#E8E8E8"
+    },
+    "sidebar_muted": {
+      "light": "#99000000",
+      "dark": "#B0B0B0"
+    },
+    "sidebar_subtle": {
+      "light": "#66000000",
+      "dark": "#858585"
+    },
     "status_success": {
       "light": "#27C46A",
       "dark": "#3BD47B"
@@ -414,6 +450,34 @@ export const mobileComponents = {
       ],
       "platformNotes": "Both signed-in header rows use conversationHeaderHeight from the same safe-area origin, without a sidebar-only top inset. Preserve this height when a subtitle appears or disappears. Anchor drawer content scaling vertically at half the header height so reveal animation cannot shift its control centerline."
     },
+    "sidebar_chrome": {
+      "purpose": "Give the workspace sidebar the desktop client's structural chrome instead of the conversation page surface.",
+      "anatomy": [
+        "chrome_surface",
+        "header_row",
+        "scroll_fade",
+        "raised_control",
+        "hairline"
+      ],
+      "states": [
+        "light",
+        "dark",
+        "signed_out",
+        "signed_in"
+      ],
+      "tokens": [
+        "sidebar_bg",
+        "sidebar_bg_fade",
+        "sidebar_raised",
+        "sidebar_line",
+        "sidebar_hover",
+        "sidebar_selection",
+        "sidebar_ink",
+        "sidebar_muted",
+        "sidebar_subtle"
+      ],
+      "platformNotes": "The family mirrors the desktop semantic theme one role at a time: sidebar_bg is surface.chrome, sidebar_raised is surface.raised, sidebar_line is border.subtle, sidebar_hover is action.quiet.hover, sidebar_selection is selection.surface, and sidebar_ink / sidebar_muted / sidebar_subtle are content.primary / content.secondary / content.caption. The sidebar therefore sits one step away from the conversation surface in both appearance modes, as the desktop navigation panel does beside the scene. Alpha roles composite over sidebar_bg and must not be flattened into opaque literals. Conversation, sheet and action surfaces keep the paper-and-ink page tokens; only sidebar chrome uses this family."
+    },
     "sidebar_device_selector": {
       "purpose": "Select one remote device and show its workspace panel below the device list, matching mobile web.",
       "anatomy": [
@@ -429,12 +493,12 @@ export const mobileComponents = {
         "loading"
       ],
       "tokens": [
-        "soft",
-        "ink",
-        "muted",
+        "sidebar_selection",
+        "sidebar_ink",
+        "sidebar_muted",
         "status_success"
       ],
-      "platformNotes": "Device rows have no disclosure chevron. Re-selecting the current device does not collapse its workspaces or restart a healthy connection. Use a soft selected surface and normal ink for device identity; only the separate status indicator expresses reachability. Do not add a connection status text row or recovery banner below the device. Automatic reconnect stays quiet; tapping the selected failed or disconnected device retries the connection. Workspace disclosure remains independent and survives refresh and device switching. Compact and wide layouts use the same selection semantics."
+      "platformNotes": "Device rows have no disclosure chevron. Re-selecting the current device does not collapse its workspaces or restart a healthy connection. Use the sidebar selection surface and normal ink for device identity; only the separate status indicator expresses reachability. Do not add a connection status text row or recovery banner below the device. Automatic reconnect stays quiet; tapping the selected failed or disconnected device retries the connection. Workspace disclosure remains independent and survives refresh and device switching. Compact and wide layouts use the same selection semantics."
     },
     "sidebar_tools_footer": {
       "purpose": "Open controlled-device tools without creating a chat; keep settings separately reachable.",
@@ -449,9 +513,9 @@ export const mobileComponents = {
         "pressed"
       ],
       "tokens": [
-        "card",
-        "line",
-        "ink"
+        "sidebar_raised",
+        "sidebar_line",
+        "sidebar_ink"
       ],
       "platformNotes": "Use Tools / 工具 for both the sidebar entry and destination title. Render a native wrench-and-screwdriver symbol (or the existing platform vector) in a 24-unit slot, 8-unit label gap, 15-unit medium text, 14-unit horizontal padding and a minimum 104 by 48 pill. Keep the 48-unit settings action separate. Use a quiet surface and outline without raised shadows. Compact and wide sidebars reuse a pure footer component with state and callbacks; create-session validation must not affect tools appearance."
     },

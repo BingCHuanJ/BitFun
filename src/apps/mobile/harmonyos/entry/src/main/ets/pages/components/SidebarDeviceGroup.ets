@@ -17,10 +17,9 @@ import { ConversationSessionFilterPolicy } from '../policy/ConversationSessionFi
 import { SidebarDirectoryPreviewPolicy } from '../policy/SidebarDirectoryPreviewPolicy';
 import { HarnessProfileMenu } from './HarnessProfileMenu';
 import {
-  INK,
-  PAGE_BG,
-  MUTED,
-  SOFT,
+  SIDEBAR_INK,
+  SIDEBAR_MUTED,
+  SIDEBAR_SELECTION,
   STATUS_SUCCESS,
   TRANSPARENT,
 } from './Theme';
@@ -94,7 +93,7 @@ struct SidebarWorkspaceGroup {
         SymbolGlyph(this.expanded ?
           $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
           .fontSize(13)
-          .fontColor([MUTED])
+          .fontColor([SIDEBAR_MUTED])
           .hitTestBehavior(HitTestMode.None)
       }
       .width(24)
@@ -108,14 +107,14 @@ struct SidebarWorkspaceGroup {
       Row({ space: 10 }) {
         SymbolGlyph($r('sys.symbol.folder'))
           .fontSize(19)
-          .fontColor([this.currentWorkspace ? INK : MUTED])
+          .fontColor([this.currentWorkspace ? SIDEBAR_INK : SIDEBAR_MUTED])
           .width(21)
           .height(21)
           .hitTestBehavior(HitTestMode.None)
         Text(this.name || this.basename(this.path))
           .fontSize(MobileDesignTypography.titleSmall.size)
           .fontWeight(this.currentWorkspace ? FontWeight.Medium : FontWeight.Regular)
-          .fontColor(INK)
+          .fontColor(SIDEBAR_INK)
           .layoutWeight(1)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -135,7 +134,7 @@ struct SidebarWorkspaceGroup {
       Stack({ alignContent: Alignment.Center }) {
         SymbolGlyph($r('sys.symbol.plus'))
           .fontSize(17)
-          .fontColor([INK])
+          .fontColor([SIDEBAR_INK])
           .hitTestBehavior(HitTestMode.None)
       }
       .width(30)
@@ -182,10 +181,10 @@ struct SidebarWorkspaceGroup {
       LoadingProgress()
         .width(13)
         .height(13)
-        .color(MUTED)
+        .color(SIDEBAR_MUTED)
       Text(RemoteI18n.t('common.loading'))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
     }
     .width('100%')
     .height(40)
@@ -198,11 +197,11 @@ struct SidebarWorkspaceGroup {
     Row({ space: 8 }) {
       Text(RemoteI18n.t('sidebar.deviceLoadFailed'))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
         .layoutWeight(1)
       Text(RemoteI18n.t('common.retry'))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(INK)
+        .fontColor(SIDEBAR_INK)
     }
     .width('100%')
     .height(40)
@@ -219,7 +218,7 @@ struct SidebarWorkspaceGroup {
       Stack({ alignContent: Alignment.BottomStart }) {
         SymbolGlyph(this.sessionGlyph(item))
           .fontSize(17)
-          .fontColor([MUTED])
+          .fontColor([SIDEBAR_MUTED])
           .width(19)
           .height(19)
         if (this.activeDevice && item.id === this.runningSessionId) {
@@ -235,7 +234,7 @@ struct SidebarWorkspaceGroup {
       Text(item.title || RemoteI18n.t('sidebar.untitled'))
         .fontSize(MobileDesignTypography.bodySmall.size)
         .fontWeight(item.id === this.selectedSessionId ? FontWeight.Bold : FontWeight.Regular)
-        .fontColor(INK)
+        .fontColor(SIDEBAR_INK)
         .layoutWeight(1)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -245,7 +244,7 @@ struct SidebarWorkspaceGroup {
     .height(44)
     .padding({ left: this.bodyIndent + 34, right: 10 })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(item.id === this.selectedSessionId ? SOFT : TRANSPARENT)
+    .backgroundColor(item.id === this.selectedSessionId ? SIDEBAR_SELECTION : TRANSPARENT)
     .borderRadius(10)
     .onClick(() => {
       this.onOpenSession(item);
@@ -260,10 +259,10 @@ struct SidebarWorkspaceGroup {
     Row({ space: 8 }) {
       Text('···')
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
       Text(RemoteI18n.f('sidebar.moreSessions', String(this.hiddenSessionCount())))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
     }
     .width('100%')
     .height(40)
@@ -423,10 +422,10 @@ export struct SidebarDeviceGroup {
       LoadingProgress()
         .width(14)
         .height(14)
-        .color(MUTED)
+        .color(SIDEBAR_MUTED)
       Text(RemoteI18n.t('common.loading'))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
     }
     .width('100%')
     .height(40)
@@ -440,11 +439,11 @@ export struct SidebarDeviceGroup {
       Text(this.device.errorText.length > 0 ?
         this.device.errorText : RemoteI18n.t('sidebar.deviceLoadFailed'))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
         .layoutWeight(1)
       Text(RemoteI18n.t('common.retry'))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(INK)
+        .fontColor(SIDEBAR_INK)
         .onClick(() => {
           this.onRetry();
         })
@@ -459,7 +458,7 @@ export struct SidebarDeviceGroup {
   private EmptyWorkspaces() {
     Text(RemoteI18n.t('sidebar.emptyWorkspaces'))
       .fontSize(MobileDesignTypography.bodyMedium.size)
-      .fontColor(MUTED)
+      .fontColor(SIDEBAR_MUTED)
       .width('100%')
       .padding({ left: 10, top: 6, bottom: 6 })
   }
@@ -469,10 +468,10 @@ export struct SidebarDeviceGroup {
     Row({ space: 8 }) {
       Text('···')
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
       Text(RemoteI18n.f('sidebar.moreWorkspaces', String(this.hiddenWorkspaceCount())))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
     }
     .width('100%')
     .height(40)
