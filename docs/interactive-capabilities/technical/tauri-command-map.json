@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "6587344a6b5e75a80457ea4ba2670bf37cf3038bdb436089ae402eb7b5a5a025",
-  "commandCount": 662,
+  "commandCount": 663,
   "coverage": {
-    "commandCount": 662,
+    "commandCount": 663,
     "documentedCommandCount": 615,
-    "implementationCommandCount": 47,
-    "implementationDigest": "401fd0a5f64377e65573d1b0883fbfa844570096adfafd4c11a999d749ba5859"
+    "implementationCommandCount": 48,
+    "implementationDigest": "f6d38a24a70708988cb47ada81d07eccf0668684e8734c9ee5155b9ffa7e3db8"
   },
   "commands": [
     {
@@ -3220,6 +3220,20 @@
       "rustPath": "api::insights_api::get_latest_insights",
       "sourceFile": "src/apps/desktop/src/api/insights_api.rs",
       "signature": "fn get_latest_insights() -> Result<Vec<InsightsReportMeta>, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "get_local_models_dev_catalogs",
+      "moduleId": "commands",
+      "capabilityId": "feature.projects",
+      "capabilityIds": [
+        "feature.projects"
+      ],
+      "documentedItemIds": [],
+      "visibility": "implementation",
+      "rustPath": "get_local_models_dev_catalogs",
+      "sourceFile": "src/apps/desktop/src/api/commands.rs",
+      "signature": "fn get_local_models_dev_catalogs( ) -> Result<openbitfun_core::LocalModelsDevCatalogs, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
