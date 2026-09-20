@@ -90,7 +90,7 @@ test("buttons constrain normalized line fallbacks through the same icon slot", (
     const markup = renderToStaticMarkup(createElement(Component, props));
     assert.match(markup, /data-openbitfun-component="icon"/);
     assert.match(markup, /data-openbitfun-source="line"/);
-    assert.match(markup, /<svg[^>]*stroke-width="1.6"/);
+    assert.match(markup, /<svg[^>]*stroke-width="var\(--openbitfun-control-icon-stroke-width\)"/);
   }
 });
 

@@ -68,8 +68,8 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceItem).toContain('gap: calc(var(--openbitfun-space-1) / 2);');
     expect(workspaceCard).toContain('max-width: 100%;');
     expect(workspaceCard).toContain('overflow: hidden;');
-    expect(workspaceIcon).toContain('width: 16px;');
-    expect(workspaceIcon).toContain('height: 16px;');
+    expect(workspaceIcon).toContain('width: var(--_nav-icon-size-prominent);');
+    expect(workspaceIcon).toContain('height: var(--_nav-icon-size-prominent);');
     expect(workspaceNameButton).toContain('flex: 0 1 auto;');
     expect(workspaceNameButton).toContain('overflow: hidden;');
     expect(workspaceNameButton).not.toContain('58px');
@@ -100,8 +100,8 @@ describe('WorkspaceListSection layout styles', () => {
     expect(assistantCollapseButton).toContain('width: 26px;');
     expect(assistantCollapseButton).toContain('min-height: 30px;');
     expect(assistantCollapseButton).toContain('padding: 0 0 0 4px;');
-    expect(assistantIcon).toContain('width: 16px;');
-    expect(assistantIcon).toContain('height: 16px;');
+    expect(assistantIcon).toContain('width: var(--_nav-icon-size-prominent);');
+    expect(assistantIcon).toContain('height: var(--_nav-icon-size-prominent);');
     expect(assistantIcon).toContain('color: inherit;');
     expect(assistantIcon).toContain('opacity: 1;');
     expect(assistantNameButton).toContain('flex: 1 1 0;');

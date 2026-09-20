@@ -138,7 +138,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
             return (
               <MenuItem data-overflow-trigger
                 key={workspace.id}
-                leading={<Icon name="plus" size="xs" aria-hidden="true" />}
+                leading={<Icon name="plus" size="sm" aria-hidden="true" />}
                 aria-label={t('nav.sessions.newAssistantSessionFor', { assistantName })}
                 onClick={() => {
                   closeMenu();

@@ -187,8 +187,8 @@ describe('SessionsSection layout styles', () => {
     expect(backgroundSubagentBadgeBlock).toContain('display: inline-grid;');
     expect(backgroundSubagentBadgeBlock).toContain('place-items: center;');
     expect(backgroundSubagentBadgeBlock).toContain('line-height: 0;');
-    expect(backgroundSubagentBadgeBlock).toContain('width: 16px;');
-    expect(backgroundSubagentBadgeBlock).toContain('height: 16px;');
+    expect(backgroundSubagentBadgeBlock).toContain('width: var(--openbitfun-control-icon-size-md);');
+    expect(backgroundSubagentBadgeBlock).toContain('height: var(--openbitfun-control-icon-size-md);');
 
     const backgroundSubagentIconBlock = extractInlineItemBlock(stylesheet, 'background-subagent-icon');
     expect(backgroundSubagentIconBlock).toContain('place-self: center;');
