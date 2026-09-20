@@ -57,6 +57,41 @@ Platform renderers may choose the listed size variant for available width, but
 must not substitute a different content purpose merely to obtain a preferred
 metric.
 
+## Sidebar chrome
+
+The left sidebar is chrome, not another page. The desktop client paints it with
+its own surface family — one step off the scene the conversation sits on — so
+the mobile clients carry a dedicated `sidebar_*` token family rather than
+reusing the page roles (`page_bg`, `card`, `soft`, `line`, `ink`, `muted`,
+`subtle`). Those page roles stay exactly as they were for conversations,
+sheets, and action surfaces; only the rail moved.
+
+Each token maps one-to-one onto a desktop semantic role from
+`design-system/packages/theme-openbitfun`:
+
+| Mobile token | Desktop role | Used for |
+| --- | --- | --- |
+| `sidebar_bg` | `color.surface.chrome` | the rail itself, and the pane behind it |
+| `sidebar_bg_fade` | same hue at zero alpha | the top stop of the footer fade |
+| `sidebar_raised` | `color.surface.raised` | circle buttons, the quiet footer action |
+| `sidebar_line` | `color.border.subtle` | hairlines and control borders |
+| `sidebar_hover` | `color.action.quiet.hover` | the search field fill |
+| `sidebar_selection` | `color.selection.surface` | the selected row and device fills |
+| `sidebar_ink` | `color.content.primary` | titles, row labels, icon tint |
+| `sidebar_muted` | `color.content.secondary` | supporting row text |
+| `sidebar_subtle` | `color.content.caption` | placeholders and offline devices |
+
+`sidebar_line`, `sidebar_hover` (dark), and `sidebar_selection` are stored as
+`#AARRGGBB` on purpose: desktop defines them as alpha over the chrome surface,
+and keeping the alpha lets them composite the same way instead of baking a
+flattened value that drifts the moment the surface changes.
+
+Sidebar components shared with page surfaces take their layer from the caller
+rather than assuming it — Android's `SidebarCircleButton` and
+`SignedOutConnectionActions` both expose background/border/content parameters,
+and the sheet presented from the sidebar (the workspace picker) stays on page
+roles because a sheet is not chrome.
+
 ## Simulator captures
 
 The native galleries can be launched without changing the normal app path:

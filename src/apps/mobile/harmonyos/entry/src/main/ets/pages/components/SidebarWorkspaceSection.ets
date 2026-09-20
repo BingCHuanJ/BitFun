@@ -16,7 +16,15 @@ import {
   SettingsSheetKind
 } from '../policy/SettingsPlacementPolicy';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
-import { STATUS_SUCCESS, STATUS_DANGER, INK, MUTED, SUBTLE, SOFT, TRANSPARENT } from './Theme';
+import {
+  SIDEBAR_INK,
+  SIDEBAR_MUTED,
+  SIDEBAR_SELECTION,
+  SIDEBAR_SUBTLE,
+  STATUS_DANGER,
+  STATUS_SUCCESS,
+  TRANSPARENT,
+} from './Theme';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
 import { SidebarDeviceIcon } from './SidebarNavigationIcons';
 import { SidebarWorkspacePicker } from './SidebarWorkspacePicker';
@@ -124,19 +132,19 @@ export struct SidebarWorkspaceSection {
         .id('sidebar-workspace-section')
         .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(FontWeight.Medium)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
       Blank()
       Stack({ alignContent: Alignment.Center }) {
         if (this.directoryState.refreshing) {
           LoadingProgress()
             .width(18)
             .height(18)
-            .color(MUTED)
+            .color(SIDEBAR_MUTED)
         } else {
           SymbolGlyph($r('sys.symbol.arrow_clockwise'))
             .fontSize(20)
             .fontWeight(FontWeight.Medium)
-            .fontColor([MUTED])
+            .fontColor([SIDEBAR_MUTED])
         }
       }
       .width(34)
@@ -159,13 +167,13 @@ export struct SidebarWorkspaceSection {
       SidebarDeviceIcon({
         deviceName: entry.deviceName,
         iconSize: 24,
-        tint: INK
+        tint: SIDEBAR_INK
       })
         .hitTestBehavior(HitTestMode.None)
       Text(entry.deviceName)
         .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(this.isSelected(entry) ? FontWeight.Bold : FontWeight.Regular)
-        .fontColor(INK)
+        .fontColor(SIDEBAR_INK)
         .layoutWeight(1)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -175,7 +183,7 @@ export struct SidebarWorkspaceSection {
         LoadingProgress()
           .width(13)
           .height(13)
-          .color(MUTED)
+          .color(SIDEBAR_MUTED)
           .hitTestBehavior(HitTestMode.None)
       } else {
         Text('')
@@ -190,7 +198,7 @@ export struct SidebarWorkspaceSection {
     .height(52)
     .padding({ left: 8, right: 4 })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(this.isSelected(entry) ? SOFT : TRANSPARENT)
+    .backgroundColor(this.isSelected(entry) ? SIDEBAR_SELECTION : TRANSPARENT)
     .borderRadius(10)
     .accessibilityText(`${entry.deviceName}, ${this.isActiveDevice(entry.deviceId) ? ConnectionStatusPresenter.label(this.connectionState) :
       RemoteI18n.t(entry.online ? 'sidebar.deviceOnline' : 'sidebar.deviceOffline')}`)
@@ -210,10 +218,10 @@ export struct SidebarWorkspaceSection {
   }
 
   private deviceHealthColor(entry: DeviceDirectoryEntry): ResourceColor {
-    if (!this.isActiveDevice(entry.deviceId)) return entry.online ? STATUS_SUCCESS : SUBTLE;
+    if (!this.isActiveDevice(entry.deviceId)) return entry.online ? STATUS_SUCCESS : SIDEBAR_SUBTLE;
     if (this.connectionState === 'connected') return STATUS_SUCCESS;
     if (this.connectionState === 'failed' || this.connectionState === 'disconnected') return STATUS_DANGER;
-    return MUTED;
+    return SIDEBAR_MUTED;
   }
 
   @Builder
@@ -223,12 +231,12 @@ export struct SidebarWorkspaceSection {
         Text(RemoteI18n.t('sidebar.workspaces'))
           .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontWeight(FontWeight.Medium)
-          .fontColor(MUTED)
+          .fontColor(SIDEBAR_MUTED)
         Blank()
         Stack({ alignContent: Alignment.Center }) {
           SymbolGlyph($r('sys.symbol.plus'))
             .fontSize(18)
-            .fontColor([this.canUseDevice(entry) ? INK : SUBTLE])
+            .fontColor([this.canUseDevice(entry) ? SIDEBAR_INK : SIDEBAR_SUBTLE])
         }
         .width(34)
         .height(34)
@@ -248,7 +256,7 @@ export struct SidebarWorkspaceSection {
       if (entry.catalogSource === 'recent') {
         Text(RemoteI18n.t('sidebar.legacyWorkspaceCatalog'))
           .fontSize(MobileDesignTypography.bodySmall.size)
-          .fontColor(MUTED)
+          .fontColor(SIDEBAR_MUTED)
           .padding({ left: 10, right: 10, bottom: 4 })
       }
       SidebarDeviceGroup({
@@ -299,11 +307,11 @@ export struct SidebarWorkspaceSection {
     Row({ space: 8 }) {
       Text('···')
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
       Text(RemoteI18n.f('sidebar.moreDevices',
         String(this.deviceEntries().length - this.visibleDeviceCount)))
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(MUTED)
+        .fontColor(SIDEBAR_MUTED)
     }
     .width('100%')
     .height(40)

@@ -44,6 +44,15 @@ export class MobileDesignColors {
   static readonly floatingBorder: MobileColorPair = new MobileColorPair("#18000000", "#18000000");
   static readonly soft: MobileColorPair = new MobileColorPair("#F4F3F0", "#2D2C28");
   static readonly floatingPanelBg: MobileColorPair = new MobileColorPair("#F7F7F5", "#1E1E1C");
+  static readonly sidebarBg: MobileColorPair = new MobileColorPair("#F8F8F9", "#0E0E10");
+  static readonly sidebarBgFade: MobileColorPair = new MobileColorPair("#00F8F8F9", "#000E0E10");
+  static readonly sidebarRaised: MobileColorPair = new MobileColorPair("#FFFFFF", "#1C1C1F");
+  static readonly sidebarLine: MobileColorPair = new MobileColorPair("#14101A27", "#1FFFFFFF");
+  static readonly sidebarHover: MobileColorPair = new MobileColorPair("#F3F3F5", "#0FFFFFFF");
+  static readonly sidebarSelection: MobileColorPair = new MobileColorPair("#14000000", "#1FFFFFFF");
+  static readonly sidebarInk: MobileColorPair = new MobileColorPair("#CC000000", "#E8E8E8");
+  static readonly sidebarMuted: MobileColorPair = new MobileColorPair("#99000000", "#B0B0B0");
+  static readonly sidebarSubtle: MobileColorPair = new MobileColorPair("#66000000", "#858585");
   static readonly statusSuccess: MobileColorPair = new MobileColorPair("#27C46A", "#3BD47B");
   static readonly statusDanger: MobileColorPair = new MobileColorPair("#E04F4F", "#FF6B6B");
   static readonly codeLineNumber: MobileColorPair = new MobileColorPair("#AAA69D", "#77756E");

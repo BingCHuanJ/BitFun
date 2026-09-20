@@ -433,6 +433,9 @@ private fun RemoteSessionListHeader(
             diameter = 38,
             onClick = onToggleViewSettings,
             modifier = Modifier.testTag(VIEW_SETTINGS_TOGGLE_TEST_TAG),
+            background = MaterialTheme.colorScheme.surface,
+            border = MaterialTheme.colorScheme.outlineVariant,
+            tint = MaterialTheme.colorScheme.onSurface,
         )
         SidebarCircleButton(
             icon = R.drawable.ic_symbol_magnifyingglass,
@@ -440,6 +443,9 @@ private fun RemoteSessionListHeader(
             diameter = 38,
             onClick = onToggleSearch,
             modifier = Modifier.testTag(SESSION_SEARCH_TOGGLE_TEST_TAG),
+            background = MaterialTheme.colorScheme.surface,
+            border = MaterialTheme.colorScheme.outlineVariant,
+            tint = MaterialTheme.colorScheme.onSurface,
         )
     }
 }

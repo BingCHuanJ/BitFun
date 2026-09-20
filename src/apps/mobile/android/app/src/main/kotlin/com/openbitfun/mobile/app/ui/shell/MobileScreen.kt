@@ -55,6 +55,7 @@ import com.openbitfun.mobile.app.ui.remote.ConnectView
 import com.openbitfun.mobile.app.ui.settings.GeneralSettingsScreen
 import com.openbitfun.mobile.app.ui.settings.SettingsScreen
 import com.openbitfun.mobile.app.ui.shell.sidebar.AppSidebar
+import com.openbitfun.mobile.app.ui.theme.openBitFunColors
 import com.openbitfun.mobile.app.viewmodel.AccountViewModel
 import com.openbitfun.mobile.core.feature.account.AccountIntent
 import com.openbitfun.mobile.core.feature.account.AccountUiState
@@ -540,6 +541,10 @@ internal fun MobileScreen() {
                 if (sidebarWidth > 0) {
                     PermanentDrawerSheet(
                         Modifier.width(sidebarWidth.dp).testTag(MASTER_DETAIL_TEST_TAG),
+                        // Material fills a drawer sheet from surfaceContainerLow;
+                        // the rail paints its own chrome, so the sheet gets out
+                        // of the way rather than tinting a second layer under it.
+                        drawerContainerColor = openBitFunColors.sidebar.background,
                     ) { sidebar() }
                     PaneSeparator(
                         if (previewVisible) {
