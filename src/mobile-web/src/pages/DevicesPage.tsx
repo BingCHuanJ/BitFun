@@ -79,7 +79,10 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
   const [error, setError] = useState<{ message: string; action: RelayFailureAction | null } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState('');
-  const [aliasSupported, setAliasSupported] = useState(false);
+  // `unknown` means the relay has not answered yet and must never be rendered as
+  // an unsupported relay: doing so flashed the notice on every page entry.
+  const [aliasCapability, setAliasCapability] = useState<'unknown' | 'supported' | 'unsupported'>('unknown');
+  const aliasSupported = aliasCapability === 'supported';
   const mountedRef = useRef(true);
   const identityRequestRef = useRef(0);
   const devicesRequestRef = useRef(0);
@@ -128,7 +131,18 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     );
     try {
       const epoch = client.accountEpoch;
-      void client.supportsDeviceAlias().then(supported => { if (isCurrent() && client.accountEpoch === epoch) setAliasSupported(supported); }).catch(() => { if (isCurrent()) setAliasSupported(false); });
+      void client.supportsDeviceAlias()
+        .then(supported => {
+          if (isCurrent() && client.accountEpoch === epoch) {
+            setAliasCapability(supported ? 'supported' : 'unsupported');
+          }
+        })
+        .catch(error => {
+          // A failed capability read is not evidence that the relay lacks the
+          // capability, so it keeps the previous answer. Relay reachability is
+          // reported by the directory request itself.
+          if (isCurrent()) console.warn('[DevicesPage] relay alias capability unavailable', error);
+        });
       const list = await client.listDevices();
       if (!isCurrent()) return;
       setDevices(list);
@@ -445,7 +459,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
         </MobileBanner>
       )}
 
-      {!aliasSupported && <MobileBanner>{t('devices.aliasUnsupported')}</MobileBanner>}
+      {aliasCapability === 'unsupported' && <MobileBanner>{t('devices.aliasUnsupported')}</MobileBanner>}
       <div className="devices-page__body">
         {renderBody()}
       </div>
