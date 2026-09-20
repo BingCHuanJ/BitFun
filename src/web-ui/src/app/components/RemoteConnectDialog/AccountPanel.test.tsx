@@ -276,6 +276,21 @@ it('accepts the negotiated alias capability and displays only alias plus metadat
   expect(container.textContent).toContain('Studio');
   expect(container.textContent).toContain('Model');
 });
+it('keeps the unsupported notice hidden while the capability answer is pending', async () => {
+  // An unanswered capability read used to render as an unsupported relay, which
+  // flashed the notice on every panel entry while `/api/info` was in flight.
+  mocks.accountRelayCapabilities.mockImplementation(() => new Promise(() => {}));
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  expect(container.textContent).toContain('My computer');
+  expect(container.textContent).not.toContain('accountLogin.deviceAliasUnsupported');
+});
+it('keeps the unsupported notice hidden when the capability read fails', async () => {
+  // Relay reachability owns its own banner; a transport error is not evidence
+  // that the relay lacks the capability.
+  mocks.accountRelayCapabilities.mockRejectedValue(new Error('network down'));
+  await act(async () => { root.render(<AccountPanel onCloseDialog={() => {}} />); });
+  expect(container.textContent).not.toContain('accountLogin.deviceAliasUnsupported');
+});
 
 /** Emit a presence signal to every listener the panel registered for this epoch. */
 async function emitPresence(devices: Array<Record<string, unknown>>) {

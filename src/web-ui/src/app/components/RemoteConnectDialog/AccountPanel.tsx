@@ -52,6 +52,13 @@ interface PanelFailure {
   action: RelayFailureAction | null;
 }
 
+/**
+ * Relay device-alias capability. `unknown` means the relay has not answered yet
+ * and must never be rendered as an unsupported relay: doing so flashed the
+ * unsupported notice on every panel entry until the capability read resolved.
+ */
+type DeviceAliasCapability = 'unknown' | 'supported' | 'unsupported';
+
 /** Reduce an account/relay failure to user-facing copy via the shared classifier. */
 function describeAccountFailure(error: unknown, t: (key: string) => string): PanelFailure {
   const kind = classifyRelayFailure(error);
@@ -178,7 +185,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState('');
   const [savingAliasId, setSavingAliasId] = useState<string | null>(null);
-  const [aliasSupported, setAliasSupported] = useState(false);
+  const [aliasCapability, setAliasCapability] = useState<DeviceAliasCapability>('unknown');
+  const aliasSupported = aliasCapability === 'supported';
   const refreshDirtyRef = useRef(false);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   // Device discovery updates presentation, not the account lifecycle. Keep
@@ -246,7 +254,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const resetState = useCallback(() => {
     setActiveAccountEpoch(null);
     setDevices([]);
-    setAliasSupported(false);
+    setAliasCapability('unknown');
     refreshDirtyRef.current = false;
     setEditingDeviceId(null);
     setAliasDraft('');
@@ -305,8 +313,15 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     );
     try {
       void remoteConnectAPI.accountRelayCapabilities().then(capabilities => {
-        if (isCurrent()) setAliasSupported(capabilities.includes('device_alias_v1'));
-      }).catch(() => { if (isCurrent()) setAliasSupported(false); });
+        if (isCurrent()) {
+          setAliasCapability(capabilities.includes('device_alias_v1') ? 'supported' : 'unsupported');
+        }
+      }).catch(error => {
+        // A failed capability read is not evidence that the relay lacks the
+        // capability, so it keeps the previous answer. Relay reachability has its
+        // own banner; reporting this one here only flashed it on every poll.
+        if (isCurrent()) log.debug('relay capabilities unavailable', error);
+      });
       let list = await remoteConnectAPI.accountListDevices();
       if (!isCurrent()) return;
       const currentLocalDeviceId = localDeviceIdRef.current;
@@ -849,7 +864,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </Button>
             </div>
             <div className="account-panel__devices-card">
-              {!aliasSupported && <Alert tone="info" message={t('accountLogin.deviceAliasUnsupported')} />}
+              {aliasCapability === 'unsupported' && <Alert tone="info" message={t('accountLogin.deviceAliasUnsupported')} />}
               {relayFailure && (
                 <FailureBanner failure={relayFailure} t={t} busy={loading} onAction={runFailureAction} />
               )}
