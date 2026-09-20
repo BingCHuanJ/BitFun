@@ -1,7 +1,7 @@
 // The transcript reserves a lane for turn navigation before sizing its column.
 // Keep the lane geometry shared with the rail so narrow panes cannot overlap it.
 $turn-rail-offset: 4px;
-$turn-rail-width: 30px;
+$turn-rail-width: 20px;
 
 @mixin viewport {
   container: flow-chat-transcript / inline-size;
