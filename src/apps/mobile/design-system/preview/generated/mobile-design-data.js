@@ -334,6 +334,11 @@ export const mobileTokens = {
       "weight": 500
     }
   },
+  "text_scale": {
+    "reference_logical_dpi": 153.3,
+    "min_factor": 0.85,
+    "max_factor": 1
+  },
   "geometry": {
     "conversation_header_height": 76,
     "conversation_header_compact_height": 64,

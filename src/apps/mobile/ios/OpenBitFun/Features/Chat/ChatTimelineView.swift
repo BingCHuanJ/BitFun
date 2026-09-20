@@ -984,11 +984,15 @@ private func markdownInlineString(
     var result = AttributedString()
     for inline in inlines {
         var part = AttributedString(inline.text)
+        // Presentation intents inherit the enclosing Text's font, so an inline
+        // run keeps the role size (and Dynamic Type) of the paragraph it sits
+        // in — the same as the ArkUI and Compose renderers, which only change
+        // weight, slant, or family.
         switch inline.type {
-        case "strong": part.font = .system(size: 14, weight: .semibold)
-        case "emphasis": part.font = .system(size: 14).italic()
+        case "strong": part.inlinePresentationIntent = .stronglyEmphasized
+        case "emphasis": part.inlinePresentationIntent = .emphasized
         case "code":
-            part.font = .system(size: 13, design: .monospaced)
+            part.inlinePresentationIntent = .code
             part.backgroundColor = OpenBitFunTheme.soft
         case "link":
             part.foregroundColor = MobileDesignColors.fileLink
