@@ -115,7 +115,9 @@ public class CloudAccountException public constructor(
     public val failure: CloudAccountFailure,
     public val statusCode: Int?,
     cause: Throwable?,
-) : IllegalStateException("Cloud account request failed: $failure", cause) {
+    /** The relay's own wording, when it gave one; for the log, never for the UI. */
+    public val detail: String? = null,
+) : IllegalStateException("Cloud account request failed: $failure" + (detail?.let { " ($it)" } ?: ""), cause) {
     public constructor(failure: CloudAccountFailure, statusCode: Int?) : this(failure, statusCode, null)
 
     public constructor(failure: CloudAccountFailure) : this(failure, null, null)
@@ -136,7 +138,19 @@ public data class CloudAccountDevice public constructor(
     public val lastSeenAt: Long?,
     /** `desktop`, or null for a row the relay stored before kinds existed. */
     public val deviceKind: String? = null,
-)
+    /**
+     * Relay-computed mutual-control compatibility of this device with this one.
+     *
+     * `false` means confirmed incompatible: either a client build/protocol
+     * mismatch or a peer that reported no version information (an older client).
+     * Null only on an older Relay that does not gate at all, which must be
+     * treated as "unknown but usable", never as incompatible.
+     */
+    public val compatible: Boolean? = null,
+) {
+    /** The single gate every control entry point reuses; see [compatible]. */
+    public val controllable: Boolean get() = compatible != false
+}
 
 public class CloudAccountClient internal constructor(
     private val client: HttpClient,
@@ -209,7 +223,8 @@ public class CloudAccountClient internal constructor(
             val auth = request(
                 relayUrl, "/api/auth/login", HttpMethod.Post,
                 LoginRequest.serializer(), LoginRequest(accessToken, deviceId, deviceName, DEVICE_KIND_MOBILE,
-                    Base64.Default.encode(DeviceIdentity.publicKey(secret)), Uuid.random().toString()),
+                    Base64.Default.encode(DeviceIdentity.publicKey(secret)), Uuid.random().toString(),
+                    CLIENT_VERSION, CLIENT_PROTOCOL_VERSION),
                 AccountAuthResponse.serializer(), "", RELAY_DEFAULT_TIMEOUT_MS,
             )
             if (auth.token.isBlank() || auth.userId.isBlank()) throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
@@ -247,6 +262,7 @@ public class CloudAccountClient internal constructor(
                 device.online,
                 device.lastSeenAt,
                 device.deviceKind,
+                device.compatible,
             )
         }
 
@@ -280,7 +296,7 @@ public class CloudAccountClient internal constructor(
         }
         return hostStream(sessionId, target, hints, merge(socket.connections.drop(1), foregroundResumes), reads,
             olderRequests = historyRequests, onError = { error ->
-                log.warn("host stream read failed stream=${sessionId.take(24)} type=${error::class.simpleName} failure=${(error as? CloudAccountException)?.failure}")
+                log.warn("host stream read failed stream=${sessionId.take(24)} type=${error::class.simpleName} failure=${(error as? CloudAccountException)?.failure} message=${error.message}")
                 onError(error)
             }, onCaughtUp = onCaughtUp).onCompletion { cause ->
                 log.info("host stream ended stream=${sessionId.take(24)} cause=${cause?.let { it::class.simpleName } ?: "none"}")
@@ -551,6 +567,9 @@ private data class LoginRequest(
     @SerialName("device_kind") val deviceKind: String,
     @SerialName("public_key") val publicKey: String,
     @SerialName("request_id") val requestId: String,
+    /** See [CLIENT_VERSION]; the Relay stores both and gates on the protocol. */
+    @SerialName("clientVersion") val clientVersion: String,
+    @SerialName("clientProtocol") val clientProtocol: Int,
 )
 @Serializable
 private data class AccountAuthResponse(val token: String, @SerialName("user_id") val userId: String)
@@ -564,6 +583,7 @@ private data class AccountDeviceWire(
     val online: Boolean,
     @SerialName("last_seen_at") val lastSeenAt: Long? = null,
     @SerialName("device_kind") val deviceKind: String? = null,
+    val compatible: Boolean? = null,
 )
 
 private fun decode(value: String): ByteArray = try {
