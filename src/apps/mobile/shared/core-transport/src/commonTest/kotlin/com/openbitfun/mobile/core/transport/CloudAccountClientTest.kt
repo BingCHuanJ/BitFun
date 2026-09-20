@@ -35,6 +35,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
@@ -42,6 +43,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class CloudAccountClientTest {
@@ -91,6 +93,44 @@ class CloudAccountClientTest {
         assertFalse(bodies[0].containsKey("password"))
         assertFalse(bodies[0].containsKey("master_key"))
         assertFalse(first.toString().contains("token-1"))
+        // The Relay stores this build on the device row and gates control on it.
+        assertEquals(CLIENT_VERSION, bodies[0]["clientVersion"]?.jsonPrimitive?.content)
+        assertEquals(CLIENT_PROTOCOL_VERSION, bodies[0]["clientProtocol"]?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun deviceDirectoryCarriesTheRelayCompatibilityVerdict() = runTest {
+        val engine = MockEngine { _ ->
+            json("""[
+                {"device_id":"d-1","device_name":"Desktop 1","device_kind":"desktop","online":true,"compatible":true},
+                {"device_id":"d-2","device_name":"Desktop 2","device_kind":"desktop","online":true,"compatible":false},
+                {"device_id":"d-3","device_name":"Desktop 3","device_kind":"desktop","online":true}
+            ]""")
+        }
+        val client = CloudAccountClient(relayHttpClient(engine))
+        val session = CloudAccountSession("token-1", "123", ByteArray(32) { 7 })
+        val devices = client.listDevices(DEFAULT_CLOUD_RELAY_URL, session, "phone-1").associateBy { it.deviceId }
+        assertEquals(true, devices.getValue("d-1").compatible)
+        assertEquals(false, devices.getValue("d-2").compatible)
+        // An older Relay that does not gate reads as "unknown but usable".
+        assertEquals(null, devices.getValue("d-3").compatible)
+        assertEquals(listOf(true, false, true), listOf("d-1", "d-2", "d-3").map { devices.getValue(it).controllable })
+    }
+
+    @Test
+    fun relayRpcRejectionKeepsTheRelaysOwnWording() {
+        val outdated = relayRpcRejection("incompatible client build: remote control requires matching client versions")
+        val failure = assertIs<RelayTransportException>(outdated).failure
+        assertEquals(RelayFailure.ClientOutdated("incompatible client build: remote control requires matching client versions"), failure)
+        assertFalse(isRetryableStreamFailure(outdated))
+
+        val offline = assertIs<CloudAccountException>(relayRpcRejection("RPC target unavailable"))
+        assertEquals(CloudAccountFailure.RELAY_UNAVAILABLE, offline.failure)
+        assertEquals("RPC target unavailable", offline.detail)
+        assertTrue(offline.message!!.contains("RPC target unavailable"))
+        assertTrue(isRetryableStreamFailure(offline))
+
+        assertEquals("Relay RPC failed", assertIs<CloudAccountException>(relayRpcRejection(null)).detail)
     }
 
     /**

@@ -1,5 +1,6 @@
 import { HostSessionStream, HostSessionCallbacks, HostSessionSource, HostStreamHint, HostStreamPage, HostStreamReadRequest, HostStreamHintPlaintext, parseHostStreamHint } from './HostSessionStream';
 import { AccountRealtime } from './AccountRealtime';
+import { CLIENT_PROTOCOL_VERSION, clientVersion } from './ClientBuild';
 import { normalizeAccountRelayUrl, OFFICIAL_RELAY_URL } from './AccountDeviceLink';
 import { http } from '@kit.NetworkKit';
 import { CloudAccountCrypto } from './CloudAccountCrypto';
@@ -22,6 +23,8 @@ interface GitHubPoll { status: string; tokens?: GitHubTokens; }
 interface LoginRequest {
   access_token: string; device_id: string; device_name: string; device_kind: string;
   public_key: string; request_id: string;
+  /** See ClientBuild.ets; the Relay stores both and gates on the protocol. */
+  clientVersion: string; clientProtocol: number;
 }
 interface PeerPublicKey { public_key: string; }
 interface RelayErrorResponse { error?: string; }
@@ -87,6 +90,20 @@ export interface CloudAccountDevice {
   deviceKind?: string;
   online: boolean;
   lastSeenAt?: number;
+  /**
+   * Relay-computed mutual-control compatibility of this device with this one.
+   *
+   * `false` means confirmed incompatible: either a client build/protocol
+   * mismatch or a peer that reported no version information (an older client).
+   * Absent only on an older Relay that does not gate at all, which must be
+   * treated as "unknown but usable", never as incompatible.
+   */
+  compatible?: boolean;
+}
+
+/** The single gate every control entry point must reuse; see `compatible`. */
+export function isDeviceControllable(device: CloudAccountDevice): boolean {
+  return device.compatible !== false;
 }
 
 /** A device credential minted for another device, never for this one. */
@@ -117,6 +134,7 @@ interface CloudAccountDeviceWire {
   device_kind?: string;
   online: boolean;
   last_seen_at?: number;
+  compatible?: boolean;
 }
 
 /** Default OpenBitFun cloud relay used by the desktop account flow. */
@@ -252,7 +270,8 @@ export class CloudAccountClient {
         const body: LoginRequest = {
           access_token: poll.tokens.accessToken, device_id: deviceId, device_name: 'HarmonyOS Phone',
           device_kind: DEVICE_KIND_MOBILE, public_key: Encoding.bytesToBase64(keys.publicKey),
-          request_id: Encoding.randomId('').slice(1)
+          request_id: Encoding.randomId('').slice(1),
+          clientVersion: clientVersion(), clientProtocol: CLIENT_PROTOCOL_VERSION
         };
         try {
           const auth = await this.post<AccountAuthResponse>(relayUrl, '/api/auth/login', body);
@@ -320,7 +339,8 @@ export class CloudAccountClient {
       deviceName: device.device_name || device.device_id,
       deviceKind: device.device_kind,
       online: device.online,
-      lastSeenAt: device.last_seen_at
+      lastSeenAt: device.last_seen_at,
+      compatible: device.compatible
     }));
   }
 

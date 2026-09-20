@@ -118,9 +118,23 @@ extension MobileAppModel {
 
     }
 
+    /// Directory generations only ever advance, so a *newer* one is the sync we
+    /// just asked for and never a stale observation.
+    ///
+    /// `syncDeviceDirectory` bumps the generation, hands the store its devices
+    /// and rebinds — replaying the store's current value straight back here —
+    /// all before it returns the generation its caller assigns. Under an
+    /// equality guard that replay is therefore always measured against the
+    /// previous generation and always dropped, and the device list only ever
+    /// reached the sidebar because the follow-up `loadDeviceDirectory` happened
+    /// to publish again. With no device online there is no selected device and
+    /// so no follow-up, which left a signed-in account showing "尚未连接桌面设备"
+    /// with its offline desktops hidden. Adopting the newer generation keeps
+    /// that first emission while still rejecting one from a cancelled bind.
     func apply(directoryState state: DeviceDirectoryUiState, generation: UInt64) {
         guard !accountLoginPreview, !localActionPreview, !remoteCreatePreview, !directoryFixturePreview,
-              generation == accountDirectoryGeneration else { return }
+              generation >= accountDirectoryGeneration else { return }
+        accountDirectoryGeneration = generation
         deviceDirectory = state.devices.map { entry in
             let deviceKey = entry.deviceId
             let sessions = entry.sessions.map { session in
