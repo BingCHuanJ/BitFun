@@ -5,7 +5,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useSubmenuIntent } from '@/shared/utils/useSubmenuIntent';
-import { subscribeOverlayInteraction, createOverlayPortal, Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@openbitfun/ui';
+import { subscribeOverlayInteraction, createOverlayPortal, Icon, IconButton, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@openbitfun/ui';
 import {
   DEFAULT_WORKSPACE_SESSION_VIEW,
   hasWorkspaceSessionFilters,
@@ -213,7 +213,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
         <span className="openbitfun-nav-panel__session-filter-menu-value">
           {active ? <span className="openbitfun-nav-panel__session-filter-active-dot" aria-hidden="true" /> : null}
           {value ? t(`nav.sessions.viewMenu.${submenu}.${value}`) : null}
-          <Icon name="chevron-right" size="md" aria-hidden="true" />
+          <Icon name="chevron-right" size="sm" aria-hidden="true" />
         </span>
       )}
       onClick={() => {
@@ -250,7 +250,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           actions={[{
             id: 'reset',
             label: t('nav.sessions.viewMenu.filters.reset'),
-            icon: <Icon glyph={RotateCcw} />,
+            icon: <Icon glyph={RotateCcw} size="sm" />,
             onClick: () => {
               setActiveSubmenu(null);
               view.resetFilters();
@@ -334,9 +334,8 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
   return (
     <>
       <Tooltip content={t('nav.sessions.viewMenu.tooltip')} placement="right" followCursor disabled={open}>
-        <button
+        <IconButton
           ref={buttonRef}
-          type="button"
           className={`openbitfun-nav-panel__section-action${open || isCustomized ? ' is-active' : ''}`}
           data-openbitfun-action="session-filter"
           data-openbitfun-state={[open && 'open', isCustomized && 'filtered'].filter(Boolean).join(' ') || undefined}
@@ -345,9 +344,10 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           aria-expanded={open}
           onClick={() => setOpen(current => !current)}
           data-testid="nav-session-filter-btn"
-        >
-          <Icon name="filter" size="lg" style={{ width: 13, height: 13 }} />
-        </button>
+          icon={<Icon name="filter" size="sm" />}
+          size="xs"
+          variant="quiet"
+        />
       </Tooltip>
       {menu}
     </>

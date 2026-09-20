@@ -1373,7 +1373,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             role="status"
             aria-live="polite"
           >
-            <Loader2 size={12} />
+            <Loader2 className="openbitfun-nav-panel__inline-loading-icon" aria-hidden="true" />
             <OverflowText>{t('nav.sessions.loading')}</OverflowText>
           </div>
         )
@@ -1405,7 +1405,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       return (
         <div data-openbitfun-component="sessions-section" data-openbitfun-part="root" className={sessionListClassName}>
           <div className="openbitfun-nav-panel__inline-loading" data-openbitfun-component="sessions-section" data-openbitfun-part="loading" data-openbitfun-state="loading">
-            <Loader2 size={12} />
+            <Loader2 className="openbitfun-nav-panel__inline-loading-icon" aria-hidden="true" />
             <OverflowText>{t('nav.sessions.loading')}</OverflowText>
           </div>
         </div>
@@ -1714,7 +1714,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     ) : null}
                     {reviewActivityKind ? (
                       <span className="openbitfun-nav-panel__inline-item-review-badge">
-                        <Loader2 size={9} aria-hidden />
+                        <Loader2 className="openbitfun-nav-panel__inline-item-review-icon" aria-hidden />
                         {getReviewActivityBadge(reviewActivityKind)}
                       </span>
                     ) : null}
@@ -1733,7 +1733,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         />
                         <Loader2
                           className="openbitfun-nav-panel__inline-item-background-subagent-icon is-loader"
-                          size={10}
                           aria-hidden
                         />
                       </span>
@@ -1791,7 +1790,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         <>
                           <MenuItem
                             type="button"
-                            leading={<Icon name="chevron-left" />}
+                            leading={<Icon name="chevron-left" size="sm" />}
                             onClick={e => {
                               e.stopPropagation();
                               setIsExportScopeMenu(false);
@@ -1803,7 +1802,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           </MenuItem>
                           <MenuItem
                             type="button"
-                            leading={<Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
+                            leading={<Icon name="arrow-down" size="sm" />}
                             onClick={e => { void handleExportMarkdown(e, session, 'full'); }}
                             data-testid="nav-session-menu-export-full"
                             data-session-id={session.sessionId}
@@ -1812,7 +1811,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           </MenuItem>
                           <MenuItem
                             type="button"
-                            leading={<Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
+                            leading={<Icon name="arrow-down" size="sm" />}
                             onClick={e => { void handleExportMarkdown(e, session, 'result'); }}
                             data-testid="nav-session-menu-export-result"
                             data-session-id={session.sessionId}
@@ -1824,7 +1823,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         <>
                           <MenuItem
                             type="button"
-                            leading={<Icon name="edit" size="xs" />}
+                            leading={<Icon name="edit" size="sm" />}
                             onClick={e => { closeSessionMenu(); handleStartEdit(e, session); }}
                             data-testid="nav-session-menu-rename"
                             data-session-id={session.sessionId}
@@ -1833,7 +1832,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           </MenuItem>
                           <MenuItem
                             type="button"
-                            leading={<Icon name="duplicate" size="xs" />}
+                            leading={<Icon name="duplicate" size="sm" />}
                             onClick={e => { closeSessionMenu(); void handleCopySessionId(e, session.sessionId); }}
                             data-testid="nav-session-menu-copy-id"
                             data-session-id={session.sessionId}
@@ -1850,14 +1849,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             data-testid="nav-session-menu-export-markdown"
                             data-session-id={session.sessionId}
                             leading={exportingSessionId === session.sessionId
-                              ? <Loader2 size={13} className="openbitfun-nav-panel__inline-toggle-spinner" />
-                              : <Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
+                              ? <Loader2 className="openbitfun-nav-panel__inline-toggle-spinner" aria-hidden />
+                              : <Icon name="arrow-down" size="sm" />}
                           >
                             <span>{t('nav.sessions.exportMarkdown')}</span>
                           </MenuItem>
                           <MenuItem
                             type="button"
-                            leading={<Icon name="clock" size="xs" />}
+                            leading={<Icon name="clock" size="sm" />}
                             onClick={e => {
                               e.stopPropagation();
                               closeSessionMenu();
@@ -1871,7 +1870,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           </MenuItem>
                           <MenuItem
                             type="button"
-                            leading={<Icon glyph={Archive} />}
+                            leading={<Icon glyph={Archive} size="sm" />}
                             onClick={e => { closeSessionMenu(); void handleArchive(e, session.sessionId); }}
                             data-testid="nav-session-menu-archive"
                             data-session-id={session.sessionId}
@@ -1880,7 +1879,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           </MenuItem>
                           <MenuItem
                             type="button"
-                            leading={<Icon glyph={ListChecks} />}
+                            leading={<Icon glyph={ListChecks} size="sm" />}
                             disabled={!workspaceId && !session.projectWorkspaceId && !session.workspaceId}
                             onClick={e => {
                               e.stopPropagation();
@@ -1903,7 +1902,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           <MenuItem
                             type="button"
                             tone="danger"
-                            leading={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
+                            leading={<Icon name="delete" size="sm" />}
                             onClick={e => { closeSessionMenu(); void handleDelete(e, session.sessionId); }}
                             data-testid="nav-session-menu-delete"
                             data-session-id={session.sessionId}
@@ -1978,7 +1977,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             </span>
           )}
           {metadataPageState.isLoading ? (
-            <Loader2 size={12} className="openbitfun-nav-panel__inline-toggle-spinner" aria-hidden />
+            <Loader2 className="openbitfun-nav-panel__inline-toggle-spinner" aria-hidden />
           ) : expandToggleLabels.remainingCount === null ? (
             <Icon name="chevron-up" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           ) : (

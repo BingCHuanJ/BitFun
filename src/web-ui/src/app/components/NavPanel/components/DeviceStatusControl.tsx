@@ -1,6 +1,6 @@
 import { useDeviceDirectory, resolveDeviceName, isDeviceControllable, deviceClientVersion } from '@/infrastructure/account/deviceDirectory';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { subscribeOverlayInteraction, createOverlayPortal, OverflowText, Button, Card, CardBody, CardFooter, CardHeader, Icon, IconButton, ScrollArea } from '@openbitfun/ui';
+import { subscribeOverlayInteraction, createOverlayPortal, OverflowText, Button, Card, CardBody, CardFooter, CardHeader, Icon, IconButton, ScrollArea, type IconSize } from '@openbitfun/ui';
 import { ChevronLeft, ChevronRight, MessageCircle, Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -43,25 +43,26 @@ function chatAppBrandFromIdentity(identity: string | null | undefined): ChatAppB
 function DeviceIcon({
   identity,
   kind,
-  size = 17,
+  size = 'sm',
 }: {
   identity?: string | null;
   kind: DeviceOverviewDeviceKind;
-  size?: number;
+  size?: IconSize;
 }) {
-  const iconStyle = { width: size, height: size };
   switch (kind) {
     case 'mobile':
-      return <Icon glyph={Smartphone} size="lg" style={iconStyle} />;
+      return <Icon glyph={Smartphone} size={size} />;
     case 'execution-host':
-      return <Icon glyph={Server} size="lg" style={iconStyle} />;
+      return <Icon glyph={Server} size={size} />;
     case 'message-app': {
       const chatApp = chatAppBrandFromIdentity(identity);
-      if (chatApp) return <ChatAppBrandIcon app={chatApp} size={size} />;
-      return <Icon glyph={MessageCircle} size="lg" style={iconStyle} />;
+      if (chatApp) {
+        return <ChatAppBrandIcon app={chatApp} size={size} />;
+      }
+      return <Icon glyph={MessageCircle} size={size} />;
     }
     default:
-      return <Icon glyph={Monitor} size="lg" style={iconStyle} />;
+      return <Icon glyph={Monitor} size={size} />;
   }
 }
 
@@ -277,7 +278,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
         data-openbitfun-part="deviceStatus"
         data-openbitfun-state={overview.mode}
       >
-        <DeviceIcon kind={overview.primaryDevice.kind} size={15} />
+        <DeviceIcon kind={overview.primaryDevice.kind} size="sm" />
         <OverflowText className="openbitfun-nav-panel__footer-device-status-label">
           {overview.currentWorkDeviceName}
         </OverflowText>
@@ -295,7 +296,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 <DeviceIcon
                   identity={group.kind === 'message-app' ? attachedMessageAppIdentity : null}
                   kind={group.kind}
-                  size={13}
+                  size="xs"
                 />
                 {group.count > 1 && (
                   <span className="openbitfun-nav-panel__footer-device-status-attached-count">
@@ -360,7 +361,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                             <DeviceIcon
                               identity={`${device.id} ${device.name}`}
                               kind={device.kind}
-                              size={16}
+                              size="md"
                             />
                           </span>
                           <strong><OverflowText>{deviceDisplayName(device)}</OverflowText></strong>
@@ -447,7 +448,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 <Button
                   variant="outline"
                   size="sm"
-                  leadingIcon={<Icon name="refresh" size="lg" />}
+                  leadingIcon={<Icon name="refresh" size="sm" />}
                   className="openbitfun-device-overview__notice"
                   onClick={() => { void refresh(); }}
                 >
@@ -473,7 +474,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                   className="openbitfun-device-overview__action"
                   variant="outline"
                   size="sm"
-                  leadingIcon={<Icon glyph={Undo2} />}
+                  leadingIcon={<Icon glyph={Undo2} size="sm" />}
                   onClick={() => { void handleReturnLocal(); }}
                   disabled={returningLocal || switchingDevice}
                   data-testid="nav-device-status-return-local"

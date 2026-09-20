@@ -72,6 +72,8 @@ test("Icon geometry exposes every catalog size without product semantics", () =>
   assert.equal(tokens["control.icon.sizeSm"], "14px");
   assert.equal(tokens["control.icon.sizeMd"], "16px");
   assert.equal(tokens["control.icon.sizeLg"], "24px");
+  assert.equal(tokens["control.icon.strokeWidth"], 1.6);
+  assert.equal(tokens["control.icon.strokeWidthStrong"], 2);
 });
 
 test("TabGroup geometry preserves the capsule selected and outline contract", async () => {

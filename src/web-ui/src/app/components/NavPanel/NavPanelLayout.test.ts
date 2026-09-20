@@ -67,15 +67,15 @@ describe('NavPanel layout styles', () => {
     expect(stylesheet).not.toContain('&__collapsible');
   });
 
-  it('keeps root action buttons at the compact row size', () => {
+  it('keeps section actions on the shared compact icon-button token', () => {
     const stylesheet = readNavPanelStylesheet();
     const sectionActionBlock = extractBlock(stylesheet, '&__section-action');
     const itemActionBlock = extractBlock(stylesheet, '&__item-action');
 
-    for (const block of [sectionActionBlock, itemActionBlock]) {
-      expect(block).toContain('width: 20px;');
-      expect(block).toContain('height: 20px;');
-    }
+    expect(sectionActionBlock).toContain('inline-size: var(--_nav-icon-slot-size);');
+    expect(sectionActionBlock).toContain('block-size: var(--_nav-icon-slot-size);');
+    expect(itemActionBlock).toContain('width: 20px;');
+    expect(itemActionBlock).toContain('height: 20px;');
   });
 
   it('uses the selected label weight for active navigation rows', () => {
@@ -135,11 +135,32 @@ describe('NavPanel layout styles', () => {
     );
     expect(stylesheet).toContain('inset-block-start: 50%;');
     expect(stylesheet).toContain('inset-inline-start: 50%;');
-    expect(stylesheet).toContain('transform: translate(calc(-50% + 1px), -50%);');
+    expect(stylesheet).toContain('transform: translate(-50%, -50%);');
+    expect(stylesheet).not.toContain('translate(calc(-50% + 1px), -50%)');
     expect(stylesheet).not.toContain(
       '.openbitfun-nav-panel__top-action-expand-icons {\n' +
       '  position: relative;\n' +
       '  width: 22px;',
+    );
+  });
+
+  it('keeps component-library leading slots out of the flexible label column', () => {
+    const stylesheet = readNavPanelStylesheet();
+
+    expect(stylesheet).toContain(
+      ".openbitfun-nav-panel__top-action-btn,\n" +
+      ".openbitfun-nav-panel__miniapp-entry {\n" +
+      "  > [data-openbitfun-part='leading'] {\n" +
+      '    flex: 0 0 var(--_nav-icon-slot-size);\n' +
+      '    inline-size: var(--_nav-icon-slot-size);\n' +
+      '    block-size: var(--_nav-icon-slot-size);',
+    );
+    expect(stylesheet).toContain(
+      "> [data-openbitfun-part='label'] {\n" +
+      '    flex: 1;',
+    );
+    expect(stylesheet).not.toContain(
+      '> span:not([data-overflow-content]):not(.openbitfun-nav-panel__top-action-icon-circle)',
     );
   });
 });

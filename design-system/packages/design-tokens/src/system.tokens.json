@@ -543,12 +543,21 @@
       "expandedPaddingInline": { "$value": "0.625rem" }
     },
     "icon": {
-      "$type": "dimension",
-      "size2xs": { "$value": "8px" },
-      "sizeXs": { "$value": "12px" },
-      "sizeSm": { "$value": "14px" },
-      "sizeMd": { "$value": "16px" },
-      "sizeLg": { "$value": "24px" }
+      "size2xs": { "$type": "dimension", "$value": "8px" },
+      "sizeXs": { "$type": "dimension", "$value": "12px" },
+      "sizeSm": { "$type": "dimension", "$value": "14px" },
+      "sizeMd": { "$type": "dimension", "$value": "16px" },
+      "sizeLg": { "$type": "dimension", "$value": "24px" },
+      "strokeWidth": {
+        "$description": "Default optical line weight for Lucide-based interface icons.",
+        "$type": "number",
+        "$value": 1.6
+      },
+      "strokeWidthStrong": {
+        "$description": "Stronger optical line weight for compact navigation and other emphasized icon groups.",
+        "$type": "number",
+        "$value": 2
+      }
     },
     "height": {
       "$type": "dimension",
