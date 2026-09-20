@@ -711,9 +711,6 @@ const SkillsScene: React.FC = () => {
                                         void installed.handleGlobalSkillToggle(skill, event.target.checked);
                                       }}
                                     />
-                                    <span className="skills-card__availability-label">
-                                      {t(installed.globallyDisabledSkillKeys.has(skill.key) ? 'messages.disabled' : 'messages.enabled')}
-                                    </span>
                                   </div>
                                 ) : !skill.isShadowed && (
                                   <span className="skills-card__status-unavailable" aria-hidden="true">—</span>

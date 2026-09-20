@@ -855,7 +855,7 @@
     --openbitfun-component-button-fill-background-hover: rgba(0, 0, 0, 0.08);
     --openbitfun-component-button-fill-background-pressed: rgba(0, 0, 0, 0.08);
     --openbitfun-component-button-outline-border: rgba(0, 0, 0, 0.08);
-    --openbitfun-component-button-outline-border-interactive: transparent;
+    --openbitfun-component-button-outline-border-interactive: rgba(0, 0, 0, 0.08);
     --openbitfun-component-button-primary-background: rgba(0, 0, 0, 0.80);
     --openbitfun-component-button-primary-background-hover: rgba(0, 0, 0, 0.60);
     --openbitfun-component-button-primary-background-pressed: rgba(0, 0, 0, 0.90);
