@@ -40,6 +40,21 @@ platform presentation primitives.
 - Native hosts follow the system font-size preference with a documented maximum
   scale. Validate the standard size and at least one enlarged accessibility size
   without changing display zoom, and prefer wrapping or ellipsis over clipping.
+- The ramp's sizes were tuned on the iPhone Pro class, where one logical unit is
+  1/153.3 inch (460 ppi at 3x). A screen whose logical unit is physically larger
+  renders the same `16` visibly bigger, so `text_scale` normalises it: the host
+  computes `xdpi / density / reference_logical_dpi`, clamps it to
+  `[min_factor, max_factor]`, and applies it to text only, on top of the user's
+  font-size preference. HarmonyOS folds it into the generated typography roles
+  (`MobileTextScale.apply` at ability start, so every role getter returns the
+  scaled value); Android folds it into the theme's `Density.fontScale` so every
+  `sp` under `OpenBitFunTheme` follows. iOS is the reference and stays at 1.
+  Symbol glyph and `dp`/`vp` geometry never scale. A HUAWEI Mate X7
+  (415.6 dpi at density 3.125) resolves to 0.868, so its `16` reads as 14 vp —
+  the same millimetres as 16 pt on the iPhone.
+- Inline Markdown runs (`**strong**`, `*emphasis*`, `` `code` ``) change only
+  weight, slant, or family; they inherit the paragraph role's size on all three
+  hosts.
 
 The native role names map to the product's formal content purposes as follows:
 

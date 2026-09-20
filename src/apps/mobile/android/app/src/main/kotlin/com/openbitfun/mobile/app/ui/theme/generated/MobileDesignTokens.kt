@@ -155,6 +155,27 @@ internal object MobileDesignTypography {
     val BrandWordmark = TextStyle(fontSize = 42.sp, lineHeight = 56.sp, fontWeight = FontWeight.Medium)
 }
 
+/**
+ * Normalises how big one logical unit of type is on the glass. The ramp was
+ * tuned on 153.3 logical units per inch; a screen whose dp is physically larger
+ * shrinks its text by the ratio, clamped, so a 16.sp reads as the same
+ * millimetres. Returns 1 for displays whose xdpi is implausible against their
+ * nominal 160-per-dp density rather than trusting bad metrics.
+ */
+internal object MobileTextScale {
+    const val ReferenceLogicalDpi: Float = 153.3f
+    const val MinFactor: Float = 0.85f
+    const val MaxFactor: Float = 1f
+
+    fun resolve(xdpi: Float, density: Float): Float {
+        if (!(xdpi > 0f) || !(density > 0f)) return 1f
+        val nominalDpi = density * 160f
+        if (xdpi < nominalDpi * 0.5f || xdpi > nominalDpi * 2f) return 1f
+        val factor = (xdpi / density / ReferenceLogicalDpi).coerceIn(MinFactor, MaxFactor)
+        return Math.round(factor * 1000f) / 1000f
+    }
+}
+
 internal object MobileDesignGeometry {
     val ConversationHeaderHeight = 76.dp
     val ConversationHeaderCompactHeight = 64.dp

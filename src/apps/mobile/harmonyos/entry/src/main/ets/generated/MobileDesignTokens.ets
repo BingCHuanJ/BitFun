@@ -73,15 +73,65 @@ export class MobileDesignColors {
   static readonly statusWarning: MobileColorPair = new MobileColorPair("#FF8C00", "#FF8C00");
 }
 
+export class MobileTextScale {
+  static readonly referenceLogicalDpi: number = 153.3;
+  static readonly minFactor: number = 0.85;
+  static readonly maxFactor: number = 1;
+  private static current: number = 1;
+
+  static get factor(): number {
+    return MobileTextScale.current;
+  }
+
+  // xdpi is physical pixels per inch along the horizontal axis; densityPixels is
+  // physical pixels per logical unit. Their ratio is logical units per inch,
+  // compared against the reference the type ramp was tuned on. Displays that
+  // report an implausible xdpi against their nominal 160-per-unit density fall
+  // back to the unscaled ramp rather than trusting bad metrics.
+  static resolve(xdpi: number, densityPixels: number): number {
+    if (!(xdpi > 0) || !(densityPixels > 0)) {
+      return 1;
+    }
+    const nominalDpi = densityPixels * 160;
+    if (xdpi < nominalDpi * 0.5 || xdpi > nominalDpi * 2) {
+      return 1;
+    }
+    const factor = xdpi / densityPixels / MobileTextScale.referenceLogicalDpi;
+    const clamped = Math.min(MobileTextScale.maxFactor, Math.max(MobileTextScale.minFactor, factor));
+    return Math.round(clamped * 1000) / 1000;
+  }
+
+  static apply(xdpi: number, densityPixels: number): number {
+    MobileTextScale.current = MobileTextScale.resolve(xdpi, densityPixels);
+    return MobileTextScale.current;
+  }
+
+  static reset(): void {
+    MobileTextScale.current = 1;
+  }
+
+  static scaled(value: number): number {
+    return Math.round(value * MobileTextScale.current * 2) / 2;
+  }
+}
+
 export class MobileTypographyToken {
-  readonly size: number;
-  readonly lineHeight: number;
+  readonly baseSize: number;
+  readonly baseLineHeight: number;
   readonly weight: number;
 
   constructor(size: number, lineHeight: number, weight: number) {
-    this.size = size;
-    this.lineHeight = lineHeight;
+    this.baseSize = size;
+    this.baseLineHeight = lineHeight;
     this.weight = weight;
+  }
+
+  get size(): number {
+    return MobileTextScale.scaled(this.baseSize);
+  }
+
+  get lineHeight(): number {
+    return MobileTextScale.scaled(this.baseLineHeight);
   }
 }
 

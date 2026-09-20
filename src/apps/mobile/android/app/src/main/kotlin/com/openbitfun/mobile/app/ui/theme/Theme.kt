@@ -8,8 +8,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.openbitfun.mobile.app.ui.theme.generated.MobileDesignColors
 import com.openbitfun.mobile.app.ui.theme.generated.MobileDesignTypography
+import com.openbitfun.mobile.app.ui.theme.generated.MobileTextScale
 
 /**
  * The palette, ported from the HarmonyOS client's `Theme.ets` plus its
@@ -299,11 +303,29 @@ internal val openBitFunColors: OpenBitFunColors
 
 @Composable
 internal fun OpenBitFunTheme(dark: Boolean, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalOpenBitFunColors provides if (dark) DarkExtras else LightExtras) {
+    CompositionLocalProvider(
+        LocalOpenBitFunColors provides if (dark) DarkExtras else LightExtras,
+        LocalDensity provides textScaledDensity(),
+    ) {
         MaterialTheme(
             colorScheme = if (dark) DarkScheme else LightScheme,
             typography = OpenBitFunTypography,
             content = content,
         )
     }
+}
+
+/**
+ * The same ramp reads physically larger on a screen whose dp is bigger than the
+ * reference the sizes were tuned on, so every `sp` under the theme is folded by
+ * the display's own pitch. It rides on top of the user's font-size preference
+ * rather than replacing it, and dp geometry is untouched.
+ */
+@Composable
+@ReadOnlyComposable
+private fun textScaledDensity(): Density {
+    val base = LocalDensity.current
+    val metrics = LocalContext.current.resources.displayMetrics
+    val factor = MobileTextScale.resolve(xdpi = metrics.xdpi, density = metrics.density)
+    return if (factor == 1f) base else Density(base.density, base.fontScale * factor)
 }
