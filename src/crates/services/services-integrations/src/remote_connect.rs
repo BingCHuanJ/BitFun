@@ -557,6 +557,7 @@ pub const REMOTE_FILE_MAX_CHUNK_BYTES: u64 = 3 * 1024 * 1024;
 pub const REMOTE_CAPABILITY_HARNESS_PROFILES_V1: &str = "harness_profiles_v1";
 pub const REMOTE_CAPABILITY_DIALOG_STEER_V1: &str = "dialog_steer_v1";
 pub const REMOTE_CAPABILITY_USER_QUESTION_INTERACTION_V1: &str = "user_question_interaction_v1";
+pub const REMOTE_CAPABILITY_SESSION_ROLLBACK_V1: &str = "session_rollback_v1";
 pub const REMOTE_CAPABILITY_PLAN_BUILD_V1: &str = "plan_build_v1";
 pub use host_stream::REMOTE_CAPABILITY_HOST_STREAM_V1;
 
@@ -566,6 +567,7 @@ fn remote_host_capabilities() -> Vec<String> {
         REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string(),
         REMOTE_CAPABILITY_DIALOG_STEER_V1.to_string(),
         REMOTE_CAPABILITY_PLAN_BUILD_V1.to_string(),
+        REMOTE_CAPABILITY_SESSION_ROLLBACK_V1.to_string(),
         REMOTE_CAPABILITY_USER_QUESTION_INTERACTION_V1.to_string(),
         REMOTE_CAPABILITY_HOST_STREAM_V1.to_string(),
     ]
@@ -2529,7 +2531,7 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
             metadata: None,
             turn_id: Some(turn.turn_id),
             // Rollback targets user turns only, so the assistant projection
-            // deliberately carries no turn identity.
+            // deliberately carries no storage index.
             turn_index: None,
             status: Some(turn.status),
             error: turn.error,

@@ -8,6 +8,7 @@ interface ChatMessageActionsProps {
   deleting: boolean;
   message: ChatMessage | null;
   streaming?: boolean;
+  rollbackSupported?: boolean;
   onClose: () => void;
   onCopy: () => void;
   onDelete: () => void;
@@ -26,6 +27,7 @@ export default function ChatMessageActions({
   deleting,
   message,
   streaming = false,
+  rollbackSupported = false,
   onClose,
   onCopy,
   onDelete,
@@ -34,7 +36,7 @@ export default function ChatMessageActions({
   onRollback,
 }: ChatMessageActionsProps) {
   const { t } = useI18n();
-  const hasTurnId = message?.role === 'user' && Boolean(message.turn_id);
+  const hasTurnId = rollbackSupported && message?.role === 'user' && Boolean(message.turn_id);
 
   const actions: MobileActionSheetItem[] = message ? [
     { id: 'copy', label: t('chat.copyMessage'), leading: <CopyIcon /> },

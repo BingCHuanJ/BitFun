@@ -670,6 +670,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
     try {
       const result = await sessionMgr.rollbackSessionToTurn(sessionId, turnId, message.turn_index);
       if (!isChatTargetCurrent(targetEpoch)) return;
+      setRollbackTarget(null);
+      setRollbackDraft('');
       // History changed on the host. Pull the authoritative snapshot now, before
       // the follow-up send can fail, or the transcript keeps showing turns that
       // no longer exist until the next idle poll.
@@ -719,11 +721,11 @@ const ChatPage: React.FC<ChatPageProps> = ({
       if (isChatTargetCurrent(targetEpoch)) {
         streamRef.current?.nudge();
       }
-      reportRemoteSessionError(e, setError);
+      if (isChatTargetCurrent(targetEpoch)) reportRemoteSessionError(e, setError);
     } finally {
-      setRollbackBusy(false);
-      setRollbackTarget(null);
-      setRollbackDraft('');
+      if (isChatTargetCurrent(targetEpoch)) {
+        setRollbackBusy(false);
+      }
     }
   }, [
     captureChatTargetEpoch,
@@ -1210,6 +1212,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         deleting={deletingMsg}
         message={menuMessage}
         streaming={isStreaming}
+        rollbackSupported={sessionMgr.supportsHostCapability('session_rollback_v1')}
         onClose={() => setMenuMessage(null)}
         onCopy={() => void handleCopyMessage()}
         onDelete={() => void handleDeleteMessage()}

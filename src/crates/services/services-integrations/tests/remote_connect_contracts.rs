@@ -49,7 +49,8 @@ use openbitfun_services_integrations::remote_connect::{
     RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
     RemoteWorkspaceKind, RemoteWorkspaceUpdate, TrackerEvent, REMOTE_CAPABILITY_DIALOG_STEER_V1,
     REMOTE_CAPABILITY_HARNESS_PROFILES_V1, REMOTE_CAPABILITY_HOST_STREAM_V1,
-    REMOTE_CAPABILITY_PLAN_BUILD_V1, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
+    REMOTE_CAPABILITY_PLAN_BUILD_V1, REMOTE_CAPABILITY_SESSION_ROLLBACK_V1,
+    REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -2223,6 +2224,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
             REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
             REMOTE_CAPABILITY_DIALOG_STEER_V1,
             REMOTE_CAPABILITY_PLAN_BUILD_V1,
+            REMOTE_CAPABILITY_SESSION_ROLLBACK_V1,
             "user_question_interaction_v1",
             REMOTE_CAPABILITY_HOST_STREAM_V1
         ])
@@ -2468,6 +2470,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
             REMOTE_CAPABILITY_DIALOG_STEER_V1,
             REMOTE_CAPABILITY_PLAN_BUILD_V1,
+            REMOTE_CAPABILITY_SESSION_ROLLBACK_V1,
             "user_question_interaction_v1",
             REMOTE_CAPABILITY_HOST_STREAM_V1
         ])
@@ -2894,6 +2897,13 @@ fn remote_connect_user_message_carries_rollback_turn_identity_on_the_wire() {
     assert_eq!(user["turn_id"], "turn-1");
     assert_eq!(user["turn_index"], 4);
     assert!(assistant.get("turn_index").is_none());
+
+    // Existing hosts and saved messages omit the additive storage index.
+    let mut legacy = user;
+    legacy.as_object_mut().unwrap().remove("turn_index");
+    let decoded: ChatMessage = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(decoded.turn_index, None);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
 }
 
 fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {

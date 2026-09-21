@@ -808,7 +808,7 @@ export class RemoteSessionManager {
   }
 
   /**
-   * Retire every turn after `targetTurnId` on the host and restore the files
+   * Retire `targetTurnId` and every turn after it on the host and restore the files
    * those turns wrote. `expectedStorageTurnIndex` comes from the same message
    * the user targeted, so a transcript that moved since it was loaded fails
    * instead of rolling back a different turn.
@@ -818,6 +818,9 @@ export class RemoteSessionManager {
     targetTurnId: string,
     expectedStorageTurnIndex?: number,
   ): Promise<SessionRollbackResult> {
+    if (!this.supportsHostCapability('session_rollback_v1')) {
+      throw new Error('This host does not support session rollback. Update the host to use this action.');
+    }
     const resp = await this.request<{
       resp: string;
       session_id: string;
@@ -831,9 +834,14 @@ export class RemoteSessionManager {
       target_turn_id: targetTurnId,
       expected_storage_turn_index: expectedStorageTurnIndex,
     });
+    if (resp.resp !== 'session_rolled_back' || resp.session_id !== sessionId
+      || !Array.isArray(resp.retired_turn_ids) || !Array.isArray(resp.restored_files)
+      || typeof resp.changed !== 'boolean') {
+      throw new Error('Invalid session rollback response');
+    }
     return {
-      retired_turn_ids: resp.retired_turn_ids ?? [],
-      restored_files: resp.restored_files ?? [],
+      retired_turn_ids: resp.retired_turn_ids,
+      restored_files: resp.restored_files,
       composer_text: resp.composer_text,
       changed: resp.changed ?? false,
     };
