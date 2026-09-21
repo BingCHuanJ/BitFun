@@ -373,6 +373,8 @@ test('rollback forwards the streamed storage index and validates the acknowledge
   assert.equal(calls[0].expected_storage_turn_index, 7);
   response = { ...response, session_id: 'session-b' };
   await assert.rejects(manager.rollbackSessionToTurn('session-a', 'turn-a', 7), /Invalid session rollback response/);
+  response = { ...response, session_id: 'session-a', composer_text: { unexpected: 'object' } };
+  await assert.rejects(manager.rollbackSessionToTurn('session-a', 'turn-a', 7), /Invalid session rollback response/);
   response = { resp: 'ok' };
   await assert.rejects(manager.rollbackSessionToTurn('session-a', 'turn-a', 7), /Invalid session rollback response/);
 });

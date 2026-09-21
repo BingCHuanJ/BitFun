@@ -836,6 +836,9 @@ export class RemoteSessionManager {
     });
     if (resp.resp !== 'session_rolled_back' || resp.session_id !== sessionId
       || !Array.isArray(resp.retired_turn_ids) || !Array.isArray(resp.restored_files)
+      || !resp.retired_turn_ids.every(id => typeof id === 'string')
+      || !resp.restored_files.every(path => typeof path === 'string')
+      || (resp.composer_text !== undefined && typeof resp.composer_text !== 'string')
       || typeof resp.changed !== 'boolean') {
       throw new Error('Invalid session rollback response');
     }

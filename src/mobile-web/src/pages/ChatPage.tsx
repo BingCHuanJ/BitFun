@@ -654,9 +654,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // send, which is how the desktop reruns an edited user message.
   const handleConfirmRollback = useCallback(async () => {
     if (!rollbackTarget || rollbackBusy) return;
-    // The host cancels the running turn and clears the queue to take the
-    // maintenance permit, so it never rolls back mid-task. Match the desktop,
-    // which refuses the mutation instead of killing work the user can't see.
+    // The host independently checks idle under its scheduling lock; this
+    // presentation guard only avoids a request while this view is already busy.
     if (isStreaming) return;
     const { message, mode } = rollbackTarget;
     const turnId = message.turn_id;
@@ -694,6 +693,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           // of dropping it when the send is what failed.
           if (isChatTargetCurrent(targetEpoch)) {
             setInput(editedText);
+            setPendingImages((message.images ?? []).map(img => ({ name: img.name, dataUrl: img.data_url })));
             setInputExpanded(true);
           }
           throw sendError;

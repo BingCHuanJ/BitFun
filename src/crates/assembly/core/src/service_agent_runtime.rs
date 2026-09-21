@@ -1267,7 +1267,12 @@ impl AgentSessionRevertPort for ScheduledSessionManagementPort {
             .map_err(map_session_close_error)?;
         let maintenance = self
             .scheduler
-            .begin_session_maintenance(&request.session_id, &storage_path, Duration::from_secs(30))
+            .begin_session_maintenance_with_policy(
+                &request.session_id,
+                &storage_path,
+                Duration::from_secs(30),
+                request.require_idle,
+            )
             .await
             .map_err(map_session_close_error)?;
         let _mutation = session_manager
@@ -3440,6 +3445,7 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
                 workspace_hostname: Some(binding.session_identity.hostname.clone()),
                 session_id: session_id.to_string(),
                 target_turn_id: target_turn_id.to_string(),
+                require_idle: true,
                 expected_storage_turn_index,
                 expected_catalog_revision: None,
                 remote_connection_id: None,
