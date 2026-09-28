@@ -4657,8 +4657,13 @@ mod history_workspace_identity_tests {
     async fn history_routing_uses_ids_even_with_colliding_roots_and_stale_transport_fields() {
         let temp = tempfile::tempdir().unwrap();
         let local = register_local_fixture(temp.path(), None).await;
+        let remote_path = if local.root_path.to_string_lossy().starts_with('/') {
+            local.root_path.to_string_lossy().to_string()
+        } else {
+            format!("/srv/colliding-test/{}", uuid::Uuid::new_v4())
+        };
         let remote = register_remote_fixture(
-            &local.root_path.to_string_lossy(),
+            &remote_path,
             "history-test-ssh",
             "history.example",
         )
