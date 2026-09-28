@@ -705,13 +705,16 @@ const ChatPage: React.FC<ChatPageProps> = ({
           throw sendError;
         }
         if (!isChatTargetCurrent(targetEpoch)) return;
-      } else if (result.composer_text) {
-        setInput(result.composer_text);
+      } else {
+        const restoredText = result.composer_text ?? '';
+        setInput(restoredText);
         const validImages = (message.images ?? []).filter((img): img is ChatImageAttachment => Boolean(img?.data_url));
         if (validImages.length > 0) {
           setPendingImages(validImages.map(img => ({ name: img.name, dataUrl: img.data_url })));
         }
-        setInputExpanded(true);
+        if (restoredText.trim() || validImages.length > 0) {
+          setInputExpanded(true);
+        }
       }
 
       showMsgToast(
