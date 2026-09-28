@@ -67,7 +67,7 @@ function isValidImageDataUrl(url: unknown): url is string {
   const match = trimmed.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=]+)$/);
   if (!match) return false;
   const base64Data = match[1];
-  return base64Data.length > 0 && (base64Data.length % 4 === 0 || base64Data.length >= 4);
+  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/.test(base64Data);
 }
 
 function extractValidImageContexts(
