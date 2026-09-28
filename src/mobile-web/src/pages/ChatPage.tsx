@@ -1135,6 +1135,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const workspaceName = currentWorkspace?.project_name || currentWorkspace?.path?.split('/').pop() || '';
   const gitBranch = currentWorkspace?.git_branch;
   const displayName = liveTitle || sessionName || t('chat.session');
+  const isRemoteWorkspace = currentWorkspace?.workspace_kind === 'remote'
+    || Boolean(currentWorkspace?.remote_connection_id)
+    || Boolean(currentWorkspace?.remote_ssh_host);
 
   return (
     <div className={`chat-page${wideLayout ? ' chat-page--wide' : ''}`} style={{ '--chat-composer-height': `${composerHeight}px` } as React.CSSProperties}>
@@ -1218,7 +1221,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         deleting={deletingMsg}
         message={menuMessage}
         streaming={isStreaming}
-        rollbackSupported={sessionMgr.supportsHostCapability('session_rollback_v1')}
+        rollbackSupported={sessionMgr.supportsHostCapability('session_rollback_v1') && !isRemoteWorkspace}
         onClose={() => setMenuMessage(null)}
         onCopy={() => void handleCopyMessage()}
         onDelete={() => void handleDeleteMessage()}

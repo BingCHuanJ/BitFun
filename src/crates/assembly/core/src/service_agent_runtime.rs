@@ -4140,6 +4140,20 @@ mod tests {
             remote_session_host_impl.contains("agent_runtime_with_dialog_turns"),
             "CoreRemoteSessionRuntimeHost must register dialogue and revert ports for rollback"
         );
+
+        let dialog_turns_builder = source
+            .split("pub(crate) fn agent_runtime_with_dialog_turns")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("pub(crate) fn agent_runtime_with_lifecycle_delivery")
+                    .next()
+            })
+            .expect("agent_runtime_with_dialog_turns definition");
+        assert!(
+            dialog_turns_builder.contains(".with_session_revert_port(session_revert)"),
+            "agent_runtime_with_dialog_turns must attach session_revert port"
+        );
     }
 
     #[test]
