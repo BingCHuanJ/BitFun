@@ -1236,7 +1236,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         confirmDisabled={rollbackBusy || isStreaming || (rollbackTarget?.mode === 'edit' && !rollbackDraft.trim())}
         confirmLabel={rollbackTarget?.mode === 'edit' ? t('chat.editAction') : t('chat.rollbackAction')}
         confirmTone="danger"
-        description={rollbackTarget?.mode === 'edit' ? undefined : t('chat.rollbackSheetHint')}
+        description={rollbackTarget?.mode === 'edit' ? t('chat.editSheetHint') : t('chat.rollbackSheetHint')}
         onConfirm={handleConfirmRollback}
         onOpenChange={(open) => {
           if (!open) closeRollbackSheet();
