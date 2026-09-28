@@ -61,13 +61,16 @@ function sanitizeMessageText(content: string): string {
     .trim();
 }
 
-function isValidImageDataUrl(url: unknown): url is string {
-  if (typeof url !== 'string') return false;
-  const trimmed = url.trim();
-  const match = trimmed.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=]+)$/);
-  if (!match) return false;
-  const base64Data = match[1];
-  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=|[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{4})$/.test(base64Data);
+function normalizeValidImageDataUrl(url: unknown): { trimmedUrl: string; mimeType: string } | null {
+  if (typeof url !== 'string') return null;
+  const trimmedUrl = url.trim();
+  const match = trimmedUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) return null;
+  const mimeType = match[1];
+  const base64Data = match[2];
+  const isValid = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=|[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{4})$/.test(base64Data);
+  if (!isValid) return null;
+  return { trimmedUrl, mimeType };
 }
 
 function extractValidImageContexts(
@@ -78,13 +81,15 @@ function extractValidImageContexts(
   const valid: { data_url: string; mime_type: string; name: string }[] = [];
   for (const img of images) {
     try {
-      if (img && typeof img === 'object' && isValidImageDataUrl(img.data_url)) {
-        const mimeMatch = img.data_url.match(/^data:([^;]+);/);
-        valid.push({
-          data_url: img.data_url,
-          mime_type: mimeMatch ? mimeMatch[1] : 'image/png',
-          name: typeof img.name === 'string' && img.name ? img.name : 'image',
-        });
+      if (img && typeof img === 'object') {
+        const normalized = normalizeValidImageDataUrl(img.data_url);
+        if (normalized) {
+          valid.push({
+            data_url: normalized.trimmedUrl,
+            mime_type: normalized.mimeType,
+            name: typeof img.name === 'string' && img.name ? img.name : 'image',
+          });
+        }
       }
     } catch {
       // Ignore corrupted attachment items
@@ -104,11 +109,14 @@ function extractValidPendingImages(images: unknown): { name: string; dataUrl: st
   const result: { name: string; dataUrl: string }[] = [];
   for (const img of images) {
     try {
-      if (img && typeof img === 'object' && isValidImageDataUrl(img.data_url)) {
-        result.push({
-          name: typeof img.name === 'string' && img.name ? img.name : 'image',
-          dataUrl: img.data_url,
-        });
+      if (img && typeof img === 'object') {
+        const normalized = normalizeValidImageDataUrl(img.data_url);
+        if (normalized) {
+          result.push({
+            name: typeof img.name === 'string' && img.name ? img.name : 'image',
+            dataUrl: normalized.trimmedUrl,
+          });
+        }
       }
     } catch {
       // Ignore corrupted attachment items
@@ -721,9 +729,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const attempt = Symbol('rollback');
     rollbackInFlightRef.current = attempt;
     setRollbackBusy(true);
+    const isCurrentAttempt = () => isChatTargetCurrent(targetEpoch) && rollbackInFlightRef.current === attempt;
     try {
       const result = await sessionMgr.rollbackSessionToTurn(sessionId, turnId, message.turn_index);
-      if (!isChatTargetCurrent(targetEpoch)) return;
+      if (!isCurrentAttempt()) return;
       setRollbackTarget(null);
       setRollbackDraft('');
       // History changed on the host. Pull the authoritative snapshot now, before
@@ -740,14 +749,14 @@ const ChatPage: React.FC<ChatPageProps> = ({
           // The rollback already retired the turn this text came from, so the
           // draft has nowhere to fall back to. Hand it to the composer instead
           // of dropping it when the send is what failed.
-          if (isChatTargetCurrent(targetEpoch)) {
+          if (isCurrentAttempt()) {
             setInput(editedText);
             setPendingImages(fallbackPendingImages);
             setInputExpanded(true);
           }
           throw sendError;
         }
-        if (!isChatTargetCurrent(targetEpoch)) return;
+        if (!isCurrentAttempt()) return;
       } else {
         const restoredText = result.composer_text ?? '';
         setInput(restoredText);
@@ -774,16 +783,16 @@ const ChatPage: React.FC<ChatPageProps> = ({
       // conflict), so pull the authoritative snapshot instead of leaving the
       // transcript stale until the next idle poll. The stream ref belongs to
       // the current chat, so guard against a session switch mid-flight.
-      if (isChatTargetCurrent(targetEpoch)) {
+      if (isCurrentAttempt()) {
         streamRef.current?.nudge();
       }
-      if (isChatTargetCurrent(targetEpoch)) reportRemoteSessionError(e, setError);
+      if (isCurrentAttempt()) reportRemoteSessionError(e, setError);
     } finally {
       if (rollbackInFlightRef.current === attempt) {
         rollbackInFlightRef.current = null;
-      }
-      if (isChatTargetCurrent(targetEpoch)) {
-        setRollbackBusy(false);
+        if (isChatTargetCurrent(targetEpoch)) {
+          setRollbackBusy(false);
+        }
       }
     }
   }, [
