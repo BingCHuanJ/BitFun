@@ -13,6 +13,7 @@ import {
   RemoteSessionManager,
   SessionSynchronizer,
   type PollResponse,
+  type ChatImageAttachment,
   type ChatMessage,
   type RemoteModelCatalog,
 } from '../services/RemoteSessionManager';
@@ -681,8 +682,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
       streamRef.current?.nudge();
 
       if (mode === 'edit') {
-        const imageContexts = message.images?.length
-          ? message.images.map((img, idx) => ({
+        const validImages = (message.images ?? []).filter((img): img is ChatImageAttachment => Boolean(img?.data_url));
+        const imageContexts = validImages.length
+          ? validImages.map((img, idx) => ({
               id: `mobile_edit_${Date.now()}_${idx}`,
               data_url: img.data_url,
               mime_type: img.data_url.split(';')[0]?.replace('data:', '') || 'image/png',
@@ -697,7 +699,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           // of dropping it when the send is what failed.
           if (isChatTargetCurrent(targetEpoch)) {
             setInput(editedText);
-            setPendingImages((message.images ?? []).map(img => ({ name: img.name, dataUrl: img.data_url })));
+            setPendingImages(validImages.map(img => ({ name: img.name, dataUrl: img.data_url })));
             setInputExpanded(true);
           }
           throw sendError;
@@ -705,8 +707,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
         if (!isChatTargetCurrent(targetEpoch)) return;
       } else if (result.composer_text) {
         setInput(result.composer_text);
-        if (message.images?.length) {
-          setPendingImages(message.images.map(img => ({ name: img.name, dataUrl: img.data_url })));
+        const validImages = (message.images ?? []).filter((img): img is ChatImageAttachment => Boolean(img?.data_url));
+        if (validImages.length > 0) {
+          setPendingImages(validImages.map(img => ({ name: img.name, dataUrl: img.data_url })));
         }
         setInputExpanded(true);
       }
