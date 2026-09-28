@@ -705,6 +705,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
         if (!isChatTargetCurrent(targetEpoch)) return;
       } else if (result.composer_text) {
         setInput(result.composer_text);
+        if (message.images?.length) {
+          setPendingImages(message.images.map(img => ({ name: img.name, dataUrl: img.data_url })));
+        }
         setInputExpanded(true);
       }
 
@@ -1135,9 +1138,12 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const workspaceName = currentWorkspace?.project_name || currentWorkspace?.path?.split('/').pop() || '';
   const gitBranch = currentWorkspace?.git_branch;
   const displayName = liveTitle || sessionName || t('chat.session');
-  const isRemoteWorkspace = currentWorkspace?.workspace_kind === 'remote'
-    || Boolean(currentWorkspace?.remote_connection_id)
-    || Boolean(currentWorkspace?.remote_ssh_host);
+  // Safe default: require a confirmed local workspace before presenting destructive rollback actions
+  const isRollbackWorkspaceAllowed = currentWorkspace !== null
+    && currentWorkspace.has_workspace
+    && currentWorkspace.workspace_kind !== 'remote'
+    && !currentWorkspace.remote_connection_id
+    && !currentWorkspace.remote_ssh_host;
 
   return (
     <div className={`chat-page${wideLayout ? ' chat-page--wide' : ''}`} style={{ '--chat-composer-height': `${composerHeight}px` } as React.CSSProperties}>
@@ -1221,7 +1227,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         deleting={deletingMsg}
         message={menuMessage}
         streaming={isStreaming}
-        rollbackSupported={sessionMgr.supportsHostCapability('session_rollback_v1') && !isRemoteWorkspace}
+        rollbackSupported={sessionMgr.supportsHostCapability('session_rollback_v1') && isRollbackWorkspaceAllowed}
         onClose={() => setMenuMessage(null)}
         onCopy={() => void handleCopyMessage()}
         onDelete={() => void handleDeleteMessage()}
