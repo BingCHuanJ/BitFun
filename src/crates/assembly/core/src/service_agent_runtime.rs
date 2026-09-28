@@ -2924,7 +2924,12 @@ impl CoreRemoteSessionRuntimeHost {
     pub(crate) fn new() -> Result<Self, String> {
         let coordinator = get_global_coordinator()
             .ok_or_else(|| "Desktop session system not ready".to_string())?;
-        let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())?;
+        let scheduler = get_global_scheduler()
+            .ok_or_else(|| "Dialog scheduler is not initialized".to_string())?;
+        let runtime = CoreServiceAgentRuntime::agent_runtime_with_dialog_turns(
+            coordinator.clone(),
+            scheduler,
+        )?;
         Ok(Self {
             coordinator,
             runtime,
@@ -4125,6 +4130,16 @@ mod tests {
             .expect("remote session rollback");
         assert!(rollback.contains("ensure_remote_binding_runtime_ownership"));
         assert!(rollback.contains("binding.is_remote()"));
+
+        let remote_session_host_impl = source
+            .split("impl CoreRemoteSessionRuntimeHost")
+            .nth(1)
+            .and_then(|source| source.split("struct CoreRemotePollRuntimeHost").next())
+            .expect("remote session host struct implementation");
+        assert!(
+            remote_session_host_impl.contains("agent_runtime_with_dialog_turns"),
+            "CoreRemoteSessionRuntimeHost must register dialogue and revert ports for rollback"
+        );
     }
 
     #[test]

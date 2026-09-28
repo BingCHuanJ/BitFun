@@ -40,7 +40,7 @@ export default function ChatMessageActions({
 
   const actions: MobileActionSheetItem[] = message ? [
     { id: 'copy', label: t('chat.copyMessage'), leading: <CopyIcon /> },
-    ...(message.role === 'user' ? [{ id: 'resend', label: t('chat.resendMessage'), leading: <ResendIcon /> }] : []),
+    ...(message.role === 'user' && !hasTurnId ? [{ id: 'resend', label: t('chat.resendMessage'), leading: <ResendIcon /> }] : []),
     ...(hasTurnId ? [
       {
         id: 'edit',
