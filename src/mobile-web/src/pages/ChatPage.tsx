@@ -61,6 +61,38 @@ function sanitizeMessageText(content: string): string {
     .trim();
 }
 
+function isValidImageDataUrl(url: unknown): url is string {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(trimmed)
+    || (trimmed.startsWith('data:image/') && trimmed.includes(';base64,'));
+}
+
+function extractValidImageContexts(
+  images: ChatImageAttachment[] | undefined,
+  prefix: string,
+): { id: string; data_url: string; mime_type: string; metadata: { name: string; source: string } }[] | undefined {
+  if (!images?.length) return undefined;
+  const valid = images.filter((img): img is ChatImageAttachment => isValidImageDataUrl(img?.data_url));
+  if (!valid.length) return undefined;
+  return valid.map((img, idx) => {
+    const mimeMatch = img.data_url.match(/^data:([^;]+);/);
+    return {
+      id: `${prefix}_${Date.now()}_${idx}`,
+      data_url: img.data_url,
+      mime_type: mimeMatch ? mimeMatch[1] : 'image/png',
+      metadata: { name: img.name || 'image', source: 'remote' },
+    };
+  });
+}
+
+function extractValidPendingImages(images: ChatImageAttachment[] | undefined): { name: string; dataUrl: string }[] {
+  if (!images?.length) return [];
+  return images
+    .filter((img): img is ChatImageAttachment => isValidImageDataUrl(img?.data_url))
+    .map(img => ({ name: img.name || 'image', dataUrl: img.data_url }));
+}
+
 
 // ─── Thinking (ModelThinkingDisplay-style) ───────────────────────────────────
 
@@ -210,7 +242,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   } | null>(null);
   const [rollbackDraft, setRollbackDraft] = useState('');
   const [rollbackBusy, setRollbackBusy] = useState(false);
-  const rollbackInFlightRef = useRef(false);
+  const rollbackInFlightTargetRef = useRef<number | null>(null);
   const msgLongPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const msgLongPressPosRef = useRef({ x: 0, y: 0 });
   const msgToastTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -249,7 +281,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
       setRollbackTarget(null);
       setRollbackDraft('');
       setRollbackBusy(false);
-      rollbackInFlightRef.current = false;
+      rollbackInFlightTargetRef.current = null;
       setActionToast(null);
       setInfoToast(null);
       setExpandedMsgIds(new Set());
@@ -605,17 +637,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const text = sanitizeMessageText(menuMessage.content);
     if (!text) return;
     setMenuMessage(null);
-    const imageContexts = menuMessage.images?.length
-      ? menuMessage.images.map((img, idx) => {
-          const mimeType = img.data_url.split(';')[0]?.replace('data:', '') || 'image/png';
-          return {
-            id: `mobile_resend_${Date.now()}_${idx}`,
-            data_url: img.data_url,
-            mime_type: mimeType,
-            metadata: { name: img.name, source: 'remote' },
-          };
-        })
-      : undefined;
+    const imageContexts = extractValidImageContexts(menuMessage.images, 'mobile_resend');
     try {
       await sessionMgr.sendMessage(sessionId, text, sessionAgentType, imageContexts);
       if (!isChatTargetCurrent(targetEpoch)) return;
@@ -660,7 +682,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // the files they wrote. Editing is that same rollback followed by a normal
   // send, which is how the desktop reruns an edited user message.
   const handleConfirmRollback = useCallback(async () => {
-    if (!rollbackTarget || rollbackBusy || rollbackInFlightRef.current) return;
+    if (!rollbackTarget || rollbackBusy || rollbackInFlightTargetRef.current !== null) return;
     // The host independently checks idle under its scheduling lock; this
     // presentation guard only avoids a request while this view is already busy.
     if (isStreaming) return;
@@ -672,7 +694,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const targetEpoch = captureChatTargetEpoch();
     if (targetEpoch === null) return;
 
-    rollbackInFlightRef.current = true;
+    rollbackInFlightTargetRef.current = targetEpoch;
     setRollbackBusy(true);
     try {
       const result = await sessionMgr.rollbackSessionToTurn(sessionId, turnId, message.turn_index);
@@ -685,20 +707,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
       streamRef.current?.nudge();
 
       if (mode === 'edit') {
-        const validImages = (message.images ?? []).filter(
-          (img): img is ChatImageAttachment => typeof img?.data_url === 'string' && img.data_url.trim().length > 0,
-        );
-        const imageContexts = validImages.length
-          ? validImages.map((img, idx) => {
-              const mimeMatch = img.data_url.match(/^data:([^;]+);/);
-              return {
-                id: `mobile_edit_${Date.now()}_${idx}`,
-                data_url: img.data_url,
-                mime_type: mimeMatch ? mimeMatch[1] : 'image/png',
-                metadata: { name: img.name, source: 'remote' },
-              };
-            })
-          : undefined;
+        const imageContexts = extractValidImageContexts(message.images, 'mobile_edit');
+        const fallbackPendingImages = extractValidPendingImages(message.images);
         try {
           await sessionMgr.sendMessage(sessionId, editedText, sessionAgentType, imageContexts);
         } catch (sendError) {
@@ -707,7 +717,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           // of dropping it when the send is what failed.
           if (isChatTargetCurrent(targetEpoch)) {
             setInput(editedText);
-            setPendingImages(validImages.map(img => ({ name: img.name, dataUrl: img.data_url })));
+            setPendingImages(fallbackPendingImages);
             setInputExpanded(true);
           }
           throw sendError;
@@ -716,13 +726,11 @@ const ChatPage: React.FC<ChatPageProps> = ({
       } else {
         const restoredText = result.composer_text ?? '';
         setInput(restoredText);
-        const validImages = (message.images ?? []).filter(
-          (img): img is ChatImageAttachment => typeof img?.data_url === 'string' && img.data_url.trim().length > 0,
-        );
-        if (validImages.length > 0) {
-          setPendingImages(validImages.map(img => ({ name: img.name, dataUrl: img.data_url })));
+        const restoredImages = extractValidPendingImages(message.images);
+        if (restoredImages.length > 0) {
+          setPendingImages(restoredImages);
         }
-        if (restoredText.trim() || validImages.length > 0) {
+        if (restoredText.trim() || restoredImages.length > 0) {
           setInputExpanded(true);
         }
       }
@@ -746,7 +754,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
       }
       if (isChatTargetCurrent(targetEpoch)) reportRemoteSessionError(e, setError);
     } finally {
-      rollbackInFlightRef.current = false;
+      if (rollbackInFlightTargetRef.current === targetEpoch) {
+        rollbackInFlightTargetRef.current = null;
+      }
       if (isChatTargetCurrent(targetEpoch)) {
         setRollbackBusy(false);
       }
