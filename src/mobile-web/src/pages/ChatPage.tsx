@@ -64,33 +64,57 @@ function sanitizeMessageText(content: string): string {
 function isValidImageDataUrl(url: unknown): url is string {
   if (typeof url !== 'string') return false;
   const trimmed = url.trim();
-  return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(trimmed)
-    || (trimmed.startsWith('data:image/') && trimmed.includes(';base64,'));
+  const match = trimmed.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) return false;
+  const base64Data = match[1];
+  return base64Data.length > 0 && (base64Data.length % 4 === 0 || base64Data.length >= 4);
 }
 
 function extractValidImageContexts(
-  images: ChatImageAttachment[] | undefined,
+  images: unknown,
   prefix: string,
 ): { id: string; data_url: string; mime_type: string; metadata: { name: string; source: string } }[] | undefined {
-  if (!images?.length) return undefined;
-  const valid = images.filter((img): img is ChatImageAttachment => isValidImageDataUrl(img?.data_url));
-  if (!valid.length) return undefined;
-  return valid.map((img, idx) => {
-    const mimeMatch = img.data_url.match(/^data:([^;]+);/);
-    return {
-      id: `${prefix}_${Date.now()}_${idx}`,
-      data_url: img.data_url,
-      mime_type: mimeMatch ? mimeMatch[1] : 'image/png',
-      metadata: { name: img.name || 'image', source: 'remote' },
-    };
-  });
+  if (!Array.isArray(images) || images.length === 0) return undefined;
+  const valid: { data_url: string; mime_type: string; name: string }[] = [];
+  for (const img of images) {
+    try {
+      if (img && typeof img === 'object' && isValidImageDataUrl(img.data_url)) {
+        const mimeMatch = img.data_url.match(/^data:([^;]+);/);
+        valid.push({
+          data_url: img.data_url,
+          mime_type: mimeMatch ? mimeMatch[1] : 'image/png',
+          name: typeof img.name === 'string' && img.name ? img.name : 'image',
+        });
+      }
+    } catch {
+      // Ignore corrupted attachment items
+    }
+  }
+  if (valid.length === 0) return undefined;
+  return valid.map((item, idx) => ({
+    id: `${prefix}_${Date.now()}_${idx}`,
+    data_url: item.data_url,
+    mime_type: item.mime_type,
+    metadata: { name: item.name, source: 'remote' },
+  }));
 }
 
-function extractValidPendingImages(images: ChatImageAttachment[] | undefined): { name: string; dataUrl: string }[] {
-  if (!images?.length) return [];
-  return images
-    .filter((img): img is ChatImageAttachment => isValidImageDataUrl(img?.data_url))
-    .map(img => ({ name: img.name || 'image', dataUrl: img.data_url }));
+function extractValidPendingImages(images: unknown): { name: string; dataUrl: string }[] {
+  if (!Array.isArray(images) || images.length === 0) return [];
+  const result: { name: string; dataUrl: string }[] = [];
+  for (const img of images) {
+    try {
+      if (img && typeof img === 'object' && isValidImageDataUrl(img.data_url)) {
+        result.push({
+          name: typeof img.name === 'string' && img.name ? img.name : 'image',
+          dataUrl: img.data_url,
+        });
+      }
+    } catch {
+      // Ignore corrupted attachment items
+    }
+  }
+  return result;
 }
 
 
@@ -242,7 +266,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   } | null>(null);
   const [rollbackDraft, setRollbackDraft] = useState('');
   const [rollbackBusy, setRollbackBusy] = useState(false);
-  const rollbackInFlightTargetRef = useRef<number | null>(null);
+  const rollbackInFlightRef = useRef<symbol | null>(null);
   const msgLongPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const msgLongPressPosRef = useRef({ x: 0, y: 0 });
   const msgToastTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -281,7 +305,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
       setRollbackTarget(null);
       setRollbackDraft('');
       setRollbackBusy(false);
-      rollbackInFlightTargetRef.current = null;
+      rollbackInFlightRef.current = null;
       setActionToast(null);
       setInfoToast(null);
       setExpandedMsgIds(new Set());
@@ -637,13 +661,13 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const text = sanitizeMessageText(menuMessage.content);
     if (!text) return;
     setMenuMessage(null);
-    const imageContexts = extractValidImageContexts(menuMessage.images, 'mobile_resend');
     try {
+      const imageContexts = extractValidImageContexts(menuMessage.images, 'mobile_resend');
       await sessionMgr.sendMessage(sessionId, text, sessionAgentType, imageContexts);
       if (!isChatTargetCurrent(targetEpoch)) return;
       streamRef.current?.nudge();
     } catch (e: any) {
-      reportRemoteSessionError(e, setError);
+      if (isChatTargetCurrent(targetEpoch)) reportRemoteSessionError(e, setError);
     }
   }, [captureChatTargetEpoch, isChatTargetCurrent, menuMessage, sessionAgentType, sessionId, sessionMgr, setError]);
 
@@ -682,7 +706,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // the files they wrote. Editing is that same rollback followed by a normal
   // send, which is how the desktop reruns an edited user message.
   const handleConfirmRollback = useCallback(async () => {
-    if (!rollbackTarget || rollbackBusy || rollbackInFlightTargetRef.current !== null) return;
+    if (!rollbackTarget || rollbackBusy || rollbackInFlightRef.current) return;
     // The host independently checks idle under its scheduling lock; this
     // presentation guard only avoids a request while this view is already busy.
     if (isStreaming) return;
@@ -694,7 +718,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const targetEpoch = captureChatTargetEpoch();
     if (targetEpoch === null) return;
 
-    rollbackInFlightTargetRef.current = targetEpoch;
+    const attempt = Symbol('rollback');
+    rollbackInFlightRef.current = attempt;
     setRollbackBusy(true);
     try {
       const result = await sessionMgr.rollbackSessionToTurn(sessionId, turnId, message.turn_index);
@@ -754,8 +779,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
       }
       if (isChatTargetCurrent(targetEpoch)) reportRemoteSessionError(e, setError);
     } finally {
-      if (rollbackInFlightTargetRef.current === targetEpoch) {
-        rollbackInFlightTargetRef.current = null;
+      if (rollbackInFlightRef.current === attempt) {
+        rollbackInFlightRef.current = null;
       }
       if (isChatTargetCurrent(targetEpoch)) {
         setRollbackBusy(false);
