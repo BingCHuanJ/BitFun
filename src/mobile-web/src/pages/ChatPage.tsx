@@ -487,6 +487,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const isSelectionCurrent = () => (
       modelSelectionInFlightRef.current === attempt && isChatTargetCurrent(targetEpoch)
     );
+    const previousReasoningPreset = modelCatalog?.session_reasoning_preset ?? null;
     setModelUpdating(true);
     setModelCatalog(current => current ? {
       ...current,
@@ -508,7 +509,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
     } catch (err) {
       if (isSelectionCurrent()) {
         reportRemoteSessionError(err, setError, t);
-        setModelCatalog(null);
+        setModelCatalog(current => current ? {
+          ...current,
+          session_reasoning_preset: previousReasoningPreset,
+        } : current);
         await loadModelCatalog();
       }
     } finally {
@@ -902,7 +906,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
       if (chatInitSeqRef.current === initSeq) chatInitSeqRef.current += 1;
       streamRef.current?.stop();
       streamRef.current = null;
-      setActiveTurn(null);
+      if (useMobileStore.getState().activeTurn !== null) setActiveTurn(null);
       setPromptSuggestion(null);
     };
   }, [
